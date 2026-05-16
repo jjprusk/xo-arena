@@ -4,7 +4,7 @@ import { getToken } from './getToken.js'
 import { useSoundStore } from '../store/soundStore.js'
 import { perfMark } from './perfLog.js'
 import { rtFetch, getSseSession, onSseSessionChange } from './rtSession.js'
-import { useEventStream } from './useEventStream.js'
+import { useEventStream, claimSseSession } from './useEventStream.js'
 
 /**
  * Subscribe to a single per-user idle channel via SSE. Internal helper for
@@ -52,6 +52,12 @@ export function useGameSDK({
   currentUser     = null,
   botUserId       = null,
   spectate        = false,
+  // Pre-resolved bundle from `POST /api/v1/play/bot` (Future_Ideas PlayVsBot
+  // CTA item 3). When provided, skips the SSE-bootstrap-then-POST chain:
+  //   { sseSessionId, tableId, slug, label, mark, board, currentTurn, bot }
+  // The shared EventSource opens in parallel using `?sseSession=<id>` so
+  // moves/lifecycle events arrive on the same pre-allocated session.
+  playBundle      = null,
 }) {
   // Phase 3.8.5.2 — picker payload is identity-scoped (botId only). The
   // server resolves (botId, gameId) → BotSkill at match start; any
@@ -405,6 +411,25 @@ export function useGameSDK({
 
     ;(async () => {
       try {
+        // Pre-resolved single-shot bundle path (Future_Ideas PlayVsBot CTA
+        // item 3). The server already minted the SSE session, created the
+        // HvB table, and packaged the opening board — we just need to
+        // render it and let the shared EventSource pick up the pre-allocated
+        // session when it opens. Skip waitForSseSession entirely so the
+        // perf-ready marker fires before the SSE round-trip lands.
+        if (playBundle && !joinSlug && !tournamentMatchId) {
+          claimSseSession(playBundle.sseSessionId)
+          applyCreateResultHvb({
+            slug:        playBundle.slug,
+            label:       playBundle.label,
+            mark:        playBundle.mark,
+            board:       playBundle.board,
+            currentTurn: playBundle.currentTurn,
+          })
+          if (playBundle.tableId) setTableId(playBundle.tableId)
+          return
+        }
+
         await waitForSseSession()
         if (cancelled) return
 

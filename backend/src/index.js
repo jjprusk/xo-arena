@@ -35,6 +35,7 @@ import eventsRouter from './routes/events.js'
 import presenceRouter from './routes/presence.js'
 import pushRouter from './routes/push.js'
 import realtimeRouter, { modeRouter as realtimeModeRouter } from './routes/realtime.js'
+import playRouter from './routes/play.js'
 import perfVitalsRouter from './routes/perfVitals.js'
 import swControlRouter from './routes/swControl.js'
 import { getSystemConfig } from './services/skillService.js'
@@ -75,6 +76,7 @@ registerRoutes(app, {
   '/presence':           presenceRouter,
   '/push':               pushRouter,
   '/rt':                 realtimeRouter,
+  '/play':               playRouter,
   '/realtime':           realtimeModeRouter,
   '/perf':               perfVitalsRouter,
   '/config/sw':          swControlRouter,

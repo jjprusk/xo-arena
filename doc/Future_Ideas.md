@@ -5,59 +5,59 @@ Deferred features and improvements that are worth revisiting but not currently p
 
 ## Known Critical Bugs
 
-### PlayVsBot start-flow — cheap wins shipped 2026-05-15; one big architectural lift left (filed 2026-05-13)
+### PlayVsBot start-flow — full collapse landed 2026-05-16 (filed 2026-05-13)
 
-**Status — cheap wins on staging v1.4.0-alpha-5.6:** three of the four originally-filed CTA items are closed (HvB join-trim, server-side gameId cache, honest measurement marker). The fourth — "eager initial-state event" — turned out to be **fictional** and has been struck. Only the full `POST /play/bot` collapse remains.
+**Status — RESOLVED on dev (pending /stage + /promote).** All four originally-filed CTA items have shipped. The 3-RTT start-flow chain is now collapsed into a single `POST /api/v1/play/bot`: the server pre-allocates the SSE session id and the client claims it via `?sseSession=<id>` when the shared EventSource opens. The opening board is returned in the same response, so the SSE round-trip is no longer on the perf-ready critical path.
 
-**Measured on staging-5.6 via two independent methods:**
-
-| Metric | Pre-fix (alpha-4.15 prod, 2026-05-13) | Now (alpha-5.6 staging) | Delta |
-|---|---:|---:|---:|
-| `tReady` p50 (perf-playvsbot.js) | ~900 ms | **849 ms** | −51 ms (−6%) |
-| `tReady` p95 (perf-playvsbot.js) | 1189 ms (worst) | **856 ms** | −333 ms (−28%) |
-| Run spread (perf-playvsbot.js) | 411 ms (778–1189) | **7 ms** (849–856) | spread collapsed |
-| `Ready` p50 desktop (perf-v2 with marker) | bimodal artifact | **910 ms** | honest first measurement |
-| `Ready` p50 mobile warm (perf-v2 with marker) | bimodal artifact | **912 ms** | mobile ≈ desktop here |
-| `Ready` p50 desktop cold-anon (perf-v2) | bimodal artifact | **1297 ms** | cold-JS-chunk overhead |
-| Follow-up join POSTs per landing | 1 × 174 ms | **0** | RTT eliminated |
-| Server `X-Cache` on `/bots?gameId=xo` | (uncacheable) | **HIT** within 60 s window | second visitor warmed |
-
-The perf-playvsbot harness and perf-v2's marker agree the warm-anon ready time is ~850-910 ms (the ~60 ms gap is the `page.goto('load')` wait perf-v2 includes). No hidden post-create wait. Pre-fix worst-case 1189 ms is dead.
-
-**Trace (warm-anon, staging v1.4.0-alpha-5.6, captured 2026-05-15):**
+**Final shipped form (dev v5.7):**
 
 ```
    0ms  navigate
    …    HTML + lazy JS chunk
-   ~    GET /api/v1/bots?gameId=xo     (server X-Cache: HIT within 60s)
-   ~    GET /api/token
-   ~    POST /api/v1/rt/tables  (kind=hvb)  ← carries tableId in response
-        applyCreateResultHvb → setPhase('playing') synchronously
- 849ms  board cell rendered (tReady)
+   ~    POST /api/v1/play/bot   → { sseSessionId, tableId, slug, board, mark, currentTurn, bot }
+        setPlayBundle → applyCreateResultHvb → setPhase('playing')
+   ~    board cell rendered (tReady)
+        ┄ in parallel ┄
+        EventSource open with ?sseSession=<id>  (claims pre-allocated session via attachRes)
 ```
 
-**What shipped (commits + measurement tooling):**
+**Structural collapse confirmed** by `perf/perf-playvsbot.js` (asserts run as part of the benchmark, not just metric tracking):
 
-- **`perf(rt): drop redundant follow-up join on HvB table create`** (commit `5105eed`, v1.4.0-alpha-5.5) — `POST /rt/tables` surfaces `tableId` directly; `useGameSDK` no longer issues `/rt/tables/:slug/join` after create. Closes original CTA item from the 6-step chain.
-- **`perf(playvsbot): add [data-perf-ready] marker + teach perf-v2 to prefer it`** (commit `765f3fe`, v1.4.0-alpha-5.6) — `PlayPage.jsx` renders `<span data-perf-ready="play" hidden />` alongside the XOGame mount; `perf-v2.js` races the marker against the legacy `.animate-spin` probe. Closes original CTA item 2. **Confirmed CTA item 4 fictional** — first honest perf-v2 number for this route is 910 ms warm-anon, well below the 1200 ms the bimodal artifact was reporting.
-- **`perf(bots): cache GET /bots?gameId=<x> with 60s TTL`** (commit `9e60e30`, v1.4.0-alpha-5.6) — drops the cache bypass in `bots.js:44-53`; per-gameId cache keys share the existing 60 s TTL; all 8 bot-mutation sites switched to `cache.invalidatePrefix('bots:')`. Closes original CTA item 1. `X-Cache: HIT` confirmed on staging-5.6.
-- **`perf/perf-playvsbot.js`** (commit `2b3c8a2`) — focused Playwright harness. `tReady` + create duration + `joinPOSTs` count + waterfall. Wired into `npm run qa` under the new "Perf" section. Asserts `joinPOSTs === 0` as a regression guard.
+- `POST /api/v1/play/bot` — exactly **1** per run ✓
+- `POST /api/v1/rt/tables` — **0** per run ✓ (collapsed)
+- `POST /api/v1/rt/tables/:slug/join` — **0** per run ✓
+- `GET /api/token` — **0** on critical path ✓
+- `GET /api/v1/bots?gameId=xo` — **0** on critical path ✓
 
-**Why this is still open:**
+**Local-dev measurement (3-run benchmark, post-StrictMode-dedup):** `tReady` p50 = **853 ms** (Vite dev mode, no JS minification, sourcemaps on — staging/prod numbers will land lower once deployed).
 
-Warm-anon ~850-910 ms is still well outside the platform's **200 ms desktop / 500 ms mobile** target. The remaining ~600 ms is dominated by serial RTTs the cheap wins didn't touch: the JS chunk download, the `GET /api/token` round-trip, and `POST /rt/tables` itself running back-to-back rather than in parallel. The cold-anon mobile number is ~2 s, which is the real first-impression number on phones over LTE.
+**Mobile confidence — new `perf/perf-playvsbot-mobile.js`** (Fast 3G profile via CDP `Network.emulateNetworkConditions` + Pixel 5 device): same harness, throttled to 1.6 Mbps down / 750 Kbps up / 150 ms RTT. Run via the qa menu's new "PlayVsBot mobile (Fast 3G)" entries for local / staging / prod. This is the channel that translates the structural win into measured mobile minutes-of-life.
 
-This route powers the **Journey step 1 (Hook) experience for anon visitors** — first-impression speed matters most here.
+| Date | Version | Item | Status |
+|---|---|---|---|
+| 2026-05-15 | v5.5 | 1 — HvB join-chain trim | shipped |
+| 2026-05-15 | v5.6 | 2 — `[data-perf-ready]` marker | shipped |
+| 2026-05-15 | v5.6 | 3 — server `/bots?gameId=` cache | shipped |
+| 2026-05-15 | v5.6 | 4 — eager initial-state event | confirmed fictional (struck) |
+| 2026-05-16 | v5.7 (dev) | **3′ — full `POST /play/bot` collapse** | **shipped** |
 
----
+**What shipped in v5.7:**
 
-**CTA — one item left:**
+- **`backend/src/routes/play.js`** — new `POST /api/v1/play/bot`. Thin orchestrator: resolves the community bot (or accepts caller-supplied `botUserId`), mints + pre-registers an SSE session id with `res:null`, calls `tableFlow.createHvbTable`, tracks the table on the pending session, returns `{ sseSessionId, tableId, slug, label, mark, board, currentTurn, bot }`. Anonymous-OK. 12 vitest cases in `play.test.js`.
+- **`backend/src/realtime/sseSessions.js`** — new `attachRes(sessionId, { res, onDispose, userId })` helper. Upgrades a pending pre-allocated session by attaching the live SSE response + dispose callback. Preserves any tables already joined. 5 new vitest cases.
+- **`backend/src/routes/events.js`** — `/api/v1/events/stream` now honors `?sseSession=<id>`. If the id matches a pending pre-allocation it claims via `attachRes`; otherwise falls through to the existing mint-on-open behavior. Backward-compatible for every other flow (PvP, tournaments, demo, gym, admin).
+- **`landing/src/lib/useEventStream.js`** — new `claimSseSession(id)` export stages a pre-allocated session id for the next `openStream()` call. One-shot; cleared after use.
+- **`landing/src/lib/useGameSDK.js`** — accepts a `playBundle` parameter. When provided, skips `waitForSseSession` entirely: stages the bundle's session id, applies the create result synchronously, sets the tableId. The shared EventSource opens in parallel; the multi-step path is intact for PvP / joinSlug / tournaments / demo.
+- **`landing/src/pages/PlayPage.jsx`** — `vs-community-bot` action now calls `api.play.startBot()` instead of `getCommunityBot()`, passes the response to `<GameView playBundle={…}>`. Module-level in-flight dedup so React StrictMode dev double-mount doesn't create a stranded duplicate table.
+- **`landing/src/lib/api.js`** — `api.play.startBot({ gameId, botUserId? })`.
+- **`perf/perf-playvsbot.js`** — extended assertions: tracks `tokenGETs`, `botsListGETs`, `tablesCreatePOSTs`, `playBotPOSTs`. Summary section calls out the structural collapse (one POST replaces three).
+- **`perf/perf-playvsbot-mobile.js`** — new throttled-network mobile benchmark. Wired into `npm run qa` Perf menu (local / staging / prod).
+- **`e2e/tests/bot-challenge-flow.spec.js`** — new test asserts HomePage "Play against a bot" CTA emits exactly 1 `POST /play/bot` and zero `/rt/tables` POSTs. Defense-in-depth regression guard against accidental fallback.
+- **`useGameSDK.sse.test.jsx`** — 3 new cases pinning the single-shot bundle branch + the multi-step fallback for non-HvB flows.
 
-**Collapse `/api/token` + `POST /rt/tables` into `POST /api/v1/play/bot`** — a single endpoint that internally issues the SSE-session token, creates the HvB table, and returns `{ tableId, sseChannel, initialState }` in one round-trip. Saves ~2 more RTTs (~150-200 ms on warm-anon desktop, **~450 ms on slow mobile**, which is where the mobile target is mostly out of reach today). Adds a new client path in `useGameSDK` keyed on `action === 'vs-community-bot'`; the existing multi-step path stays for non-bot flows. **~2 dev days**, real architectural blast radius (touches token issuance + table create + the SSE-session lookup chain). Worth it for the mobile cold-anon number specifically — desktop warm-anon is already close enough to the target that the lift may not be worth it on its own.
+**Why we stop here:**
 
-**Decision point before doing this:** check Sprint roadmap priorities — if Hook UX is the next sprint focus, ship this; otherwise it's a reasonable backlog item. The cheap wins already brought worst-case latency down 28 % and collapsed variance from 411 ms to 7 ms, which is the biggest perceivable improvement on this route.
-
-**Files involved (if/when we do it):** `backend/src/routes/realtime.js` (new `/play/bot` handler), `backend/src/services/tableFlowService.js` (`createHvbTable` already returns the right shape, just needs to compose with token issuance), `backend/src/lib/sseSessions.js` (token + session creation path), `landing/src/lib/useGameSDK.js` (new branch), `landing/src/pages/PlayPage.jsx` (route-action wiring). Regression coverage already in place via `perf/perf-playvsbot.js` (`joinPOSTs === 0`) and the new `[data-perf-ready]` marker (`perf-v2.js` Ready column for the `PlayVsBot` route in `doc/Performance_Trend.md`).
+The structural cost of the start-flow chain is eliminated end-to-end — no serial RTTs remain on the critical path. Further reductions would require touching the cold-cache HTML/JS load path (lazy chunk splitting, edge caching, etc.), which is a separate optimization vector and not specific to PlayVsBot.
 
 ---
 

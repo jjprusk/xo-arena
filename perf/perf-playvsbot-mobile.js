@@ -1,44 +1,48 @@
 #!/usr/bin/env node
 // Copyright © 2026 Joe Pruskowski. All rights reserved.
 /**
- * XO Arena — PlayVsBot warm-anon ready-time benchmark.
+ * XO Arena — PlayVsBot warm-anon ready-time benchmark, throttled-mobile variant.
  *
- * Companion to the "PlayVsBot — 6-step serial join chain" entry in
- * Future_Ideas.md. The route-level Ready/LCP rebaseline doesn't measure
- * this specific path (it exercises HomePage / Tournaments / Rankings),
- * so this script targets it directly.
+ * Companion to `perf-playvsbot.js`. Same measurements, but adds Fast-3G-class
+ * network throttling + a mobile device profile to validate the platform's
+ * mobile target (500 ms ready). The desktop variant routinely runs warm-anon
+ * around ~900 ms on prod; this script tells us whether the structural collapse
+ * in Future_Ideas item 3 actually translates into the bigger projected mobile
+ * win (~450 ms over the slow path).
  *
  * What it measures, per run:
- *   tReady   — ms from navigation-start to the moment the XO board's
- *              `Cell 1` button is visible (the user-perceived "ready"
- *              moment when the game becomes playable).
- *   tCreate  — duration of `POST /api/v1/rt/tables` (HvB create).
- *   joinPOSTs — count of follow-up `POST /api/v1/rt/tables/<slug>/join`
- *              after the create. **Should be 0 post-fix.** (Was 1
- *              pre-fix, adding ~170 ms to the chain.)
- *   waterfall — list of every /api/v1/* request with offset + duration,
- *              dumped for the slowest run so you can eyeball the chain.
+ *   tReady              — ms from navigation-start to the moment the XO
+ *                         board's `Cell 1` button is visible.
+ *   tPlayBot            — duration of `POST /api/v1/play/bot` (the
+ *                         single-shot endpoint that replaced the 3-RTT chain).
+ *   tCreate             — duration of `POST /api/v1/rt/tables` (should be 0
+ *                         occurrences on the warm vs-community-bot path).
+ *   joinPOSTs           — count of `POST /api/v1/rt/tables/<slug>/join`
+ *                         (should be 0 post-fix).
+ *   tokenGETs           — count of `GET /api/token` on the critical path.
+ *   botsListGETs        — count of `GET /api/v1/bots?gameId=…` on the
+ *                         critical path.
+ *   tablesCreatePOSTs   — count of `POST /api/v1/rt/tables` (should be 0
+ *                         post-collapse — replaced by /play/bot).
  *
- * Methodology:
- *   1. Per run, spin a fresh Chromium context (cold caches + fresh SSE
- *      session) so we measure warm-anon-from-HomePage realistically.
- *   2. Visit HomePage first — that triggers `prefetchCommunityBot()`
- *      on mount, so the `/api/v1/bots?gameId=xo` RTT is warm. This
- *      matches the prod trace from 2026-05-13.
- *   3. Then navigate to `/play?action=vs-community-bot` and wait for
- *      `aria-label="Cell 1"` to be visible.
+ * Throttling profile — "Fast 3G" (Chrome DevTools preset):
+ *   downloadThroughput : 1.6 Mbps
+ *   uploadThroughput   : 750 Kbps
+ *   latency            : 150 ms (round-trip)
+ *
+ * Device profile — Pixel 5 (375 × 851, DPR 3, mobile UA).
  *
  * Usage:
- *   node perf/perf-playvsbot.js                       # localhost
- *   node perf/perf-playvsbot.js --target=staging      # staging
- *   node perf/perf-playvsbot.js --target=prod         # prod
- *   node perf/perf-playvsbot.js --runs=10 --headed    # tweak run count
+ *   node perf/perf-playvsbot-mobile.js                       # localhost
+ *   node perf/perf-playvsbot-mobile.js --target=staging      # staging
+ *   node perf/perf-playvsbot-mobile.js --target=prod         # prod
+ *   node perf/perf-playvsbot-mobile.js --runs=10 --headed
  *
  * Output:
- *   perf/baselines/playvsbot-<env>-<isoTimestamp>.json
+ *   perf/baselines/playvsbot-mobile-<env>-<isoTimestamp>.json
  */
 
-import { chromium } from 'playwright'
+import { chromium, devices } from 'playwright'
 import { writeFileSync, mkdirSync, existsSync } from 'fs'
 import { fileURLToPath } from 'url'
 import { dirname, join } from 'path'
@@ -62,6 +66,14 @@ const ENV_TAG  = TARGET ?? (BASE_URL.includes('staging') ? 'staging'
 
 const PLAY_URL = `${BASE_URL}/play?action=vs-community-bot`
 
+// Fast 3G profile — matches Chrome DevTools' built-in preset.
+const NET_PROFILE = {
+  offline:             false,
+  downloadThroughput:  (1.6 * 1024 * 1024) / 8,   // 1.6 Mbps in bytes/sec
+  uploadThroughput:    (750  * 1024)        / 8,  // 750 Kbps in bytes/sec
+  latency:             150,                       // ms (additional)
+}
+
 const pct = (sorted, p) => sorted[Math.min(sorted.length - 1, Math.floor((p / 100) * sorted.length))]
 const p50 = arr => pct([...arr].sort((a, b) => a - b), 50)
 const p95 = arr => pct([...arr].sort((a, b) => a - b), 95)
@@ -80,8 +92,17 @@ function classify(url) {
 }
 
 async function runOnce(browser, idx) {
-  const ctx = await browser.newContext()
+  // Mobile context — Pixel 5 dimensions + UA, plus credentials/cookies
+  // isolated per run (cold cache).
+  const ctx = await browser.newContext({ ...devices['Pixel 5'] })
   const page = await ctx.newPage()
+
+  // Throttle every page in this context. CDPSession is the only Playwright
+  // entry point for emulateNetworkConditions; the high-level `route()` API
+  // can simulate latency but not bandwidth.
+  const cdp = await ctx.newCDPSession(page)
+  await cdp.send('Network.enable')
+  await cdp.send('Network.emulateNetworkConditions', NET_PROFILE)
 
   const apiCalls = []
   page.on('request', req => {
@@ -101,27 +122,21 @@ async function runOnce(browser, idx) {
     }
   })
 
-  // 1) Warm the community-bot cache via HomePage (matches the prod scenario
-  //    where users land on Home before clicking Play). Use domcontentloaded
-  //    not networkidle — long-lived SSE streams never let staging idle.
-  await page.goto(BASE_URL, { waitUntil: 'domcontentloaded', timeout: 30_000 })
-  // HomePage fires `prefetchCommunityBot()` from useEffect on mount — give
-  // it a beat to land before we navigate so the cache is actually warm.
-  await page.waitForTimeout(1500)
+  // 1) Warm the community-bot cache via HomePage — same flow as desktop.
+  await page.goto(BASE_URL, { waitUntil: 'domcontentloaded', timeout: 60_000 })
+  // Throttling makes the prefetch slower — give it 3 s (vs 1.5 s desktop)
+  // so the cache is actually warm before /play navigation.
+  await page.waitForTimeout(3000)
 
-  // 2) Tag the navigate-start moment with wallclock outside the page —
-  //    using performance.now() inside doesn't work because it resets
-  //    across the cross-document navigation.
+  // 2) Wallclock-tag navigation start. performance.now() resets across
+  //    cross-document navigation, so we measure outside the page.
   const tNavStart = Date.now()
   await page.evaluate(url => { window.location.href = url }, PLAY_URL)
 
-  // 3) Wait for the XO board's first cell to be visible. That's the
-  //    user-perceived "ready" moment.
-  await page.waitForSelector('button[aria-label="Cell 1"]', { state: 'visible', timeout: 30_000 })
+  // 3) Wait for the board to render.
+  await page.waitForSelector('button[aria-label="Cell 1"]', { state: 'visible', timeout: 60_000 })
   const tReady = Date.now() - tNavStart
 
-  // 5) Tabulate the network calls. tCreate / joinPOSTs come from
-  //    the captured /api/v1/* events.
   const createCall = apiCalls.find(c =>
     classify(c.url) === 'rt-tables-create' && c.method === 'POST'
   )
@@ -131,9 +146,6 @@ async function runOnce(browser, idx) {
   const joinCalls = apiCalls.filter(c =>
     classify(c.url) === 'rt-tables-join' && c.method === 'POST'
   )
-  // Structural-collapse asserts: the new single-shot endpoint should
-  // replace the old 3-step chain. Token + bots GETs and rt-tables POST
-  // should not appear on the critical path after Future_Ideas item 3.
   const tokenCalls = apiCalls.filter(c =>
     classify(c.url) === 'token' && c.method === 'GET'
   )
@@ -147,15 +159,15 @@ async function runOnce(browser, idx) {
   await ctx.close()
 
   return {
-    run:        idx,
+    run:               idx,
     tReady,
-    tCreateMs:        createCall?.duration ?? null,
-    tPlayBotMs:       playBotCall?.duration ?? null,
-    joinPOSTs:        joinCalls.length,
-    tokenGETs:        tokenCalls.length,
-    botsListGETs:     botsListCalls.length,
+    tCreateMs:         createCall?.duration ?? null,
+    tPlayBotMs:        playBotCall?.duration ?? null,
+    joinPOSTs:         joinCalls.length,
+    tokenGETs:         tokenCalls.length,
+    botsListGETs:      botsListCalls.length,
     tablesCreatePOSTs: tablesCreatePosts.length,
-    playBotPOSTs:     playBotCall ? 1 : 0,
+    playBotPOSTs:      playBotCall ? 1 : 0,
     apiCalls:   apiCalls
       .filter(c => c.duration !== undefined)
       .map(c => ({
@@ -170,10 +182,12 @@ async function runOnce(browser, idx) {
 
 async function main() {
   const browser = await chromium.launch({ headless: !HEADED })
-  console.log(`PlayVsBot benchmark`)
-  console.log(`  base : ${BASE_URL}`)
-  console.log(`  env  : ${ENV_TAG}`)
-  console.log(`  runs : ${RUNS}`)
+  console.log(`PlayVsBot mobile-throttled benchmark`)
+  console.log(`  base   : ${BASE_URL}`)
+  console.log(`  env    : ${ENV_TAG}`)
+  console.log(`  runs   : ${RUNS}`)
+  console.log(`  device : Pixel 5`)
+  console.log(`  net    : Fast 3G (1.6 Mbps down / 750 Kbps up / 150 ms RTT)`)
   console.log('')
 
   const results = []
@@ -185,7 +199,6 @@ async function main() {
       console.log(
         `tReady=${r.tReady}ms ` +
         `tPlayBot=${r.tPlayBotMs ?? '—'}ms ` +
-        `tCreate=${r.tCreateMs ?? '—'}ms ` +
         `joinPOSTs=${r.joinPOSTs} ` +
         `tokenGETs=${r.tokenGETs} ` +
         `botsListGETs=${r.botsListGETs}`
@@ -205,20 +218,18 @@ async function main() {
 
   const tReadyP50    = p50(ok.map(r => r.tReady))
   const tReadyP95    = p95(ok.map(r => r.tReady))
-  const tCreateP50   = p50(ok.map(r => r.tCreateMs).filter(v => v !== null))
   const tPlayBotP50  = p50(ok.map(r => r.tPlayBotMs).filter(v => v !== null))
   const joinPostsTot       = ok.reduce((s, r) => s + r.joinPOSTs, 0)
   const tokenGetsTot       = ok.reduce((s, r) => s + r.tokenGETs, 0)
   const botsListGetsTot    = ok.reduce((s, r) => s + r.botsListGETs, 0)
   const tablesCreatePostsTot = ok.reduce((s, r) => s + r.tablesCreatePOSTs, 0)
   const playBotPostsTot    = ok.reduce((s, r) => s + r.playBotPOSTs, 0)
-  const slowestRun   = [...ok].sort((a, b) => b.tReady - a.tReady)[0]
+  const slowestRun         = [...ok].sort((a, b) => b.tReady - a.tReady)[0]
 
-  console.log('\n── Summary ──────────────────────────────────────')
+  console.log('\n── Summary (Fast-3G mobile) ─────────────────────')
   console.log(`  tReady p50           : ${tReadyP50} ms`)
   console.log(`  tReady p95           : ${tReadyP95} ms`)
   console.log(`  play/bot p50         : ${tPlayBotP50 ?? '—'} ms`)
-  console.log(`  rt-tables create p50 : ${tCreateP50 ?? '—'} ms`)
   console.log('')
   console.log(`  Structural collapse (across ${ok.length} runs):`)
   console.log(`    play/bot POSTs      : ${playBotPostsTot}    ${playBotPostsTot === ok.length ? '✓' : '⚠️  expected one per run'}`)
@@ -235,18 +246,19 @@ async function main() {
     console.log(`    ${c.method.padEnd(5)} ${c.duration.toString().padStart(5)}ms  ${tag}  ${new URL(c.url).pathname}`)
   }
 
-  // Write baseline JSON.
   const __dirname = dirname(fileURLToPath(import.meta.url))
   const outDir    = join(__dirname, 'baselines')
   if (!existsSync(outDir)) mkdirSync(outDir, { recursive: true })
   const stamp = new Date().toISOString().replace(/[:.]/g, '-')
-  const outPath = join(outDir, `playvsbot-${ENV_TAG}-${stamp}.json`)
+  const outPath = join(outDir, `playvsbot-mobile-${ENV_TAG}-${stamp}.json`)
   writeFileSync(outPath, JSON.stringify({
     env:       ENV_TAG,
     base:      BASE_URL,
     runs:      RUNS,
+    device:    'Pixel 5',
+    network:   'Fast 3G (1.6 Mbps / 750 Kbps / 150 ms)',
     summary:   {
-      tReadyP50, tReadyP95, tCreateP50, tPlayBotP50,
+      tReadyP50, tReadyP95, tPlayBotP50,
       joinPostsTotal:          joinPostsTot,
       tokenGetsTotal:          tokenGetsTot,
       botsListGetsTotal:       botsListGetsTot,
