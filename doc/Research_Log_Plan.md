@@ -1,7 +1,7 @@
 <!-- Copyright © 2026 Joe Pruskowski. All rights reserved. -->
 # User Research Log — Implementation Plan
 
-**Status:** v1 plan, ready to schedule
+**Status:** Sprint 1 shipped on `dev` 2026-05-16 (commit `11baa14`). Sprints 2 + 3 scheduled.
 **Author:** Joe Pruskowski (with Claude)
 **Date:** 2026-05-16
 
@@ -377,23 +377,23 @@ The Research Log doesn't eliminate Sprint 5+ planning — it changes what's left
 
 ## §5 Sprint checklist
 
-### Sprint 1 — Foundation (~2 days)
+### Sprint 1 — Foundation (~2 days) — ✅ SHIPPED on `dev` 2026-05-16 (commit `11baa14`)
 
-- [ ] **Schema:** add `TrainingSessionNote` + `NoteOutcome` to `packages/db/prisma/schema.prisma`
-- [ ] Generate + apply migration locally (`docker compose run --rm backend npx prisma migrate dev --name research_log_notes`)
-- [ ] **Route file:** `backend/src/routes/research.js` mounted at `/research` in `index.js`
-- [ ] Implement + test `POST /research/sessions/:sessionId/notes`
-- [ ] Implement + test `PATCH /research/notes/:noteId`
-- [ ] Implement + test `DELETE /research/notes/:noteId`
-- [ ] Implement + test `GET /research/notes` (with `algorithm` / `outcome` / `tag` / `since` / `limit` filters)
-- [ ] Implement + test `GET /research/notes/:noteId`
-- [ ] Tests: owner check (403 on cross-user mutation), body size limit (≤ 2 KB), invalid outcome (400), missing session (404). Target: 10 vitest cases.
-- [ ] **Client API:** `api.research.{createNote, updateNote, deleteNote, listNotes, getNote}` in `landing/src/lib/api.js`
-- [ ] **Component:** `landing/src/components/research/SessionNotesDrawer.jsx`
-- [ ] Integrate into `landing/src/pages/GymPage.jsx` Sessions tab
-- [ ] Vitest: 5 cases on the drawer (render, add, edit, delete, optimistic + rollback)
+- [x] **Schema:** add `TrainingSessionNote` + `NoteOutcome` to `packages/db/prisma/schema.prisma`
+- [x] Generate + apply migration locally (`docker compose run --rm backend npx prisma migrate deploy` — `migrate dev` wanted a reset because earlier migrations had been hand-edited, so we authored `20260516120000_research_log_notes/migration.sql` directly and applied via `deploy`)
+- [x] **Route file:** `backend/src/routes/research.js` mounted at `/research` in `index.js`
+- [x] Implement + test `POST /research/sessions/:sessionId/notes`
+- [x] Implement + test `PATCH /research/notes/:noteId`
+- [x] Implement + test `DELETE /research/notes/:noteId`
+- [x] Implement + test `GET /research/notes` (with `outcome` / `tag` / `since` / `limit` filters — `algorithm` filter deferred to Sprint 2 where it can JOIN through to `TrainingSession.model.algorithm`)
+- [x] Implement + test `GET /research/notes/:noteId`
+- [x] Tests: owner check (403 on cross-user mutation), body size limit (≤ 2 KB), invalid outcome (400), missing session (404). **Shipped 13 vitest cases** (target was 10).
+- [x] **Client API:** `api.research.{createNote, updateNote, deleteNote, listNotes, getNote}` in `landing/src/lib/api.js`
+- [x] **Component:** `landing/src/components/research/SessionNotesDrawer.jsx`
+- [x] Integrate into `landing/src/pages/GymPage.jsx` Sessions tab (mounted from `landing/src/components/gym/SessionsTab.jsx` under the selected-session detail panel)
+- [x] Vitest: 5 cases on the drawer (render, add, edit, delete, optimistic + rollback)
 - [ ] Manual QA: write a note → reload → still there; edit → reflects; delete → gone
-- [ ] Update `doc/V1_Acceptance.md` with the new flow
+- [x] Update `doc/V1_Acceptance.md` with the new flow (Stage 12)
 
 ### Sprint 2 — Profile journal + Publish flow (~3.5 days)
 
