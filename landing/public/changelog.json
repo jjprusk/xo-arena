@@ -1,5 +1,10 @@
 [
   {
+    "version": "1.4.0-alpha-5.8",
+    "date": "2026-05-16",
+    "description": "Mobile performance enhancements"
+  },
+  {
     "version": "1.4.0-alpha-5.7",
     "date": "2026-05-16",
     "description": "PlayVsBot start-flow — full collapse to POST /api/v1/play/bot"
