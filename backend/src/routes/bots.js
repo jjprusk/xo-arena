@@ -11,8 +11,13 @@ import { deleteBot as deleteBotCascade, BuiltinBotProtectedError } from '../serv
 import * as mlSvc from '../services/mlService.js'
 import cache from '../utils/cache.js'
 
-const BOTS_CACHE_KEY = 'bots:public'
-const BOTS_TTL_MS    = 60_000  // 60 seconds
+const BOTS_CACHE_KEY    = 'bots:public'
+const BOTS_GAMEID_KEY   = (gameId) => `bots:gameId:${gameId}`
+const BOTS_TTL_MS       = 60_000  // 60 seconds
+// All bots-list cache keys share the `bots:` prefix — mutations invalidate
+// the whole family via `cache.invalidatePrefix('bots:')` so a fresh bot
+// shows up in both the public list and any per-game picker simultaneously.
+const BOTS_CACHE_PREFIX = 'bots:'
 
 const router = Router()
 
@@ -41,14 +46,27 @@ router.get('/', async (req, res, next) => {
       return res.json({ bots, limitInfo: { count, limit, isExempt }, provisionalThreshold })
     }
 
-    // Phase 3.8.2.6 — gameId filter for community bot pickers. Bypasses the
-    // public cache because the filter dimension would multiply cache entries
-    // for what is a relatively rare query path. listBots() already attaches
-    // playableGameIds (BotSkill rows + 'xo' for minimax bots), so we can
-    // just filter on it without a second DB roundtrip.
+    // gameId filter for community bot pickers. This is now the hottest path
+    // off HomePage's `/play?action=vs-community-bot` flow (one fetch per
+    // landing), so it gets the same 60 s TTL cache as the public list, keyed
+    // per gameId. `includeInactive=true` is an admin path — skip the cache
+    // there to avoid bloating the key space + serving stale-inactive rows
+    // through the picker.
     if (gameId && typeof gameId === 'string') {
+      const skipCache = includeInactive === 'true'
+      if (!skipCache) {
+        const cachedG = cache.get(BOTS_GAMEID_KEY(gameId))
+        if (cachedG) {
+          res.setHeader('X-Cache', 'HIT')
+          return res.json({ bots: cachedG })
+        }
+      }
       const all = await listBots({ includeInactive: includeInactive === 'true' })
       const playable = all.filter((b) => Array.isArray(b.playableGameIds) && b.playableGameIds.includes(gameId))
+      if (!skipCache) {
+        cache.set(BOTS_GAMEID_KEY(gameId), playable, BOTS_TTL_MS)
+        res.setHeader('X-Cache', 'MISS')
+      }
       return res.json({ bots: playable })
     }
 
@@ -282,7 +300,7 @@ router.post('/', requireAuth, async (req, res, next) => {
 
     const { name, avatarUrl, competitive } = req.body ?? {}
     const bot = await createBot(userId, { name, avatarUrl, competitive, ownerBaId: baId })
-    cache.invalidate(BOTS_CACHE_KEY)
+    cache.invalidatePrefix(BOTS_CACHE_PREFIX)
 
     // Journey step 3 (Curriculum: Create your first bot) — fire-and-forget.
     // Was step 5 in the legacy 7-step spec; renumbered in the v1 Intelligent
@@ -363,7 +381,7 @@ router.post('/quick', requireAuth, async (req, res, next) => {
       difficulty: tier,
       ownerBaId:  baId,
     })
-    cache.invalidate(BOTS_CACHE_KEY)
+    cache.invalidatePrefix(BOTS_CACHE_PREFIX)
 
     // Curriculum step 3 — fire-and-forget; same pattern as POST /.
     completeStep(user.id, 3).catch(() => {})
@@ -419,7 +437,7 @@ router.post('/:id/train-quick', requireAuth, async (req, res, next) => {
       where: { id: bot.id },
       data:  { botModelId: expectedId },
     })
-    cache.invalidate(BOTS_CACHE_KEY)
+    cache.invalidatePrefix(BOTS_CACHE_PREFIX)
     completeStep(caller.id, 4).catch(() => {})
 
     res.json({ bot: updated, alreadyTrained: false })
@@ -562,7 +580,7 @@ router.post('/:id/train-guided/finalize', requireAuth, async (req, res, next) =>
         where: { id: bot.id },
         data:  { botModelId: skillId, botModelType: 'qlearning' },
       })
-      cache.invalidate(BOTS_CACHE_KEY)
+      cache.invalidatePrefix(BOTS_CACHE_PREFIX)
     }
 
     completeStep(caller.id, 4).catch(() => {})
@@ -629,7 +647,7 @@ router.delete('/:id/skills/:skillId', requireAuth, async (req, res, next) => {
       }
     })
 
-    cache.invalidate(BOTS_CACHE_KEY)
+    cache.invalidatePrefix(BOTS_CACHE_PREFIX)
     res.status(204).end()
   } catch (err) {
     if (err.code === 'P2025') return res.status(404).json({ error: 'Skill not found' })
@@ -678,7 +696,7 @@ router.post('/:id/skills', requireAuth, async (req, res, next) => {
       })
     }
 
-    cache.invalidate(BOTS_CACHE_KEY)
+    cache.invalidatePrefix(BOTS_CACHE_PREFIX)
     res.status(201).json({ skill, created: true })
   } catch (err) {
     next(err)
@@ -770,7 +788,7 @@ router.patch('/:id', requireAuth, async (req, res, next) => {
     }
 
     const updated = await db.user.update({ where: { id: req.params.id }, data })
-    cache.invalidate(BOTS_CACHE_KEY)
+    cache.invalidatePrefix(BOTS_CACHE_PREFIX)
     res.json({ bot: updated })
   } catch (err) {
     next(err)
@@ -824,7 +842,7 @@ router.delete('/:id', requireAuth, async (req, res, next) => {
 
     await deleteBotCascade(db, bot)
 
-    cache.invalidate(BOTS_CACHE_KEY)
+    cache.invalidatePrefix(BOTS_CACHE_PREFIX)
     res.status(204).end()
   } catch (err) {
     if (err instanceof BuiltinBotProtectedError) return res.status(400).json({ error: err.message })

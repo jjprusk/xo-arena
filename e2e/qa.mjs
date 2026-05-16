@@ -53,6 +53,9 @@ function exec(cmd, args, opts = {}) {
 const pw     = (suite, extra = []) => exec('npx', ['playwright', 'test', ...(suite ? [suite] : []), '--project=chromium', ...extra])
 const stress = ()                   => exec('npx', ['playwright', 'test', 'stress', '--project=stress', '--timeout=400000'])
 const large  = (extra = [])         => exec('node', ['qa-tournament-large.mjs', ...extra])
+// Perf scripts live in /perf at the repo root; cwd one level up so module
+// resolution + perf/baselines/ paths work the same as direct `node perf/*.js`.
+const perf   = (script, extra = []) => exec('node', [`perf/${script}`, ...extra], { cwd: `${E2E}/..` })
 
 // ── Menu definition ───────────────────────────────────────────────────────────
 // S = section header, I = selectable item, D = blank divider
@@ -80,6 +83,11 @@ const MENU = [
   I('Tournament runaway-loop guards',                  () => pw('tournament-guards'),          'no auth'),
   I('2-human MIXED match claim (regression)',          () => pw('tournament-2human-match-claim'), 'TEST_ADMIN + TEST_USER + TEST_USER2'),
   I('All Playwright (chromium)',                        () => pw(null)),
+  D(),
+  S('Perf'),
+  I('PlayVsBot ready-time — local',                    () => perf('perf-playvsbot.js'),                              'http://localhost:5174'),
+  I('PlayVsBot ready-time — staging',                  () => perf('perf-playvsbot.js', ['--target=staging']),        'no auth needed'),
+  I('PlayVsBot ready-time — prod',                     () => perf('perf-playvsbot.js', ['--target=prod']),           'no auth needed'),
   D(),
   S('Long-running'),
   I('Stress tests  (~5 min)',                          () => stress(), 'STRESS_ADMIN_TOKEN'),

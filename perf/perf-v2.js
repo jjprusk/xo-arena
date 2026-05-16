@@ -194,15 +194,24 @@ async function measure({ browser, url, profile, contextOpts, existingContext }) 
   await page.goto(url, { waitUntil: 'load', timeout: 30_000 })
   await page.waitForSelector('header', { timeout: 5_000 }).catch(() => {})
 
-  const spinnerAppeared = await page
-    .waitForSelector('.animate-spin', { state: 'attached', timeout: 200 })
-    .then(() => true)
-    .catch(() => false)
+  // Prefer an explicit per-route ready marker if it shows up within the
+  // same 10-s window the spinner fallback would use. Routes that opt in
+  // render `<span data-perf-ready="<name>" hidden />` exactly when the
+  // page is interactive — that's a deterministic signal vs the bimodal
+  // `.animate-spin` heuristic. Race the marker against a short spinner
+  // attach probe so non-instrumented routes still measure correctly.
+  const winner = await Promise.race([
+    page.waitForSelector('[data-perf-ready]', { timeout: 10_000 }).then(() => 'marker').catch(() => null),
+    page.waitForSelector('.animate-spin', { state: 'attached', timeout: 200 }).then(() => 'spinner').catch(() => null),
+  ])
 
-  if (spinnerAppeared) {
+  if (winner === 'spinner') {
+    // Spinner won the race — wait for it to detach as before.
     await page.waitForSelector('.animate-spin', { state: 'detached', timeout: 10_000 })
       .catch(() => {})
   }
+  // If winner === 'marker', the page is ready — no extra wait.
+  // If neither matched (winner === null) the page loaded instantly and we fall through.
 
   const readyMs = Date.now() - t0
 

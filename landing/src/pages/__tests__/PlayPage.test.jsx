@@ -123,6 +123,41 @@ describe('PlayPage', () => {
     expect(document.querySelectorAll('[aria-label^="Cell"]').length).toBe(9)
   })
 
+  // §item-2 (Future_Ideas PlayVsBot CTA): perf-v2 prefers `[data-perf-ready]`
+  // over the bimodal `.animate-spin` detector when measuring route ready time.
+  // The marker must appear exactly when the board is interactive — i.e. with
+  // the XOGame mount — and must NOT appear in non-interactive phases.
+  describe('perf-v2 ready marker', () => {
+    it('mounts [data-perf-ready="play"] when phase is "playing"', async () => {
+      useGameSDK.mockReturnValue({
+        ...defaultSDKReturn,
+        phase: 'playing',
+        session: { tableId: 'room-1', settings: {}, players: [] },
+      })
+      await act(async () => { renderPlay('?join=some-room') })
+      expect(document.querySelector('[data-perf-ready="play"]')).not.toBeNull()
+    })
+
+    it('mounts the marker when phase is "finished" too', async () => {
+      useGameSDK.mockReturnValue({
+        ...defaultSDKReturn,
+        phase: 'finished',
+        session: { tableId: 'room-1', settings: {}, players: [] },
+      })
+      await act(async () => { renderPlay('?join=some-room') })
+      expect(document.querySelector('[data-perf-ready="play"]')).not.toBeNull()
+    })
+
+    it('does NOT mount the marker while phase is "connecting" (spinner shown)', async () => {
+      useGameSDK.mockReturnValue({
+        ...defaultSDKReturn,
+        phase: 'connecting',
+      })
+      await act(async () => { renderPlay('?join=some-room') })
+      expect(document.querySelector('[data-perf-ready="play"]')).toBeNull()
+    })
+  })
+
   // Leave-destination logic — see PlayPage.jsx `leaveHref`. The Back link in
   // PlatformShell is wired to the same href used by the Leave Table /
   // abandoned / opponentLeft navigations, so asserting on it covers all three.

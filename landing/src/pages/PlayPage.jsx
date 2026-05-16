@@ -233,7 +233,16 @@ export function GameView({ joinSlug, tournamentMatchId, tournamentId, authSessio
           onLeave={() => sdk.leaveTable()}
         >
           {(phase === 'playing' || phase === 'finished') && (
-            <XOGame session={session} sdk={sdk} />
+            <>
+              <XOGame session={session} sdk={sdk} />
+              {/* perf-v2 marker — flips when the user can actually see + use
+                  the board (post-create synthetic start event for HvB, or the
+                  first SSE state event for PvP). Lets perf-v2 measure a
+                  deterministic ready moment instead of the bimodal
+                  `.animate-spin` heuristic. See Future_Ideas PlayVsBot entry,
+                  CTA item 2. */}
+              <span data-perf-ready="play" hidden aria-hidden="true" />
+            </>
           )}
         </PlatformShell>
 
