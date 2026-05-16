@@ -105,33 +105,30 @@ _See **Appendix — Resolved & Obsolete** at the end of this doc for fixed entri
 
 ---
 
-## Journey CTA spotlight — wiring leftovers
+## Journey CTA spotlight — wiring leftovers (RESOLVED 2026-05-16)
 
-The reusable `<Spotlight target={ref} active={...} onDismiss={...} />` component shipped on 2026-04-29 (`landing/src/components/guide/Spotlight.jsx`) and replaces the ad-hoc per-page `xo-spotlight-pulse` toggle. Wired so far:
+The reusable `<Spotlight target={ref} active={...} onDismiss={...} />` component shipped on 2026-04-29 (`landing/src/components/guide/Spotlight.jsx`) and replaces the ad-hoc per-page `xo-spotlight-pulse` toggle. Final state:
 
-- **Step 4 (`?action=train-bot`)** — `BotProfilePage` Train button. ✅
-- **Step 5 (`?action=spar`)** — `BotProfilePage` Spar block; `ProfilePage` forwards the action to the bot detail page same way it does for `train-bot`. ✅
+- **Step 3 (`?action=quick-bot`)** — `QuickBotWizard` opens as a focused modal overlay (`ProfilePage.jsx:116-121`). A spotlight inside a modal adds no value — the modal already commands attention. **Closed: deliberately not wired.**
+- **Step 4 (`?action=train-bot`)** — `BotProfilePage` Train button. ✅ wired
+- **Step 5 (`?action=spar`)** — `BotProfilePage` Spar block; `ProfilePage` forwards the action to the bot detail page same way it does for `train-bot`. ✅ wired
+- **Step 6 (`?action=cup`)** — handler now exists at `ProfilePage.jsx:142-172`. Calls `tournamentApi.cloneCurriculumCup`, spawns a 4-bot Curriculum Cup, registers the user's bot, and immediately navigates to `/tournaments/<id>?follow=<botId>`. The `?follow=` query auto-opens the live spectate modal on arrival, which is the equivalent of a spotlight — actively pulls the user's attention to their bot's match. **Closed: spotlight pattern not applicable — user is forwarded away from `/profile` in a single tick; the follow-spectate is the destination attention-grab.**
+- **Step 7 (`?action=cup-result`)** — `JourneyCard.jsx:208-216` deliberately removed the clickable CTA. Step 7 fires server-side after the cup wraps; the `CoachingCard` auto-appears on completion (§5.5). The journey card renders an inline note in its place: *"🏅 Watching your cup play out — your result lands here automatically when it wraps."* **Closed: replaced by auto-coaching-card surface, no CTA needed.**
 
-Not yet wired (each one is one `<Spotlight>` render line + a small destination handler):
-
-- **Step 3 (`?action=quick-bot`)** — `QuickBotWizard` "Next" button. The wizard is already a focused modal so the spotlight is lower-value here; skip unless usability tests show the Next button blends in.
-- **Step 6 (`?action=cup`)** — Curriculum Cup card. No `?action=cup` handler exists on `ProfilePage` (or anywhere else), and there's no Cup-card destination element to ref. Needs the destination feature first.
-- **Step 7 (`?action=cup-result`)** — result row in the tournament list. Same as step 6 — destination doesn't exist yet.
-
-Effort: ~30 minutes per remaining wiring site once the destination handler is in place.
+Net: nothing actionable remains. The `<Spotlight>` component has reached the right wiring footprint — the unwired steps each have a better-fitting attention pattern (modal overlay, follow-spectate, auto-coaching-card) than a spotlight would provide.
 
 ---
 
-## Status snapshot (last reviewed 2026-04-23)
+## Status snapshot (last reviewed 2026-05-16)
 
 | Item | Status |
 |---|---|
 | Real-Time Presence / Inactivity Detection | ✅ Mostly done (presence store + heartbeat live; away/active refinement open) |
-| Multi-Game Bots (now Phase 3.8) | 🚧 In-plan (scheduled as Phase 3.8 of the Implementation Plan) |
-| Real-Time Games Against Bots (Pong) | ⏳ Open (Phase 6) |
+| Multi-Game Bots (Phase 3.8) | 🟡 Partly shipped — 8 of 25 items landed on dev during V1 QA (additive parts of 3.8.1 + 3.8.2 + tests); remaining UI work deferred |
+| Real-Time Games Against Bots (Pong) | ✅ Shipped — `pongRunner` + `usePongSDK` + `/api/v1/rt/pong/rooms` POST routes all live (Phase 6 complete) |
 | Persist Game State Through Deploys | ❌ Obsolete (replaced by DB-backed `Table` rows in Phase 3.4) |
-| Backend Logs in Admin Log Viewer | ⏳ Open |
-| Guide Help Subsystem (Chat Interface) | ⏳ Open |
+| Backend Logs in Admin Log Viewer | ✅ Shipped — `LogViewerPage` at `/admin/logs` |
+| Guide Help Subsystem (Chat Interface) | ✅ Shipped — full Help System with pgvector retrieval + `/admin/help/queries` curation queue + `/admin/help/metrics` dashboard + thumbs feedback; plan + sprint tracker archived |
 | Guide as Navigation (Command Palette) | ⏳ Open |
 | Configurable Guide | ❌ Obsolete (iframe guide retired; premise gone) |
 | Multi-Game Architecture | ✅ Largely done as the Game SDK (Phases 1.1–1.4) — remaining games are their own phases |
@@ -139,6 +136,10 @@ Effort: ~30 minutes per remaining wiring site once the destination handler is in
 | Recurring tournaments schema refactor (Phase 3.7a) | ✅ Shipped — `TournamentTemplate` + `templateId` FK live; `AdminTemplatesPage` + `AdminTemplateDetailPage` exist (see Appendix) |
 | Tournament admin UX overhaul | ⏳ Open — operator-facing surfaces around recurring tournaments are clumsy; entry below |
 | `table.released` per-reason soak monitor | ⏳ Open (post-prod-launch — needs real traffic to be meaningful) |
+| PlayVsBot start-flow collapse (`POST /play/bot`) | ✅ Shipped (v1.4.0-alpha-5.7 prod 2026-05-16) — full chain collapsed into one round-trip; SSE session pre-allocated server-side; structural-collapse asserts live in `perf/perf-playvsbot.js` |
+| Warm-anon `/api/session` chatter dedup | ✅ Shipped (v1.4.0-alpha-5.8 prod 2026-05-16) — `useOptimisticSession` rewritten as shared singleton; 8 → 2 GETs per cold mount |
+| Journey CTA spotlight wiring | ✅ Resolved — steps 4 + 5 wired; steps 3 / 6 / 7 resolved by better-fitting patterns (modal, follow-spectate, auto-coaching-card). See entry above. |
+| PlayVsBot mobile-throttled benchmark | ✅ Shipped — `perf/perf-playvsbot-mobile.js` (Fast 3G + Pixel 5) wired into `npm run qa` |
 
 ## Migration-sensitivity audit (2026-04-23)
 
