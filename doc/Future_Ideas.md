@@ -55,9 +55,49 @@ Deferred features and improvements that are worth revisiting but not currently p
 - **`e2e/tests/bot-challenge-flow.spec.js`** — new test asserts HomePage "Play against a bot" CTA emits exactly 1 `POST /play/bot` and zero `/rt/tables` POSTs. Defense-in-depth regression guard against accidental fallback.
 - **`useGameSDK.sse.test.jsx`** — 3 new cases pinning the single-shot bundle branch + the multi-step fallback for non-HvB flows.
 
-**Why we stop here:**
+**Why we stop here on the *chain*:**
 
-The structural cost of the start-flow chain is eliminated end-to-end — no serial RTTs remain on the critical path. Further reductions would require touching the cold-cache HTML/JS load path (lazy chunk splitting, edge caching, etc.), which is a separate optimization vector and not specific to PlayVsBot.
+The structural cost of the start-flow chain is eliminated end-to-end — no serial RTTs remain on the critical path. The next round of optimization is no longer chain-shaped — it's session-bootstrap chatter (see the next entry).
+
+---
+
+### Warm-anon `/play` tReady — session-bootstrap chatter is the new bottleneck (filed 2026-05-16)
+
+**Context:** after the PlayVsBot start-flow collapse landed on v5.7, the absolute `tReady` win was ~80 ms (924 → 842 ms desktop warm-anon prod) — meaningfully smaller than the ~200 ms we projected. The structural collapse itself worked (one `/play/bot` POST replaces the three-RTT chain), but the wall-clock floor moved to a different bottleneck: **cold-mount session-probe chatter**.
+
+**Measured on prod v1.4.0-alpha-5.7, slowest run waterfall:**
+
+```
+GET 235ms  /api/session    ← (1)
+GET 197ms  /api/session    ← (2)
+GET 160ms  /api/session    ← (3)
+GET 190ms  /api/v1/bots    ← prefetch leaking onto critical path
+GET 116ms  /api/session    ← (4)
+GET 114ms  /api/v1/events/stream
+GET 288ms  /api/session    ← (5)
+GET 244ms  /api/session    ← (6)
+POST 264ms /api/v1/play/bot
+GET  44ms  /api/session    ← (7)
+GET  44ms  /api/v1/events/stream   ← duplicate SSE open
+```
+
+**Eight `/api/session` GETs** on a single warm-anon landing — each 100–290 ms. They're parallel network-wise but several gate React renders, so the wall-clock floor stays ~850 ms even though no single request is longer than 288 ms. AppLayout, JourneyCard, ProfileMenu, AuthGate, etc. each fire their own session probe on cold mount with no in-flight dedup.
+
+The second `/api/v1/events/stream` GET is `reopenSharedStream()` firing once on cold mount even when the auth identity hasn't actually changed (anon → anon shouldn't reopen).
+
+**CTAs:**
+
+1. ✅ **Dedupe `/api/session` via shared-singleton (item 1 — shipped on dev 2026-05-16).** `landing/src/lib/useOptimisticSession.js` rewritten as a module-level singleton: one fetch + one 60-second poller regardless of subscriber count. The previous version fired one fetch per `useOptimisticSession()` instance on mount; 8 simultaneous callers (AppLayout, PlayPage, HomePage, JourneyCard, ProfileMenu, …) hammered `/api/session` in parallel. New `_listeners` Set fans the shared state out to every subscriber; subscribers attach via `listener(state, pending)`; first mount starts polling, last unmount stops it. 6 vitest cases pin: (a) 5 parallel cold mounts → exactly 1 fetch; (b) shared state propagation; (c) `triggerSessionRefresh()` fires one fetch and notifies all subscribers; (d) failure → null; (e) anon → null without leaking the response shape; (f) last-unmount stops the poll. **Projected ~150–250 ms saved on the warm-anon `/play` tReady. Will rebaseline on staging/prod after /stage + /promote.**
+
+2. **Duplicate `/events/stream` open — needs instrumentation first.** The prod waterfall shows two `/events/stream` GETs but `AppLayout.jsx:177-183`'s `reopenSharedStream()` already has an identity-change guard that should prevent firing on cold-mount anon → anon. Most likely culprit is EventSource auto-reconnect after a server-side session race (Better Auth identity probe mid-bootstrap), but without prod instrumentation to confirm I can't pick the right fix. The second open is also not on the perf-ready critical path (Cell 1 visible fires from the synchronous `applyCreateResultHvb` *before* the second open finishes), so the wall-clock cost is closer to **server-side resource leak** than user-perceived latency. Deferred until either a) we see it gating tReady in a future measurement, or b) we add SSE-lifecycle telemetry. **Files involved (when picked up):** `landing/src/lib/useEventStream.js`, `landing/src/lib/rtSession.js`, `backend/src/routes/events.js`.
+
+**Files touched (item 1):** `landing/src/lib/useOptimisticSession.js` (rewrite), `landing/src/lib/__tests__/useOptimisticSession.test.jsx` (new — 6 cases). Regression coverage via `perf/perf-playvsbot.js` + `perf/perf-playvsbot-mobile.js` (tReady p50 + structural-collapse asserts).
+
+**Larger items (deferred, for reference):**
+
+- **Render `/play` before auth resolves** — AppLayout currently awaits `/api/session` before rendering child routes. Render-then-hydrate pattern: render assuming anon, hydrate to authed UI when the session lands. `/play?action=vs-community-bot` is fully anon-OK so this is safe. **~1 day. ~100–200 ms saved.**
+- **Inline the opening board into the HTML** — SSR the `/play?action=vs-community-bot` route with a static empty-board placeholder. The `/play/bot` POST fires from a script tag in the HTML head, before the React bundle finishes loading. Removes the JS-boot-then-effect-then-POST chain. **~2 days. ~200–400 ms saved.**
+- **Edge-route `/play/bot`** — Cloudflare Worker or Fly multi-region for this one endpoint. Costs a Tokyo user 200+ ms RTT to a single US-East Fly machine today. Needs DB read-replicas at edge or Redis-cache write-through for bot resolution. **~1 week. ~200–500 ms saved, geography-dependent.**
 
 ---
 
