@@ -68,6 +68,8 @@ model User {
   seedBotConfigs         TournamentSeedBot[]
   templateSeedBotConfigs TournamentTemplateSeedBot[]
   researchNotes          TrainingSessionNote[]
+  researchEntries        ResearchLogEntry[]
+  helpDocsOwned          HelpDoc[]                 @relation("HelpDocOwner")
 
   @@map("users")
 }
@@ -325,6 +327,28 @@ model TrainingSessionNote {
   @@index([sessionId])
   @@index([sharedWithCommunity, publishedAt])
   @@map("training_session_notes")
+}
+
+model ResearchLogEntry {
+  id                  String                @id @default(cuid())
+  userId              String
+  user                User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  title               String
+  body                String
+  tags                String[]              @default([])
+  category            ResearchEntryCategory
+
+  sharedWithCommunity Boolean               @default(false)
+  publishedAt         DateTime?
+  helpDocId           String?               @unique
+
+  createdAt           DateTime              @default(now())
+  updatedAt           DateTime              @updatedAt
+
+  @@index([userId, createdAt])
+  @@index([sharedWithCommunity, publishedAt])
+  @@map("research_log_entries")
 }
 
 model MLCheckpoint {
@@ -972,12 +996,17 @@ model HelpDoc {
   lastEditedById  String?
   version         Int           @default(1)
   seededFromFile  String?
+  source          String        @default("guide")
+  ownerId         String?
+  owner           User?         @relation("HelpDocOwner", fields: [ownerId], references: [id], onDelete: SetNull)
   createdAt       DateTime      @default(now())
   updatedAt       DateTime      @updatedAt
   chunks          HelpChunk[]
 
   @@index([status])
   @@index([category])
+  @@index([source])
+  @@index([ownerId])
   @@map("help_docs")
 }
 
@@ -1194,6 +1223,13 @@ enum NoteOutcome {
   PLATEAU
   REGRESSION
   INCONCLUSIVE
+}
+
+enum ResearchEntryCategory {
+  PLANNING
+  RETROSPECTIVE
+  OBSERVATION
+  OTHER
 }
 
 enum TournamentMode {
