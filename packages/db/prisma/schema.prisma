@@ -67,6 +67,7 @@ model User {
   userRoles              UserRole[]
   seedBotConfigs         TournamentSeedBot[]
   templateSeedBotConfigs TournamentTemplateSeedBot[]
+  researchNotes          TrainingSessionNote[]
 
   @@map("users")
 }
@@ -280,6 +281,7 @@ model TrainingSession {
   startedAt   DateTime          @default(now())
   completedAt DateTime?
   episodes    TrainingEpisode[]
+  notes       TrainingSessionNote[]
   model       BotSkill          @relation(fields: [modelId], references: [id], onDelete: Cascade)
 
   @@index([modelId])
@@ -299,6 +301,30 @@ model TrainingEpisode {
 
   @@index([sessionId])
   @@map("training_episodes")
+}
+
+model TrainingSessionNote {
+  id                  String      @id @default(cuid())
+  userId              String
+  user                User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  sessionId           String
+  session             TrainingSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  body                String
+  outcome             NoteOutcome
+  tags                String[]
+
+  sharedWithCommunity Boolean     @default(false)
+  publishedAt         DateTime?
+  helpDocId           String?     @unique
+
+  createdAt           DateTime    @default(now())
+  updatedAt           DateTime    @updatedAt
+
+  @@index([userId, createdAt])
+  @@index([sessionId])
+  @@index([sharedWithCommunity, publishedAt])
+  @@map("training_session_notes")
 }
 
 model MLCheckpoint {
@@ -1161,6 +1187,13 @@ enum EpisodeOutcome {
   WIN
   LOSS
   DRAW
+}
+
+enum NoteOutcome {
+  SUCCESS
+  PLATEAU
+  REGRESSION
+  INCONCLUSIVE
 }
 
 enum TournamentMode {

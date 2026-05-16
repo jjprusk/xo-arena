@@ -41,7 +41,7 @@ Move the platform's recommended "keep a research log" workflow **inside** the pl
 | ID | Requirement |
 |---|---|
 | S1 | Schema lives in the existing Prisma model (`packages/db`). Two new tables: `TrainingSessionNote` and `ResearchLogEntry`. |
-| S2 | The note layer **does not duplicate** hyperparameters or benchmark data — those already live on the existing `MLSession` row. Notes carry only the editorial content; reads JOIN. |
+| S2 | The note layer **does not duplicate** hyperparameters or benchmark data — those already live on the existing `TrainingSession` row. Notes carry only the editorial content; reads JOIN. |
 | S3 | Published notes are **mirrored into the Help corpus** as a new `HelpDoc.source = 'community-note'`. This is an additive change to the existing schema (`HelpDoc.source` is already a free-text label). Reindexing reuses the existing FTS + pgvector pipeline. |
 | S4 | The retrieval pipeline returns **three categories** of chunks per query: `corpus` (curated `HelpDoc`s), `private-notes` (only the asking user's), `community-notes` (published by others). The mixer assigns each category a budget so curated content always wins ties. |
 | S5 | A privacy scrubber runs on every **publish** action: regex over emails / phone numbers / addresses / IP-shaped strings. Display name + user-id are scrubbed; `authorHandle` is set from the user's preferred public handle. |
@@ -66,7 +66,7 @@ model TrainingSessionNote {
   userId               String
   user                 User     @relation(fields: [userId], references: [id])
   sessionId            String
-  session              MLSession @relation(fields: [sessionId], references: [id])
+  session              TrainingSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
   parentNoteId         String?
   parent               TrainingSessionNote?  @relation("NoteChain", fields: [parentNoteId], references: [id])
   children             TrainingSessionNote[] @relation("NoteChain")
@@ -124,7 +124,7 @@ enum ResearchEntryCategory {
 ```
 
 **Why two tables instead of one:**
-- `TrainingSessionNote` is tightly coupled to a `MLSession` (FK + delete behavior + retrieval-time JOIN to hyperparameters). Optional `sessionId` would muddy that.
+- `TrainingSessionNote` is tightly coupled to a `TrainingSession` (FK + delete behavior + retrieval-time JOIN to hyperparameters). Optional `sessionId` would muddy that.
 - `ResearchLogEntry` is standalone — planning posts before a session, retrospectives spanning weeks, observations on bracket UX. Different shape.
 - Both share the publish-to-corpus pathway; the publish handler dispatches on type but writes to the same `HelpDoc` table.
 
@@ -195,7 +195,7 @@ model ResearchLogExport {
   noteId          String?  @unique
   entryId         String?  @unique
   userId          String
-  algorithm       String?                // copied from MLSession at export time
+  algorithm       String?                // copied from TrainingSession at export time
   hyperparameters Json?                  // snapshot at session end
   preBenchmark    Float?
   postBenchmark   Float?
@@ -211,7 +211,7 @@ model ResearchLogExport {
 }
 ```
 
-**Why a denormalized table instead of a query view:** training pipelines pull rows in batches; a static table avoids re-JOINing `MLSession` + `BotSkill` + `GameElo` for every batch. The export is rebuilt nightly (truncate + insert) so it's eventually-consistent with the source tables — perfectly fine for offline training jobs.
+**Why a denormalized table instead of a query view:** training pipelines pull rows in batches; a static table avoids re-JOINing `TrainingSession` + `BotSkill` + `GameElo` for every batch. The export is rebuilt nightly (truncate + insert) so it's eventually-consistent with the source tables — perfectly fine for offline training jobs.
 
 The reranker (Sprint-5+ in `Future_Ideas.md`) reads from this table directly. Future fine-tune jobs ingest it via `pgcopy`. No new infrastructure needed beyond the cron.
 
@@ -251,7 +251,7 @@ Three sprints, each independently shippable. Sprint 1 delivers user value standa
 **Backend:**
 
 1. **Schema** — `TrainingSessionNote` + `NoteOutcome` enum. Prisma migration. Tests: schema round-trip, FK + cascade behavior, unique constraint on `helpDocId`.
-2. **Routes** — `POST /research/sessions/:sessionId/notes`, `PATCH /research/notes/:noteId`, `DELETE /research/notes/:noteId`, `GET /research/notes`, `GET /research/notes/:noteId`. All gated by `requireAuth`. Owner check via `req.auth.userId === note.userId`.
+2. **Routes** — `POST /research/sessions/:sessionId/notes`, `PATCH /research/notes/:noteId`, `DELETE /research/notes/:noteId`, `GET /research/notes`, `GET /research/notes/:noteId`. All gated by `requireAuth`. Owner check uses the **denormalized `note.userId`** field (`req.auth.userId === note.userId`) — `TrainingSession` itself has no direct `userId` (ownership flows `TrainingSession.modelId → BotSkill.createdBy`), so on **create** we resolve ownership once via `session.model.createdBy` and stamp `userId` onto the note; all subsequent mutations check the stamped field, avoiding a per-write JOIN.
 3. **Body validation** — `body` ≤ 2 KB, `outcome` must be a `NoteOutcome` value, `tags` array of ≤ 10 lower-snake strings each ≤ 32 chars. Reject with 400 + clear error code.
 4. **Tests** — 10 vitest cases on the routes (happy paths + owner check + size limit + outcome validation + missing-session 404).
 
@@ -463,7 +463,7 @@ All v1 decisions confirmed in a planning walkthrough with the project lead. Snap
 
 | # | Decision | Locked |
 |---|---|---|
-| B1 | Schema split for notes vs entries | **two tables** — `TrainingSessionNote` (FK to `MLSession`) + `ResearchLogEntry` (standalone) |
+| B1 | Schema split for notes vs entries | **two tables** — `TrainingSessionNote` (FK to `TrainingSession`) + `ResearchLogEntry` (standalone) |
 | B2 | Community-feed location | **both surfaces** — Profile → Training Journal → Community sub-tab AND a new "Community notes" section in the Guide drawer browse panel; shared `GET /research/community` API |
 | B3 | Note ordering on a session row | **newest first by default**, with a per-tab sort toggle in the drawer header |
 | B4 | Post-v1 enhancements (comments, voting, voice, real-time collab, bulk import, hyperparameter hints) | **deferred — tracked in `doc/Future_Ideas.md` → "Research Log — post-v1 enhancements"** |

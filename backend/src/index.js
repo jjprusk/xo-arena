@@ -24,6 +24,7 @@ import adminRouter from './routes/admin.js'
 import adminPerfBaselinesRouter from './routes/adminPerfBaselines.js'
 import helpAdminRouter from './routes/helpAdmin.js'
 import helpRouter from './routes/help.js'
+import researchRouter from './routes/research.js'
 import botsRouter from './routes/bots.js'
 import botGamesRouter from './routes/botGames.js'
 import feedbackRouter from './routes/feedback.js'
@@ -60,6 +61,7 @@ registerRoutes(app, {
   '/admin/perf': adminPerfBaselinesRouter,
   '/admin/help': helpAdminRouter,
   '/help':       helpRouter,
+  '/research':   researchRouter,
   '/games': gamesRouter,
   '/ml': mlRouter,
   '/skills': skillsRouter,

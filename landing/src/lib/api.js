@@ -111,6 +111,24 @@ export const api = {
       api.post('/play/bot', { gameId, ...(botUserId ? { botUserId } : {}) }),
   },
 
+  research: {
+    // Sprint 1 of doc/Research_Log_Plan.md — TrainingSessionNote CRUD.
+    createNote: (sessionId, body, token) =>
+      api.post(`/research/sessions/${sessionId}/notes`, body, token),
+    updateNote: (noteId, body, token) => api.patch(`/research/notes/${noteId}`, body, token),
+    deleteNote: (noteId, token)       => request('DELETE', `/research/notes/${noteId}`, null, token),
+    listNotes:  (params = {}, token)  => {
+      const p = new URLSearchParams()
+      if (params.outcome) p.set('outcome', params.outcome)
+      if (params.tag)     p.set('tag',     params.tag)
+      if (params.since)   p.set('since',   params.since)
+      if (params.limit)   p.set('limit',   String(params.limit))
+      const qs = p.toString()
+      return api.get(`/research/notes${qs ? `?${qs}` : ''}`, token)
+    },
+    getNote:    (noteId, token)       => api.get(`/research/notes/${noteId}`, token),
+  },
+
   guide: {
     getPreferences:   (token)       => api.get('/guide/preferences', token),
     patchPreferences: (body, token) => api.patch('/guide/preferences', body, token),
