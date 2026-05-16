@@ -3,7 +3,6 @@ import React, { lazy, useEffect, useState } from 'react'
 import { useLocation, useSearchParams, useNavigate, Link, Navigate } from 'react-router-dom'
 import { useOptimisticSession } from '../lib/useOptimisticSession.js'
 import { useGameSDK } from '../lib/useGameSDK.js'
-import { getCommunityBot } from '../lib/communityBotCache.js'
 import PlatformShell from '../components/platform/PlatformShell.jsx'
 import { perfMark, perfDumpSummary } from '../lib/perfLog.js'
 import { recordGuestHookStep1 } from '../lib/guestMode.js'
@@ -33,10 +32,17 @@ function Spinner() {
   )
 }
 
+// Module-level in-flight promise for POST /api/v1/play/bot. Survives React
+// StrictMode mount/unmount/mount in dev so the second mount picks up the
+// first mount's result instead of firing a second POST that would create a
+// duplicate HvB table. Cleared in `.finally()` so a future navigation to
+// /play starts a fresh request. See Future_Ideas PlayVsBot CTA item 3.
+let sharedPlayBotRequest = null
+
 // Inner component — only mounted once botConfig is resolved (or not needed).
 // Keeps all hook calls stable regardless of async bot fetch.
 // Exported so TableDetailPage can render a table-routed game without duplicating this logic.
-export function GameView({ joinSlug, tournamentMatchId, tournamentId, authSession, botConfig, spectatingCount = 0, spectate = false }) {
+export function GameView({ joinSlug, tournamentMatchId, tournamentId, authSession, botConfig, playBundle = null, spectatingCount = 0, spectate = false }) {
   const navigate = useNavigate()
   const location = useLocation()
 
@@ -62,6 +68,7 @@ export function GameView({ joinSlug, tournamentMatchId, tournamentId, authSessio
     currentUser,
     botUserId:  botConfig?.botUserId  ?? null,
     spectate,
+    playBundle,
   })
 
   // Subscribe to move events to drive seat-pod states in the shell
@@ -332,22 +339,36 @@ export default function PlayPage() {
   const gameKey = authSession?.user?.id ?? 'guest'
 
   const [botConfig, setBotConfig] = useState(null)   // { botUserId }
+  const [playBundle, setPlayBundle] = useState(null) // POST /play/bot response (Future_Ideas item 3)
   const [botError, setBotError]   = useState(false)
   const [demoError, setDemoError] = useState(false)
 
   // Game chunk is preloaded at the module level in AppLayout — no need to re-trigger here.
 
-  // Resolve community bot — uses the module-level cache so repeated plays
-  // and navigations from HomePage (which prefetches) skip the round-trip.
+  // Vs-community-bot start: one round-trip to POST /api/v1/play/bot collapses
+  // bot resolution + SSE session pre-allocation + HvB table create. The
+  // response carries the opening board so GameView can render immediately —
+  // no SSE bootstrap on the perf-ready critical path. See Future_Ideas item 3.
   useEffect(() => {
     if (action !== 'vs-community-bot' || joinSlug) return
-    perfMark('PlayPage:botConfig-start')
-    getCommunityBot()
-      .then(config => {
-        perfMark('PlayPage:botConfig-done', config ? 'ok' : 'null')
-        config ? setBotConfig(config) : setBotError(true)
+    let cancelled = false
+    perfMark('PlayPage:playBundle-start')
+    // StrictMode in dev mounts → unmounts → remounts every effect, which
+    // would fire two real /play/bot POSTs (each creates a stranded table).
+    // The shared in-flight promise dedups them — second mount picks up the
+    // first mount's result. Cleared on resolve/reject so a user navigating
+    // back to /play later gets a fresh table.
+    sharedPlayBotRequest ??= api.play.startBot({ gameId: 'xo' })
+      .finally(() => { sharedPlayBotRequest = null })
+    sharedPlayBotRequest
+      .then(res => {
+        if (cancelled) return
+        perfMark('PlayPage:playBundle-done', res?.tableId ? 'ok' : 'null')
+        setPlayBundle(res)
+        setBotConfig({ botUserId: res?.bot?.id ?? null })
       })
-      .catch(() => setBotError(true))
+      .catch(() => { if (!cancelled) setBotError(true) })
+    return () => { cancelled = true }
   }, [action, joinSlug])
 
   // Watch-demo: spawn a private bot-vs-bot demo table (Hook step 2) and
@@ -407,6 +428,7 @@ export default function PlayPage() {
       tournamentId={tournamentId}
       authSession={authSession}
       botConfig={resolvedBotConfig}
+      playBundle={action === 'vs-community-bot' ? playBundle : null}
       spectate={spectate}
     />
   )

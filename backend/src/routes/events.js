@@ -153,18 +153,15 @@ router.get('/stream', optionalSessionCookie, async (req, res) => {
   // a reopen that happens before any real event arrives starts the new
   // connection with no resume cursor, and any event published in the gap
   // (e.g. `guide:journeyStep` fired by a completing POST) is silently lost.
-  const sseSessionId = mintSessionId()
-  const tailId = await getStreamTailId().catch(() => null)
-  if (tailId) res.write(`id: ${tailId}\n`)
-  res.write(`event: session\ndata: ${JSON.stringify({ sseSessionId })}\n\n`)
-  // Phase 5: when the session truly goes away (3-s debounce expires), drop
-  // it from every table presence map it had joined and rebroadcast presence
-  // so badge counts settle. The dispatcher fetches latest sessionsModule
-  // lazily because tablePresenceService → sseSessions has no inverse import.
-  sseSessions.register(sseSessionId, {
-    userId,
-    res,
-    onDispose: async (uid, sid, snapshot = {}) => {
+  // Pre-allocated session claim path — `POST /api/v1/play/bot` mints a
+  // session id ahead of the EventSource open, registers it with `res: null`,
+  // and the client passes that id back here via `?sseSession=<id>`. Saves
+  // ~1 RTT on the warm-anon vs-community-bot landing (Future_Ideas item 3).
+  // Falls through to mint-on-open for any unknown / already-claimed id.
+  const claimedId = typeof req.query.sseSession === 'string' ? req.query.sseSession : null
+
+  // Build the onDispose callback once — same for mint and claim paths.
+  const onDispose = async (uid, sid, snapshot = {}) => {
       try {
         const { handleSessionGone } = await import('../services/tablePresenceService.js')
         const dropped = handleSessionGone({ sessionId: sid })
@@ -203,8 +200,21 @@ router.get('/stream', optionalSessionCookie, async (req, res) => {
       } catch (err) {
         logger.warn({ err: err.message, sessionId: sid }, 'sseSessions onDispose: cleanup failed')
       }
-    },
-  })
+    }
+
+  // Claim a pre-allocated session if one was supplied and is still pending
+  // (registered with res:null by /api/v1/play/bot). Otherwise mint fresh.
+  let sseSessionId
+  if (claimedId && sseSessions.attachRes(claimedId, { res, onDispose, userId })) {
+    sseSessionId = claimedId
+  } else {
+    sseSessionId = mintSessionId()
+    sseSessions.register(sseSessionId, { userId, res, onDispose })
+  }
+
+  const tailId = await getStreamTailId().catch(() => null)
+  if (tailId) res.write(`id: ${tailId}\n`)
+  res.write(`event: session\ndata: ${JSON.stringify({ sseSessionId })}\n\n`)
 
   // Replay missed events for Last-Event-ID reconnects. Bounded at 500 to
   // avoid a runaway replay for long-offline clients — they'll need a full

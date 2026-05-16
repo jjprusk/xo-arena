@@ -105,6 +105,46 @@ test.describe('Bot Challenge — guest entry points', () => {
     await expectLandedOnPlayBoard(page)
   })
 
+  // HomePage's "Play against a bot" CTA exercises the single-shot
+  // `POST /api/v1/play/bot` collapse (Future_Ideas PlayVsBot CTA item 3).
+  // The test pins the *structural* shape of the chain: exactly one /play/bot
+  // POST, zero POSTs to the legacy /rt/tables create. If a regression sends
+  // us back through the old chain, the assertion fires before the perf
+  // numbers ever flag it.
+  test('home "Play against a bot": exactly one POST /play/bot, zero /rt/tables creates', async ({ page }) => {
+    const apiCalls = []
+    page.on('request', req => {
+      const url = req.url()
+      const method = req.method()
+      if (method !== 'POST') return
+      if (/\/api\/v1\/play\/bot\b/.test(url))                  apiCalls.push('play-bot')
+      else if (/\/api\/v1\/rt\/tables(\?|$)/.test(url))        apiCalls.push('rt-tables-create')
+      else if (/\/api\/v1\/rt\/tables\/[^/]+\/join/.test(url)) apiCalls.push('rt-tables-join')
+    })
+
+    await page.goto('/')
+    // The "Play against a bot" CTA is rendered as a Link (single render — no
+    // tab/journey toggling), so a name-based locator is stable.
+    const cta = page.getByRole('link', { name: /Play against a bot/i }).first()
+    await cta.waitFor({ state: 'visible', timeout: 15_000 })
+    await cta.click()
+
+    // The collapsed flow keeps the URL on /play?action=vs-community-bot —
+    // no `?join=<slug>` redirect since the table id is delivered in the
+    // single-shot response.
+    await expect(page).toHaveURL(/\/play\?action=vs-community-bot/, { timeout: 15_000 })
+    await expect(boardLocator(page)).toBeVisible({ timeout: 15_000 })
+
+    // Structural assertions: one /play/bot POST replaces the entire
+    // /rt/tables create + join chain.
+    const playBotPosts        = apiCalls.filter(k => k === 'play-bot').length
+    const rtTablesCreatePosts = apiCalls.filter(k => k === 'rt-tables-create').length
+    const rtTablesJoinPosts   = apiCalls.filter(k => k === 'rt-tables-join').length
+    expect(playBotPosts).toBe(1)
+    expect(rtTablesCreatePosts).toBe(0)
+    expect(rtTablesJoinPosts).toBe(0)
+  })
+
   test('/rankings: guest can challenge a bot row via the Play column', async ({ page, request }) => {
     // The leaderboard surfaces every historical bot — including ones
     // since deactivated — so picking "first row" is non-deterministic

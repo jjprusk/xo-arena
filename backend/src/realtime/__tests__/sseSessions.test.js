@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest'
 import {
   register,
+  attachRes,
   dispose,
   get,
   forUser,
@@ -133,5 +134,45 @@ describe('sseSessions — touch', () => {
     vi.advanceTimersByTime(1000)
     touch('s1')
     expect(get('s1').lastSeenAt).toBeGreaterThan(t0)
+  })
+})
+
+describe('sseSessions — attachRes (pre-allocated claim)', () => {
+  it('attaches res + onDispose to a pre-registered pending session', () => {
+    const cb = vi.fn()
+    register('s1', { userId: 'u1', res: null })
+    const fakeRes = { write: vi.fn() }
+    const ok = attachRes('s1', { res: fakeRes, onDispose: cb })
+    expect(ok).toBe(true)
+    expect(get('s1').res).toBe(fakeRes)
+    // Trigger immediate dispose so the onDispose callback fires (debounce
+    // doesn't apply when `immediate: true`).
+    dispose('s1', { immediate: true })
+    expect(cb).toHaveBeenCalledTimes(1)
+  })
+
+  it('returns false for an unknown sessionId', () => {
+    const ok = attachRes('nope', { res: {} })
+    expect(ok).toBe(false)
+  })
+
+  it('returns false if the session is already claimed (res !== null)', () => {
+    register('s1', { userId: 'u1', res: { write: vi.fn() } })
+    const ok = attachRes('s1', { res: { write: vi.fn() } })
+    expect(ok).toBe(false)
+  })
+
+  it('preserves joinedTables set by the pre-allocator', () => {
+    register('s1', { userId: null, res: null })
+    joinTable('s1', 'tbl_a')
+    attachRes('s1', { res: { write: vi.fn() } })
+    expect(tablesFor('s1')).toEqual(['tbl_a'])
+  })
+
+  it('upgrades the userId index when an anon pre-alloc is claimed by an authed SSE', () => {
+    register('s1', { userId: null, res: null })
+    attachRes('s1', { res: { write: vi.fn() }, userId: 'u_signed_in' })
+    const found = forUser('u_signed_in')
+    expect(found.map(e => e.sessionId)).toEqual(['s1'])
   })
 })

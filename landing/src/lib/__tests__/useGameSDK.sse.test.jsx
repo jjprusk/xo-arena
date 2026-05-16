@@ -18,10 +18,12 @@ vi.mock('../rtSession.js', () => ({
 // useEventStream is a hook — capture the latest registration so tests can
 // dispatch synthetic SSE events and assert on the SDK's reaction.
 const eventStreamRegistry = { latest: null }
+const claimSseSessionMock = vi.fn()
 vi.mock('../useEventStream.js', () => ({
   useEventStream: (opts) => {
     eventStreamRegistry.latest = opts
   },
+  claimSseSession: (...args) => claimSseSessionMock(...args),
   KNOWN_SSE_EVENT_TYPES: [],
 }))
 
@@ -42,6 +44,7 @@ beforeEach(() => {
   sessionListeners.clear()
   _sessionId = 's1'
   eventStreamRegistry.latest = null
+  claimSseSessionMock.mockReset()
 })
 
 function dispatch(channel, payload) {
@@ -219,6 +222,82 @@ describe('useGameSDK SSE+POST gameflow branch', () => {
         forfeitReason: 'disconnect',
       }),
     }))
+  })
+
+  // ── playBundle path — single-shot HvB start (Future_Ideas item 3) ──────────
+  describe('single-shot playBundle branch', () => {
+    const bundle = {
+      sseSessionId: 'pre_alloc_1',
+      tableId:      'tbl_h',
+      slug:         'hvb-pre',
+      label:        'You vs Rusty',
+      mark:         'X',
+      board:        Array(9).fill(null),
+      currentTurn:  'X',
+      bot:          { id: 'bot_rusty', displayName: 'Rusty', botModelId: 'builtin:minimax:0' },
+    }
+
+    it('skips the rtFetch chain entirely when a playBundle is provided', async () => {
+      const { result } = renderHook(() =>
+        useGameSDK({
+          gameId: 'xo',
+          botUserId: bundle.bot.id,
+          currentUser: { id: 'u1', displayName: 'Alice' },
+          playBundle: bundle,
+        }),
+      )
+
+      // applyCreateResultHvb fires synchronously from the bundle — phase
+      // flips to 'playing' before any rtFetch could possibly resolve.
+      await waitFor(() => expect(result.current.phase).toBe('playing'))
+
+      // No POST /rt/tables — the entire create-flow chain was bypassed.
+      expect(rtFetchMock).not.toHaveBeenCalled()
+      // The pre-allocated SSE session id was staged for the next openStream.
+      expect(claimSseSessionMock).toHaveBeenCalledWith('pre_alloc_1')
+      // Session exposes the bundle's slug, just like the multi-step path.
+      expect(result.current.session?.tableId).toBe('hvb-pre')
+    })
+
+    it('multi-step PvP path still runs when no playBundle is provided (regression guard)', async () => {
+      rtFetchMock
+        .mockResolvedValueOnce({ slug: 'abc', label: 'Alice', mark: 'X', action: 'created' })
+        .mockResolvedValueOnce({ tableId: 'tbl_1', mark: 'X', action: 'host_reattach' })
+
+      renderHook(() =>
+        useGameSDK({ gameId: 'xo', currentUser: { id: 'u1', displayName: 'Alice' } }),
+      )
+
+      await waitFor(() => {
+        expect(rtFetchMock).toHaveBeenCalledWith('/rt/tables', expect.objectContaining({
+          body: expect.objectContaining({ kind: 'pvp' }),
+        }))
+      })
+      // No SSE-session pre-claim on the multi-step path.
+      expect(claimSseSessionMock).not.toHaveBeenCalled()
+    })
+
+    it('joinSlug overrides playBundle (rejoin of an existing table should not skip the SSE bootstrap)', async () => {
+      rtFetchMock.mockResolvedValueOnce({
+        ok: true, action: 'host_reattach', tableId: 'tbl_x', mark: 'X', slug: 'abc',
+        room: { hostUserId: 'u1', label: 'PvP' },
+      })
+
+      renderHook(() =>
+        useGameSDK({
+          gameId: 'xo', joinSlug: 'abc',
+          currentUser: { id: 'u1' },
+          playBundle: bundle,  // present but should be ignored
+        }),
+      )
+
+      await waitFor(() => {
+        expect(rtFetchMock).toHaveBeenCalledWith('/rt/tables/abc/join', expect.objectContaining({
+          body: { role: 'player' },
+        }))
+      })
+      expect(claimSseSessionMock).not.toHaveBeenCalled()
+    })
   })
 
   it('translates table:<id>:reaction into reaction handlers (and filters self)', async () => {
