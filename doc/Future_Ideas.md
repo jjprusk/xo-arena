@@ -99,9 +99,41 @@ Today the corpus (onboarding-after-the-journey.md, gym-sessions-tab.md) explicit
 - **Privacy:** notes are private by default. Sharing is opt-in per-note; a "publish" toggle scrubs `userId` and adds the note to a public training-notes corpus that the Help System indexes.
 - **Streak / habit nudges:** the Guide's What's Next surface can prompt "you've trained 5 times this week — add a note about what you tried" to drive accrual. Discovery reward eligible.
 
-**Complexity:** Medium. Schema and auto-capture are straightforward (Sessions tab already has the data). UI is 2–3 dev days for the basic version. The cross-cutting Help System integration (point 2) is what makes this transformative; that's another ~1 week and depends on the reranker work currently scoped for Sprint 5+.
+**Complexity:** Medium. Schema and auto-capture are straightforward (Sessions tab already has the data). UI is 2–3 dev days for the basic v1 (notes attached to sessions + a Profile Training journal tab). Wiring user notes into the existing Help System FTS+pgvector retrieval pipeline as an additional ranked source is another ~3–5 days on top.
 
-**Sequencing dependency:** ships best after Sprint 3 of the Help System (so user-private notes can be a retrieval source via the same FTS+pgvector path) and after the §2.5 rate limiter (so a "publish your note as community context" action can be safely opt-in without abuse vectors). The auto-capture-only version (notes attached to sessions, no Help integration) is a clean v1 deliverable any time after Sprint 2.
+**Ready to implement.** All prereqs from the original entry have shipped — the Help System retrieval stack (corpus + FTS + pgvector + admin curation), the per-user rate limiter, and the streaming `/help/ask` endpoint are all live (see `Future_Ideas_Completed.md`). No external dependencies remain; this can be picked up whenever it's prioritized. The transformative reranker-scored cross-corpus version layers on top of the Sprint-5+ reranker (also in the Future_Ideas backlog), but the basic retrieval integration does not wait on it.
+
+**Implementation plan:** the full v1 spec lives in **`doc/Research_Log_Plan.md`** — 3 sprints (~8 dev days), requirements + design + sprint checklist + risks + forward-compatibility notes for what Help Sprint 5+ inherits from the work.
+
+---
+
+## Research Log — post-v1 enhancements
+
+Deferred from the Research Log v1 scope to keep the 3-sprint plan focused (see `doc/Research_Log_Plan.md`). Each item is independently shippable later without re-architecting the v1 design — the notes below describe how each slots in.
+
+### Comments / threads on community notes
+
+Layer a new `ResearchNoteComment` table on top of the published-note rows (`HelpDoc` with `source = 'community-note'`). Same UI shell as the Help feedback thread. Adds social signal but also a moderation surface; defer until publishing volume justifies it.
+
+### Voting / "useful" signal on community notes
+
+The `HelpFeedback` thumbs already lands on the *answers* that cite community notes — that's sufficient retrieval-quality signal for the reranker (Sprint-5+ Help System entry above). A direct per-note vote on the community-feed surface is a separate signal: "I like this note" vs "the Guide gave a good answer using this note." Worth adding once the corpus has accumulated enough notes that browsing-by-rank is a real use case.
+
+### Voice input / dictation
+
+Speech-to-text on the note composer textarea. Browser Web Speech API as the default; falls back to Whisper-on-device or a server endpoint where the browser doesn't support it. New frontend component on the composer; no backend change. Pairs naturally with the Help System Sprint-5+ voice-input item — share the implementation.
+
+### Real-time collaboration / shared workspaces
+
+Lets two users co-author a research log (e.g. a mentor + mentee, or a team training the same bot family). Requires a new sharing model on top of the existing per-user ownership: `NoteCollaborator` join table + per-document realtime via the existing SSE+POST infrastructure. Whole new subsystem; doesn't conflict with v1.
+
+### External markdown import (bulk)
+
+A "Import from local notebook" flow that accepts `.md` / `.zip` files and creates `ResearchLogEntry` rows in batch. Same `create entry` semantics, just batched. Useful migration path for users who already keep external journals; not blocking for v1 since users can also paste markdown into the existing composer.
+
+### Per-note "useful at hyperparameter X" hints
+
+Once the corpus has signal, surface "users found this note useful when running with `gamma ≈ 0.95`" — a structured callout above the note body. Trains on the same `ResearchLogExport` data the reranker uses. Likely emerges naturally from the Sprint-5+ reranker work rather than as its own ticket.
 
 ---
 
