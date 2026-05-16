@@ -42,7 +42,7 @@ Move the platform's recommended "keep a research log" workflow **inside** the pl
 |---|---|
 | S1 | Schema lives in the existing Prisma model (`packages/db`). Two new tables: `TrainingSessionNote` and `ResearchLogEntry`. |
 | S2 | The note layer **does not duplicate** hyperparameters or benchmark data — those already live on the existing `TrainingSession` row. Notes carry only the editorial content; reads JOIN. |
-| S3 | Published notes are **mirrored into the Help corpus** as a new `HelpDoc.source = 'community-note'`. This is an additive change to the existing schema (`HelpDoc.source` is already a free-text label). Reindexing reuses the existing FTS + pgvector pipeline. |
+| S3 | Published notes are **mirrored into the Help corpus** as a new `HelpDoc.source = 'community-note'`. `HelpDoc.source` is a new free-text column added in Sprint 2 (the plan originally assumed it already existed — drift found 2026-05-16). All pre-Sprint-2 rows backfill to `'guide'`. Reindexing reuses the existing FTS + pgvector pipeline. |
 | S4 | The retrieval pipeline returns **three categories** of chunks per query: `corpus` (curated `HelpDoc`s), `private-notes` (only the asking user's), `community-notes` (published by others). The mixer assigns each category a budget so curated content always wins ties. |
 | S5 | A privacy scrubber runs on every **publish** action: regex over emails / phone numbers / addresses / IP-shaped strings. Display name + user-id are scrubbed; `authorHandle` is set from the user's preferred public handle. |
 | S6 | Per-user rate limit on publishing: max 50 published notes / week (matches the existing `helpRateLimit` shape). Editing counts as a new publish for limit purposes. |
@@ -183,7 +183,7 @@ The Help System's retrieval pipeline (Sprint 2 §3 `services/help/retrieval.js`)
 
 - **Privacy filter at write-time, not query-time:** the `private-note` `HelpDoc` rows carry the author's `userId` in `HelpDoc.ownerId` (new optional column, additive migration). The retrieval query adds `WHERE source = 'private-note' AND ownerId = $callerId` for the private lane. Community-note rows have `ownerId IS NULL` (anonymized) or `ownerId = author` (handle-attributed) — either way they're publicly readable.
 
-- **`shareNotesWithGuide` preference:** stored on the user record. When `false`, the `private-notes` lane is skipped entirely for that user's queries. Defaults to `true` because the user has already opted into the platform.
+- **`shareNotesWithGuide` preference:** stored as a key in the existing `User.preferences Json @default("{}")` column (no schema change). When `false`, the `private-notes` lane is skipped entirely for that user's queries. Defaults to `true` (absence-of-key === ON) because the user has already opted into the platform.
 
 ### 2.5 Data-mining export
 
@@ -280,7 +280,7 @@ Three sprints, each independently shippable. Sprint 1 delivers user value standa
 1. **Schema** — `ResearchLogEntry` + `ResearchEntryCategory` enum. `HelpDoc.ownerId` (optional FK to `User`). Migration is additive.
 2. **Feature flag** — seed `SystemConfig.researchLog.publishEnabled = false` (default off). All publish-related routes + UI gate on this; the entire Sprint 2 surface ships behind the flag so the publish flow is *built* in Sprint 2 but *activated* only when the flag is flipped (no redeploy needed for activation).
 3. **PII scrubber** — `backend/src/services/research/pii.js` with regex set listed in §2.3. Pure function + 15 unit-test cases.
-4. **Publish routes** — `POST /research/notes/:noteId/publish`, `POST /research/notes/:noteId/unpublish`, `POST /research/entries/:entryId/publish`, `POST /research/entries/:entryId/unpublish`. Each creates / updates / deletes the linked `HelpDoc` row, runs the existing Sprint-2 chunker + embedder, sets `helpDocId`. Idempotent. Returns 503 when `publishEnabled === false`.
+4. **Publish routes** — `POST /research/notes/:noteId/publish`, `POST /research/notes/:noteId/unpublish`, `POST /research/entries/:entryId/publish`, `POST /research/entries/:entryId/unpublish`. Each creates / updates / deletes the linked `HelpDoc` row, runs the existing `services/help/chunker.js` + `services/help/embedClient.js` pipeline, sets `helpDocId`. Idempotent. Returns 503 when `publishEnabled === false`.
 4. **Entry routes** — `POST /research/entries`, `PATCH /research/entries/:entryId`, `DELETE /research/entries/:entryId`, `GET /research/entries`.
 5. **Community list** — `GET /research/community` — paginated query over `HelpDoc.source IN ('community-note')` JOIN the source `TrainingSessionNote` / `ResearchLogEntry` for the attribution handle.
 6. **Export route** — `GET /research/export.md` returns `text/markdown` with YAML front-matter per item.
@@ -289,7 +289,7 @@ Three sprints, each independently shippable. Sprint 1 delivers user value standa
 
 **Frontend (landing):**
 
-9. **Profile → Training journal tab** — `landing/src/pages/profile/TrainingJournalTab.jsx`. Filters, list, ad-hoc entry composer, community feed sub-tab.
+9. **Profile → Training journal tab** — mount inside the existing flat `landing/src/pages/ProfilePage.jsx` (no `pages/profile/` subdir exists); extract the tab body to `landing/src/components/research/TrainingJournalTab.jsx`. Filters, list, ad-hoc entry composer, community feed sub-tab.
 10. **Publish modal** — side-by-side scrubber preview (`PublishNoteModal.jsx`). Shows highlighted matches + Cancel / Confirm.
 11. **Export button** — anchor with `download="training-journal.md"` pointing at `GET /research/export.md`.
 12. **Settings toggle** — `shareNotesWithGuide` in the user prefs panel.
@@ -392,26 +392,26 @@ The Research Log doesn't eliminate Sprint 5+ planning — it changes what's left
 - [x] **Component:** `landing/src/components/research/SessionNotesDrawer.jsx`
 - [x] Integrate into `landing/src/pages/GymPage.jsx` Sessions tab (mounted from `landing/src/components/gym/SessionsTab.jsx` under the selected-session detail panel)
 - [x] Vitest: 5 cases on the drawer (render, add, edit, delete, optimistic + rollback)
-- [ ] Manual QA: write a note → reload → still there; edit → reflects; delete → gone
+- [x] Manual QA: write a note → reload → still there; edit → reflects; delete → gone *(2026-05-16, project lead)*
 - [x] Update `doc/V1_Acceptance.md` with the new flow (Stage 12)
 
 ### Sprint 2 — Profile journal + Publish flow (~3.5 days)
 
-- [ ] **Schema:** add `ResearchLogEntry` + `ResearchEntryCategory` + `HelpDoc.ownerId`
+- [ ] **Schema:** add `ResearchLogEntry` + `ResearchEntryCategory` + `HelpDoc.ownerId` + `HelpDoc.source` (defaulting to `'guide'` for all existing rows)
 - [ ] Migration: `research_log_entries_and_publish`
 - [ ] **Feature flag:** seed `SystemConfig.researchLog.publishEnabled = false`. Gate every publish route on the flag (return 503 when off). Gate the publish button + Community sub-tab + Guide drawer community section on the flag client-side.
 - [ ] **PII scrubber:** `backend/src/services/research/pii.js` + 15 vitest cases
-- [ ] **Publish routes** (notes + entries) — wire into existing `services/help/corpusChunker.js` + `embedder.js`
+- [ ] **Publish routes** (notes + entries) — wire into existing `services/help/chunker.js` + `services/help/embedClient.js`
 - [ ] **Unpublish cascade** — delete linked `HelpDoc` + chunks; clear `helpDocId`
 - [ ] **Entry CRUD routes** (`POST/PATCH/DELETE/GET` `/research/entries[…]`)
 - [ ] **Community list:** `GET /research/community` with attribution JOIN
 - [ ] **Export:** `GET /research/export.md` returns markdown with YAML front-matter
 - [ ] **Rate limit:** extend `helpRateLimit.js` with `research-publish` bucket (50 / week / user, no daily cap)
 - [ ] Tests: 25 vitest cases on publish round-trip, scrub, unpublish cascade, community list, export, rate-limit, **feature-flag gate (publish routes 503 when off, succeed when on)**
-- [ ] **Page:** `landing/src/pages/profile/TrainingJournalTab.jsx` — three sections (Session notes / Ad-hoc entries / Community feed); Community section hidden when `publishEnabled === false`
+- [ ] **Page:** `landing/src/components/research/TrainingJournalTab.jsx` mounted inside existing flat `landing/src/pages/ProfilePage.jsx` (no `pages/profile/` subdir) — three sections (Session notes / Ad-hoc entries / Community feed); Community section hidden when `publishEnabled === false`
 - [ ] **Guide drawer integration:** new "Community notes" section in the browse panel mounting the same `<CommunityFeed>` component as the Profile sub-tab. Cross-link header.
 - [ ] **Modal:** `landing/src/components/research/PublishNoteModal.jsx` (side-by-side preview, attribution dropdown defaulting to `handle`)
-- [ ] **Settings toggle:** `shareNotesWithGuide` in the existing user-prefs panel
+- [ ] **Settings toggle:** `shareNotesWithGuide` stored as a key inside the existing `User.preferences Json` column (no schema column); surfaced in the existing user-prefs panel
 - [ ] Vitest: ~14 cases on the new frontend components (publish flow + feature-flag gate + attribution default + cross-link)
 - [ ] Manual QA with flag OFF: publish UI invisible everywhere
 - [ ] Manual QA with flag ON: write → publish → see in both Profile + Guide drawer community feeds → unpublish → gone from both but still in your journal
