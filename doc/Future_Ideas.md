@@ -111,6 +111,48 @@ Today the corpus (onboarding-after-the-journey.md, gym-sessions-tab.md) explicit
 
 Deferred from the Research Log v1 scope to keep the 3-sprint plan focused (see `doc/Research_Log_Plan.md`). Each item is independently shippable later without re-architecting the v1 design — the notes below describe how each slots in.
 
+### Private-notes auto-indexing pipeline (Research Log Sprint 3 deferral)
+
+Sprint 3 wired the lane architecture (`corpus` / `privateNotes` / `communityNotes`) with
+budgets, `ownerId` filter at the SQL level, and the `shareNotesWithGuide` preference
+gate — but **the `privateNotes` lane returns empty results today** because
+unpublished `TrainingSessionNote` and `ResearchLogEntry` rows have no backing
+`HelpDoc` to retrieve from. (Publishing flips a note into `source = 'community-note'`,
+which lives in a *different* lane.) The lane is plumbed end-to-end through retrieval
+and citations so this work is purely about *populating* it; no retrieval/UI code
+needs to move.
+
+**What it would take** — a "note mirror" service that maintains a parallel
+`source = 'private-note'` `HelpDoc` (with `ownerId`) for every note/entry the user
+owns:
+
+- **Hook on note/entry write paths** — `services/research/noteMirrorService.js`
+  exposed as `mirrorNote(note)` / `mirrorEntry(entry)` / `unmirrorNote(id)`. Called
+  from the existing CRUD routes alongside the DB write. Re-uses the
+  `services/help/chunker.js` + `embedClient.js` pipeline already wired in
+  `services/research/publishService.js`.
+- **Publish ↔ private transitions** — extend `publishService` so publishing flips an
+  existing private mirror's `source` to `'community-note'` (and re-scrubs PII) rather
+  than creating a fresh `HelpDoc`; unpublish flips it back to `'private-note'`. Same
+  `helpDocId` pointer survives the round-trip — saves an embed call per publish.
+- **Backfill job** — `backend/src/jobs/researchLogBackfillPrivateMirror.js` walks
+  every existing `TrainingSessionNote` + `ResearchLogEntry` and mirrors it. Idempotent
+  (`helpDocId` presence check). One-time, runs from `um` CLI.
+- **Cost considerations** — one embed call per note create + per edit. At
+  text-embedding-3-small @ 384 dim, ~$0.00002 per note. Negligible per-user;
+  worth adding a `cron`-style coalescer if a user does ten edits in a minute.
+- **TTL / cleanup** — when a note is deleted, the mirror cascades (already wired via
+  the unpublish path's `teardownCommunityDoc`; reusing it for `unmirrorNote`).
+
+**Acceptance:** with `shareNotesWithGuide=true`, asking the Guide a Q where the
+answer benefits from your private notes produces a citation tagged `lane: 'privateNotes'`
+that deep-links into your Training Journal. Cross-user test asserts the lane returns
+zero rows when the asker is not the note owner.
+
+**Complexity:** Medium (~2 days). The data path mirrors the Sprint 2
+publish pipeline; the only new surface area is the mirror service + backfill
+job + the publish-flip semantics.
+
 ### Comments / threads on community notes
 
 Layer a new `ResearchNoteComment` table on top of the published-note rows (`HelpDoc` with `source = 'community-note'`). Same UI shell as the Help feedback thread. Adds social signal but also a moderation surface; defer until publishing volume justifies it.

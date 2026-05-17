@@ -351,6 +351,33 @@ model ResearchLogEntry {
   @@map("research_log_entries")
 }
 
+/// Materialised "view" over TrainingSessionNote + ResearchLogEntry — refreshed
+/// nightly via truncate-and-insert (backend/src/jobs/researchLogExport.js).
+/// Powers downstream analytics and the Sprint-5+ reranker training feed; not
+/// served on the request path. Source-of-truth rows live in the original
+/// tables; this table is disposable and rebuilt from scratch each run.
+model ResearchLogExport {
+  id                  String     @id      // source row id, prefixed by `type`
+  type                String              // 'note' | 'entry'
+  userId              String
+  body                String
+  outcome             String?            // notes only
+  title               String?            // entries only
+  category            String?            // entries only
+  tags                String[]   @default([])
+  sharedWithCommunity Boolean    @default(false)
+  publishedAt         DateTime?
+  helpDocId           String?
+  sourceCreatedAt     DateTime
+  sourceUpdatedAt     DateTime
+  exportedAt          DateTime   @default(now())
+
+  @@index([userId])
+  @@index([type])
+  @@index([sharedWithCommunity, publishedAt])
+  @@map("research_log_exports")
+}
+
 model MLCheckpoint {
   id         String   @id @default(cuid())
   modelId    String

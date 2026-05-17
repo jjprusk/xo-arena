@@ -168,6 +168,11 @@ export async function* streamHelpAsk({
             contentFilterTriggered: !!parsed.data?.contentFilterTriggered,
             degraded:               !!parsed.data?.degraded,
             latencyMs:              parsed.data?.latencyMs ?? null,
+            // Sprint 3 §3 step 4 — lane-tagged citations. Absent in older
+            // server builds; default to [] so the UI can render unconditionally.
+            citations:              Array.isArray(parsed.data?.citations)
+              ? parsed.data.citations
+              : [],
           }
           return
         } else if (parsed.event === 'error') {

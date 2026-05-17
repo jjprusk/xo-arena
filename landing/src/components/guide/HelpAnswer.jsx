@@ -185,6 +185,11 @@ export default function HelpAnswer({ turn, innerRef = null }) {
         </div>
       )}
 
+      {/* Lane-tagged citations (Research_Log_Plan Sprint 3 §3 step 4 + 6) */}
+      {status === 'done' && Array.isArray(turn.citations) && turn.citations.length > 0 && (
+        <CitationsList citations={turn.citations} />
+      )}
+
       {/* Sprint 3 §3.3 — thumbs + categories + comment. HelpFeedback
           renders nothing if the turn doesn't have a persisted
           queryId/answerId yet, so this is safe to mount unconditionally
@@ -193,6 +198,54 @@ export default function HelpAnswer({ turn, innerRef = null }) {
     </div>
   )
 }
+
+// ── Citations ────────────────────────────────────────────────────────────
+
+const LANE_META = {
+  corpus:         { icon: '📘', label: 'Guide',     hrefFor: c => `/help/${c.slug}` },
+  privateNotes:   { icon: '🔒', label: 'Your note', hrefFor: ()  => '/profile?section=journal' },
+  communityNotes: { icon: '🌐', label: 'Community', hrefFor: ()  => '/profile?section=journal' },
+}
+
+function CitationsList({ citations }) {
+  return (
+    <div className="text-[11px]" style={{ color: 'var(--text-muted)' }}>
+      <div className="mb-1 opacity-80">Sources</div>
+      <ul className="flex flex-wrap gap-1.5">
+        {citations.map(c => {
+          const meta = LANE_META[c.lane] ?? LANE_META.corpus
+          const href = meta.hrefFor(c)
+          const title = c.title || c.slug || 'source'
+          const byline = c.lane === 'communityNotes' && c.author?.displayName
+            ? ` · ${c.author.displayName}` : ''
+          // Internal links use react-router; external would need an anchor.
+          // All our lanes link in-app for now.
+          return (
+            <li key={c.docId}>
+              <Link
+                to={href}
+                className="inline-flex items-center gap-1 px-2 py-0.5 rounded"
+                style={{
+                  background: 'var(--bg-surface)',
+                  border: '1px solid var(--border-default)',
+                  color: 'var(--text-primary)',
+                }}
+                title={`${meta.label}: ${title}${byline}`}
+                data-lane={c.lane}
+              >
+                <span aria-hidden="true">{meta.icon}</span>
+                <span className="truncate max-w-[14rem]">{title}</span>
+                {byline ? <span className="opacity-70">{byline}</span> : null}
+              </Link>
+            </li>
+          )
+        })}
+      </ul>
+    </div>
+  )
+}
+
+export { CitationsList }
 
 // Exposed for tests so they can assert the copy maps without re-rendering.
 export { ERROR_COPY, errorMessage }

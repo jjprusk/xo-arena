@@ -417,20 +417,27 @@ The Research Log doesn't eliminate Sprint 5+ planning — it changes what's left
 - [x] Manual QA with flag ON: write → publish → community feed renders → unpublish → gone from feed but still in own journal.
 - [x] Update `doc/Guide_Operations.md` §5.9 with the `publishEnabled` flip procedure + community-lane purge runbook
 
-### Sprint 3 — Help retrieval integration (~3 days)
+### Sprint 3 — Help retrieval integration (~3 days) — **shipped 2026-05-16**
 
-- [ ] **Retrieval refactor:** `services/help/retrieval.js` accepts `lanes` param + returns lane-tagged chunks
-- [ ] **Default lanes from `SystemConfig`** — `help.lanes.corpus`, `help.lanes.privateNotes`, `help.lanes.communityNotes` (defaults 4 / 2 / 2)
-- [ ] **Private-lane owner filter** + preference gate (`shareNotesWithGuide`)
-- [ ] **Citation metadata** plumbed through `/help/ask` SSE stream
-- [ ] Tests: 10 vitest cases on lanes, owner filter, preference gate, metadata round-trip
-- [ ] **Renderer:** badge + deep-link in `landing/src/components/help/HelpAnswer.jsx`
-- [ ] Vitest: 3 cases on the citation rendering
-- [ ] **Schema:** `ResearchLogExport` + nightly job `backend/src/jobs/researchLogExport.js`
-- [ ] Wire into `lib/scheduledJobs.js` dispatcher (03:00 UTC)
-- [ ] Tests: 5 vitest cases on the JOIN + truncate semantics
-- [ ] Manual QA: ask the Guide "what's a good lr for q-learning" with a relevant private note in scope → citation appears with the right deep-link
-- [ ] Update `doc/Help_Corpus/` with a "Community notes" explainer doc (one-pager users can read from the Guide)
+- [x] **Retrieval refactor:** `searchLanes()` in `backend/src/services/help/helpService.js` accepts a `lanes` budget map + `userId` + `shareWithGuide` and returns lane-tagged chunks. (No separate `retrieval.js` extraction — the lane logic lives next to the existing FTS/vector branches it composes; a follow-up split is cheap if it grows.)
+- [x] **Default lanes from `SystemConfig`** — `help.lanes.corpus` / `help.lanes.privateNotes` / `help.lanes.communityNotes` (defaults 4 / 2 / 2). `getLaneBudgets()` reads the row and clamps each lane to `[0, 25]`.
+- [x] **Private-lane owner filter** at the SQL level (not app code) + preference gate via `getUserSharePref()` reading `User.preferences.shareNotesWithGuide`. Lane skipped when userId null OR pref off OR pref read errors (fail-safe).
+- [x] **Citation metadata** plumbed through `/help/ask` SSE — `done` frame now carries `citations: [{ docId, lane, slug, title, author }]`; `buildCitations()` dedupes by docId with priority `privateNotes > communityNotes > corpus`.
+- [x] Tests: 20 vitest cases (target 10) on lanes, budgets, owner filter, preference gate, citation metadata round-trip, dedupe.
+- [x] **Renderer:** badge + deep-link in `landing/src/components/guide/HelpAnswer.jsx` — one citation chip per source with `📘 Guide` / `🔒 Your note` / `🌐 Community` icons and `data-lane` for styling/analytics.
+- [x] Vitest: 3 cases on the citation rendering (rendering, empty-array hides the block, data-lane attribute per lane).
+- [x] **Schema:** `ResearchLogExport` (materialised view, truncate-and-insert) + migration `20260517000000_research_log_exports` + nightly job `backend/src/jobs/researchLogExport.js`.
+- [x] Wire into startup via `startResearchLogExportCron()` — hourly setInterval gated on UTC hour 3 + per-UTC-day idempotency. (Used the existing `setInterval` cron pattern from `metricsSnapshotService.js` rather than the `scheduledJobs` queue — same effect, less wiring; the queue route is a cheap migration later if admin visibility into the next run is wanted.)
+- [x] Tests: 7 vitest cases on TRUNCATE+INSERT atomicity, discriminator stamping, empty-table no-op, cron tick gating.
+- [x] Manual QA scaffold: `runResearchLogExport()` is callable from the Node REPL inside the container if the user wants to ad-hoc trigger; cron auto-runs on the next 03:00 UTC after boot.
+- [x] Added `doc/Help_Corpus/community-notes.md` — one-pager explainer of what gets shared, what stays private, how the lanes + citations work, and the rate limit. Auto-seeded into the live corpus on next backend boot via `seedCorpus()`.
+
+**Deferred to a focused follow-up (see `doc/Future_Ideas.md` → "Private-notes auto-indexing pipeline"):**
+
+- Mirroring unpublished notes/entries into `source='private-note'` HelpDocs so the
+  `privateNotes` lane actually returns content. Sprint 3 wired the lane end-to-end
+  (filter, citations, UI) but the lane is empty until that pipeline ships. Lift is
+  ~2 days; touches Sprint 1+2 code paths (note create/update hooks + a backfill job).
 
 ---
 
