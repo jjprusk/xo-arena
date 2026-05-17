@@ -41,6 +41,7 @@ import realtimeRouter, { modeRouter as realtimeModeRouter } from './routes/realt
 import playRouter from './routes/play.js'
 import perfVitalsRouter from './routes/perfVitals.js'
 import swControlRouter from './routes/swControl.js'
+import { validateGameSlug } from './middleware/gameSlug.js'
 import { getSystemConfig } from './services/skillService.js'
 import { startActivityFlushJob } from './services/activityService.js'
 import { startReplayPurgeJob } from './services/replayPurgeService.js'
@@ -53,6 +54,15 @@ import { startMetricsSnapshotCron } from './services/metricsSnapshotService.js'
 
 const PORT = process.env.PORT || 3000
 
+// A1.4 — game-as-prefix route layer. Registered BEFORE the flat mounts below
+// so /api/v1/games/:slug/bots takes precedence over /api/v1/games's other routes.
+// Each prefix mount runs the slug validator first; unknown slugs 404 cleanly.
+// Inner handlers read req.gameId (set by validator) and req.query.gameId is
+// injected for back-compat with handlers that pre-date the prefix.
+registerRoutes(app, {
+  '/games/:slug/bots': [validateGameSlug, botsRouter],
+})
+
 registerRoutes(app, {
   '/ai': aiRouter,
   '/logs': logsRouter,
@@ -64,6 +74,11 @@ registerRoutes(app, {
   '/admin/help': helpAdminRouter,
   '/help':       helpRouter,
   '/research':   researchRouter,
+  // /game-results is the canonical mount for game-result records (POST /, GET /,
+  // GET /:id/replay). The legacy /games mount is kept for back-compat until A1.9
+  // adds 301s. The name games-as-records was historically confusing; game-results
+  // is unambiguous and frees the /games namespace for the prefix router above.
+  '/game-results': gamesRouter,
   '/games': gamesRouter,
   '/ml': mlRouter,
   '/skills': skillsRouter,

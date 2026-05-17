@@ -85,10 +85,18 @@ app.use((req, res, next) => {
 // Health check
 app.get('/health', (_req, res) => res.json({ status: 'ok' }))
 
-// API v1 routes (registered after app is created)
+// API v1 routes (registered after app is created).
+//
+// Each value may be:
+//   - a single router (e.g. botsRouter)
+//   - an array of [middleware..., router] (e.g. [validateGameSlug, botsRouter])
+//     used for prefix routes that need a slug validator or other guards.
+//
+// app.use() accepts a variadic mix of middleware and routers, so we spread.
 export function registerRoutes(app, routes) {
-  for (const [path, router] of Object.entries(routes)) {
-    app.use(`/api/v1${path}`, router)
+  for (const [path, handler] of Object.entries(routes)) {
+    const handlers = Array.isArray(handler) ? handler : [handler]
+    app.use(`/api/v1${path}`, ...handlers)
   }
 }
 
