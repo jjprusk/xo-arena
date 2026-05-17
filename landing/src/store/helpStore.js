@@ -213,6 +213,7 @@ export function createHelpStoreImpl(deps = {}) {
                     contentFilterTriggered: frame.contentFilterTriggered,
                     degraded:               frame.degraded,
                     latencyMs:              frame.latencyMs,
+                    citations:              frame.citations ?? [],
                     finishedAt:             Date.now(),
                   }
                 : t),

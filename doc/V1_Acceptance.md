@@ -437,6 +437,65 @@ The 1-second sleep is needed because `appendToStream` is fire-and-forget — wit
 
 ---
 
+## Stage 12 — Research Log Sprint 1 (training session notes)
+
+**Purpose:** verify the user can write, edit, and delete notes attached to a
+training session, and that the routes correctly enforce ownership. Sprint 1
+is publish-free — every note is private; publish + community lanes ship in
+Sprint 2.
+
+Plan reference: `doc/Research_Log_Plan.md` §3 "Sprint 1".
+
+### 12.1 Add a note to one of your own sessions
+
+Sign in as a user who has at least one completed `TrainingSession`. Open the
+Gym, select the model that owns the session, switch to the **Sessions** tab,
+and click a session row to open its detail panel. Expand the **📔 Research
+notes** drawer. Type a body, choose an outcome (`SUCCESS` etc.), add one or
+two tags, and click **+ Add note**.
+
+**Expected:** the new note appears at the top of the list (newest first by
+default) with the outcome badge + tags rendered. The textarea clears.
+
+### 12.2 Edit + delete the note
+
+Click **Edit** on the new row, change the body and outcome, click **Save**.
+The row updates inline. Click **Delete** — the row disappears.
+
+**Expected:** both mutations are optimistic; a transient network failure
+rolls back to the previous state and surfaces the error inline.
+
+### 12.3 Ownership gate (cross-user 403)
+
+In a separate browser session, sign in as a different user and call:
+
+```sh
+curl -X POST https://<host>/api/v1/research/sessions/<other-user-session-id>/notes \
+  -H "Authorization: Bearer <your-token>" \
+  -H "Content-Type: application/json" \
+  -d '{"body":"x","outcome":"SUCCESS"}'
+```
+
+**Expected:** `403 forbidden`. No row is created. The Sessions tab of the
+other user's Gym is not even reachable in the UI, so this only matters as a
+direct API check.
+
+### 12.4 Persistence on reload
+
+Reload the page. Re-open the Gym, the same model, the same session row, the
+notes drawer.
+
+**Expected:** every note created in 12.1 / 12.2 still renders.
+
+### 12.5 Sort toggle
+
+Click the **Newest first ↓** button in the drawer header.
+
+**Expected:** order flips to oldest-first; the button label flips to
+**Oldest first ↑**. Click again to revert.
+
+---
+
 ## Sign-off
 
 If every stage passed, the v1 release is acceptance-clean. Tag the build and proceed to staging.

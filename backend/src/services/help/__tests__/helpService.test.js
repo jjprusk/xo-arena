@@ -349,6 +349,11 @@ describe('ask() — happy path + plumbing', () => {
         $queryRaw: vi.fn(async () => []),
         helpQuery: { create: helpQueryCreate, update: helpQueryUpdate },
         helpAnswer: { create: helpAnswerCreate },
+        // Sprint 3: buildCitations enriches retrieved chunks with HelpDoc
+        // metadata. Tests don't assert on citations directly; return an
+        // empty list so the seam compiles without each fixture mocking it.
+        helpDoc: { findMany: vi.fn(async () => []) },
+        user:    { findUnique: vi.fn(async () => null) },
       },
     }))
     vi.doMock('../../../logger.js', () => ({
@@ -373,7 +378,7 @@ describe('ask() — happy path + plumbing', () => {
       question: 'how do I train a bot',
       userId:   'u-1',
       context:  { route: '/x' },
-      _search:  searchStub,
+      _searchLanes: searchStub, _getUserPrefs: async () => false,
     }))
     expect(frames[0]).toEqual({ kind: 'token', text: 'Hello ' })
     expect(frames[1]).toEqual({ kind: 'token', text: 'world.' })
@@ -395,7 +400,7 @@ describe('ask() — happy path + plumbing', () => {
         degradedReason: 'openai embed 503',
       },
     })
-    await collectAsk(svc.ask({ question: 'q', userId: 'u-1', _search: searchStub }))
+    await collectAsk(svc.ask({ question: 'q', userId: 'u-1', _searchLanes: searchStub, _getUserPrefs: async () => false }))
     const data = helpQueryCreate.mock.calls[0][0].data
     expect(data.text).toBe('q')
     expect(data.userId).toBe('u-1')
@@ -409,7 +414,7 @@ describe('ask() — happy path + plumbing', () => {
 
   it('returns error frame on empty question', async () => {
     const { svc, searchStub } = await setupAsk()
-    const frames = await collectAsk(svc.ask({ question: '   ', userId: 'u-1', _search: searchStub }))
+    const frames = await collectAsk(svc.ask({ question: '   ', userId: 'u-1', _searchLanes: searchStub, _getUserPrefs: async () => false }))
     expect(frames).toEqual([{ kind: 'error', error: 'empty_question' }])
   })
 
@@ -420,7 +425,7 @@ describe('ask() — happy path + plumbing', () => {
       },
     })
     const frames = []
-    for await (const f of svc.ask({ question: 'q', userId: 'u-1', _search: searchStub })) frames.push(f)
+    for await (const f of svc.ask({ question: 'q', userId: 'u-1', _searchLanes: searchStub, _getUserPrefs: async () => false })) frames.push(f)
     const done = frames.at(-1)
     // help.v2 + linkRewriter strip the bold wrapping so the link is the
     // visual callout (per user feedback 2026-05-14).
@@ -434,7 +439,7 @@ describe('ask() — happy path + plumbing', () => {
     const { svc, helpAnswerCreate, searchStub } = await setupAsk({
       helpAnswerCreate: vi.fn(async () => { throw new Error('db down') }),
     })
-    const frames = await collectAsk(svc.ask({ question: 'q', userId: 'u-1', _search: searchStub }))
+    const frames = await collectAsk(svc.ask({ question: 'q', userId: 'u-1', _searchLanes: searchStub, _getUserPrefs: async () => false }))
     // Tokens still flow
     expect(frames.find(f => f.kind === 'token')).toBeTruthy()
     // Done frame still emitted (answerId is null because create failed)
@@ -485,7 +490,7 @@ describe('ask() — content filter (§2.7)', () => {
     }))
 
     const frames = []
-    for await (const f of svc.ask({ question: 'q', userId: 'u-1', _search: searchStub })) frames.push(f)
+    for await (const f of svc.ask({ question: 'q', userId: 'u-1', _searchLanes: searchStub, _getUserPrefs: async () => false })) frames.push(f)
     const done = frames.at(-1)
     expect(done.contentFilterTriggered).toBe(true)
     expect(done.rendered).toMatch(/can't help with that/)
@@ -529,7 +534,7 @@ describe('ask() — chat failure paths', () => {
     }))
 
     const frames = []
-    for await (const f of svc.ask({ question: 'q', userId: 'u-1', _search: searchStub })) frames.push(f)
+    for await (const f of svc.ask({ question: 'q', userId: 'u-1', _searchLanes: searchStub, _getUserPrefs: async () => false })) frames.push(f)
     const last = frames.at(-1)
     expect(last.kind).toBe('error')
     expect(last.error).toBe('llm_unavailable')
@@ -565,7 +570,7 @@ describe('ask() — chat failure paths', () => {
     }))
 
     const frames = []
-    for await (const f of svc.ask({ question: 'q', userId: 'u-1', _search: searchStub })) frames.push(f)
+    for await (const f of svc.ask({ question: 'q', userId: 'u-1', _searchLanes: searchStub, _getUserPrefs: async () => false })) frames.push(f)
     const last = frames.at(-1)
     expect(last.kind).toBe('error')
     expect(last.error).toBe('rate_limited')
@@ -596,7 +601,7 @@ describe('ask() — chat failure paths', () => {
     }))
 
     const frames = []
-    for await (const f of svc.ask({ question: 'q', userId: 'u-1', _search: searchStub })) frames.push(f)
+    for await (const f of svc.ask({ question: 'q', userId: 'u-1', _searchLanes: searchStub, _getUserPrefs: async () => false })) frames.push(f)
     expect(frames.at(-1)).toMatchObject({ kind: 'error', error: 'internal' })
   })
 })

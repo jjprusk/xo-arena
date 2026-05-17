@@ -265,6 +265,153 @@ Re-enable by upserting `value: true` (or deleting the row, since the default is 
 
 **Verification:** open DevTools → Application → Service Workers on a tab you know had the SW registered; within 30s of flipping `sw.enabled=false`, the SW should disappear and `caches.keys()` in the console should return `[]`.
 
+### 5.9 Research-Log community publishing toggle
+
+The Profile-page Training Journal lets users publish their own notes and
+research-log entries to a shared community lane (see
+`doc/Research_Log_Plan.md` Sprint 2). The publish surface is gated by a
+SystemConfig key — when the row is absent the flag is **OFF** and every
+publish/unpublish endpoint returns `503 { error: 'publish_disabled' }`
+without touching the DB. Flipping is a one-row upsert, no redeploy
+required.
+
+**Default state is OFF.** Ship the feature dark, watch metrics + abuse
+reports for a few days, then flip ON. The frontend modal handles 503 by
+rendering "Community publishing is currently disabled."
+
+**To enable community publishing:**
+
+```sh
+docker compose exec -T backend node --experimental-transform-types --no-warnings -e "
+  import('./src/lib/db.js').then(async ({ default: db }) => {
+    await db.systemConfig.upsert({
+      where:  { key: 'researchLog.publishEnabled' },
+      create: { key: 'researchLog.publishEnabled', value: { enabled: true } },
+      update: { value: { enabled: true } },
+    })
+    console.log('researchLog.publishEnabled = true')
+    await db.\$disconnect()
+  })
+"
+```
+
+The `isPublishEnabled` helper accepts any of `value: true`,
+`value: 'true'`, or `value: { enabled: true }` — pick whichever feels
+clearest. The `{ enabled: <bool> }` shape leaves room for adjacent
+sub-flags later without a key rename.
+
+**To disable (emergency stop):**
+
+```sh
+docker compose exec -T backend node --experimental-transform-types --no-warnings -e "
+  import('./src/lib/db.js').then(async ({ default: db }) => {
+    await db.systemConfig.upsert({
+      where:  { key: 'researchLog.publishEnabled' },
+      create: { key: 'researchLog.publishEnabled', value: { enabled: false } },
+      update: { value: { enabled: false } },
+    })
+    console.log('researchLog.publishEnabled = false')
+    await db.\$disconnect()
+  })
+"
+```
+
+Disabling does **not** retroactively unpublish anything — existing
+`HelpDoc` rows with `source = 'community-note'` stay in place and remain
+visible to the Sprint 3 retrieval mixer. To purge the community lane,
+delete those rows directly:
+
+```sh
+docker compose exec -T backend node --experimental-transform-types --no-warnings -e "
+  import('./src/lib/db.js').then(async ({ default: db }) => {
+    const docs = await db.helpDoc.findMany({ where: { source: 'community-note' }, select: { id: true } })
+    if (docs.length === 0) { console.log('nothing to purge'); return await db.\$disconnect() }
+    await db.helpChunk.deleteMany({ where: { docId: { in: docs.map(d => d.id) } } })
+    await db.helpDoc.deleteMany({ where: { id: { in: docs.map(d => d.id) } } })
+    console.log('purged ' + docs.length + ' community docs + their chunks')
+    await db.\$disconnect()
+  })
+"
+```
+
+**Per-user rate limit:** 50 publishes/user/rolling-7-days, enforced in
+`backend/src/middleware/researchPublishRateLimit.js`. Unpublish is not
+rate-limited. The 429 response carries
+`{ error: 'rate_limited', scope: 'week', retryAfter, limit }`.
+
+### 5.10 Editing an existing Help-Corpus doc in staging or production
+
+The Help-Corpus seeder (`seedCorpus()` in
+`backend/src/services/help/corpusSeeder.js`) runs on every backend boot and
+is **additive-only by design**:
+
+- **New slug** in `/doc/Help_Corpus/*.md` → inserted + chunked + embedded
+  automatically on the next boot. No manual step.
+- **Edit to an existing slug** → **NOT** picked up on boot. The seeder
+  checks "does this slug already exist?" and skips if yes. The live row
+  keeps the prior body.
+- **Deleted file** → the corresponding row stays in `help_docs`. The
+  seeder never deletes.
+
+This is intentional: the DB is the source of truth after the first seed,
+so the admin editor at `/admin/help` can edit a doc without the next
+boot stomping the edit. The trade-off is that *intended* git-side edits
+also don't propagate automatically.
+
+**Two ways to propagate an edit to staging or prod:**
+
+**Option A — the admin editor (preferred for one-off edits)**
+1. Sign in as a HELP_ADMIN.
+2. Go to `/admin/help` → click the doc → edit in the rich-text editor.
+3. Save. The row is updated, chunks regenerate, embeddings refresh.
+4. The git file is now out of sync with the DB — *that's expected*. The
+   admin editor is the source of truth after the first seed. Bring the
+   git copy back into sync via `um help-export` if you want.
+
+**Option B — delete + reseed (preferred for git-driven bulk edits)**
+
+Use this when you've made the edit on `dev` and merged through the
+normal `dev → staging → main` pipeline, and you want the deployed
+backend to pick up the new file content.
+
+On the target environment (run from a host with `fly` access):
+
+```sh
+# Staging
+fly ssh console -a xo-backend-staging -C "node --experimental-transform-types --no-warnings -e \"
+import('/app/backend/src/lib/db.js').then(async ({ default: db }) => {
+  const slug = 'SLUG-HERE';
+  const doc = await db.helpDoc.findUnique({ where: { slug } });
+  if (doc) {
+    await db.helpChunk.deleteMany({ where: { docId: doc.id } });
+    await db.helpDoc.delete({ where: { id: doc.id } });
+    console.log('Deleted', slug);
+  }
+  const { seedCorpus } = await import('/app/backend/src/services/help/corpusSeeder.js');
+  console.log(await seedCorpus());
+  await db.\\\$disconnect();
+})
+\""
+
+# Production — same command, swap the app name
+fly ssh console -a xo-backend-prod -C "..."
+```
+
+Replace `SLUG-HERE` with the slug of the doc you edited (e.g.
+`research-notes-and-journal`). The brief window between `delete` and
+`seedCorpus()` is sub-second; queries hitting it during that window get
+fewer chunks but never an error. For a fleet-wide bulk refresh
+(multiple edits at once), run the script with a list of slugs.
+
+**Aliases + retrieval logic** propagate normally — they're code, not
+data. The change deploys with the next `/stage` or `/promote`; nothing
+extra needed.
+
+**Future improvement** noted in the Help-System Question Backlog: add
+a `--force` flag on the seeder (or wrap delete+reseed in
+`um help-reseed <slug>`) so this isn't tribal knowledge. Until then,
+this section IS the runbook.
+
 ---
 
 ## 6. References

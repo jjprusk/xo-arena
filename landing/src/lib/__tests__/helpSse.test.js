@@ -76,6 +76,7 @@ describe('streamHelpAsk — happy path', () => {
         contentFilterTriggered: false,
         degraded: false,
         latencyMs: 42,
+        citations: [],
       },
     ])
     expect(fetcher).toHaveBeenCalledOnce()
@@ -239,7 +240,7 @@ describe('streamHelpAsk — guards', () => {
     // progress is dropped silently; we keep the token + done.
     expect(frames).toEqual([
       { kind: 'token', text: 'ok' },
-      { kind: 'done', answerId: null, queryId: null, rendered: 'ok', contentFilterTriggered: false, degraded: false, latencyMs: null },
+      { kind: 'done', answerId: null, queryId: null, rendered: 'ok', contentFilterTriggered: false, degraded: false, latencyMs: null, citations: [] },
     ])
   })
 })

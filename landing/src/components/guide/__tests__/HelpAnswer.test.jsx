@@ -186,3 +186,53 @@ describe('HelpAnswer — link tracking', () => {
     expect(submitFeedback).toHaveBeenCalledOnce()
   })
 })
+
+// ── Citations (Research_Log_Plan Sprint 3 §3 step 6) ─────────────────────
+
+describe('HelpAnswer — citations', () => {
+  it('renders one chip per citation with its lane icon and title', () => {
+    renderAnswer(makeTurn({
+      status:   'done',
+      rendered: 'Use the Gym tab.',
+      queryId:  'q-1',
+      answerId: 'a-1',
+      citations: [
+        { docId: 'd1', lane: 'corpus',         slug: 'gym-sessions-tab', title: 'Gym sessions tab' },
+        { docId: 'd2', lane: 'communityNotes', slug: 'research-note-n9', title: 'Plateau retrospective', author: { id: 'u2', displayName: 'Bob' } },
+      ],
+    }))
+    expect(screen.getByText('Sources')).toBeInTheDocument()
+    expect(screen.getByText('Gym sessions tab')).toBeInTheDocument()
+    expect(screen.getByText('Plateau retrospective')).toBeInTheDocument()
+    expect(screen.getByText(/Bob/)).toBeInTheDocument()
+    // Corpus citation deep-links to /help/<slug>; community link points at journal.
+    const corpus = screen.getByText('Gym sessions tab').closest('a')
+    expect(corpus.getAttribute('href')).toBe('/help/gym-sessions-tab')
+    const community = screen.getByText('Plateau retrospective').closest('a')
+    expect(community.getAttribute('href')).toBe('/profile?section=journal')
+  })
+
+  it('does not render the Sources block when citations is empty', () => {
+    renderAnswer(makeTurn({
+      status: 'done', rendered: 'no sources',
+      queryId: 'q', answerId: 'a',
+      citations: [],
+    }))
+    expect(screen.queryByText('Sources')).not.toBeInTheDocument()
+  })
+
+  it('tags each link with data-lane so styling + analytics can key on it', () => {
+    renderAnswer(makeTurn({
+      status: 'done', rendered: 'x', queryId: 'q', answerId: 'a',
+      citations: [
+        { docId: 'd1', lane: 'corpus',         slug: 's', title: 't1' },
+        { docId: 'd2', lane: 'privateNotes',   slug: 's', title: 't2' },
+        { docId: 'd3', lane: 'communityNotes', slug: 's', title: 't3' },
+      ],
+    }))
+    const lanes = ['corpus', 'privateNotes', 'communityNotes']
+    for (const lane of lanes) {
+      expect(document.querySelector(`a[data-lane="${lane}"]`)).not.toBeNull()
+    }
+  })
+})

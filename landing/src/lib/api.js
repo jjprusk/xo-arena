@@ -111,6 +111,62 @@ export const api = {
       api.post('/play/bot', { gameId, ...(botUserId ? { botUserId } : {}) }),
   },
 
+  research: {
+    // Sprint 1 of doc/Research_Log_Plan.md — TrainingSessionNote CRUD.
+    createNote: (sessionId, body, token) =>
+      api.post(`/research/sessions/${sessionId}/notes`, body, token),
+    updateNote: (noteId, body, token) => api.patch(`/research/notes/${noteId}`, body, token),
+    deleteNote: (noteId, token)       => request('DELETE', `/research/notes/${noteId}`, null, token),
+    listNotes:  (params = {}, token)  => {
+      const p = new URLSearchParams()
+      if (params.outcome) p.set('outcome', params.outcome)
+      if (params.tag)     p.set('tag',     params.tag)
+      if (params.since)   p.set('since',   params.since)
+      if (params.limit)   p.set('limit',   String(params.limit))
+      const qs = p.toString()
+      return api.get(`/research/notes${qs ? `?${qs}` : ''}`, token)
+    },
+    getNote:    (noteId, token)       => api.get(`/research/notes/${noteId}`, token),
+
+    // Sprint 2 — publish/unpublish + entries + community + export.
+    publishNote:    (noteId, token) => api.post(`/research/notes/${noteId}/publish`, {}, token),
+    unpublishNote:  (noteId, token) => api.post(`/research/notes/${noteId}/unpublish`, {}, token),
+
+    createEntry:    (body, token)   => api.post('/research/entries', body, token),
+    updateEntry:    (id, body, tok) => api.patch(`/research/entries/${id}`, body, tok),
+    deleteEntry:    (id, tok)       => request('DELETE', `/research/entries/${id}`, null, tok),
+    listEntries:    (params = {}, token) => {
+      const p = new URLSearchParams()
+      if (params.category) p.set('category', params.category)
+      if (params.tag)      p.set('tag',      params.tag)
+      if (params.since)    p.set('since',    params.since)
+      if (params.limit)    p.set('limit',    String(params.limit))
+      const qs = p.toString()
+      return api.get(`/research/entries${qs ? `?${qs}` : ''}`, token)
+    },
+    getEntry:       (id, token) => api.get(`/research/entries/${id}`, token),
+    publishEntry:   (id, token) => api.post(`/research/entries/${id}/publish`, {}, token),
+    unpublishEntry: (id, token) => api.post(`/research/entries/${id}/unpublish`, {}, token),
+
+    listCommunity:  (params = {}, token) => {
+      const p = new URLSearchParams()
+      if (params.tag)             p.set('tag', params.tag)
+      if (params.limit)           p.set('limit', String(params.limit))
+      if (params.cursorCreatedAt) p.set('cursorCreatedAt', params.cursorCreatedAt)
+      if (params.cursorId)        p.set('cursorId', params.cursorId)
+      const qs = p.toString()
+      return api.get(`/research/community${qs ? `?${qs}` : ''}`, token)
+    },
+    // Returns text/markdown — caller should use the URL directly with a
+    // <a download> attribute rather than this fetch wrapper.
+    exportUrl:      () => `/api/v1/research/export.md`,
+
+    // Sprint 2 — shareNotesWithGuide preference. Stored inside User.preferences
+    // Json (no schema column); absent === default OFF.
+    getPreferences:   (token)       => api.get('/research/preferences', token),
+    patchPreferences: (body, token) => api.patch('/research/preferences', body, token),
+  },
+
   guide: {
     getPreferences:   (token)       => api.get('/guide/preferences', token),
     patchPreferences: (body, token) => api.patch('/guide/preferences', body, token),
