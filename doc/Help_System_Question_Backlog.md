@@ -55,9 +55,9 @@ First two: you guide where to start. Third: my judgment. Fourth: a shape hint, n
 ## Backlog
 
 <!-- Append new questions here. One per line. Verbatim phrasing. -->
--  [ ] "how to I manage my notes" -suggest: jumps to the steps without ever saying where they're managed from
-- [ ] "what is the recipe for training an alpha zero bot" - suggest: create a new doc that references the existing ai training documentation recipes.
-- [ ] "take me to page x" - suggest: either provide link to that page or explain that the page doesn't exist.
+- [x] "how to I manage my notes" — rewrote the lead of `research-notes-and-journal.md` so chunk 0 leads with **"Profile → Training Journal"** + the Gym session-notes drawer *before* CRUD steps. Bad-synthesis-via-weak-lead, fixed by rephrasing the position-0 chunk in the user's own words ("manage", "my notes", path-first). Verified: answer now leads with the path then walks through Add/Edit/Delete.
+- [x] "what is the recipe for training an alpha zero bot" — added `alpha zero → alphazero session recipe simulations temperature episodes` query alias. Corpus already had the full session-recipe table in `algorithm-alphazero.md`; the two-word spelling just wasn't matching. (Your suggestion was a new doc — the existing one was already complete, so an alias was the smaller, safer fix.)
+- [x] "take me to page x" — added a new corpus doc `using-the-guide.md` that names the navigation question explicitly: the Guide can tell you *where* a page is but can't navigate for you; use the link in the reply / top nav / URL bar. Verified: answer now reads "I can tell you where to find the page, but I can't navigate there myself…" instead of the off-topic refusal.
 - [x] "specific settings for my mc bot" — added `mc → monte carlo` query alias; corpus already had `algorithm-monte-carlo.md`; now surfaces the recommended-settings table.
 - [x] "is this system fun to use" — bumped prompt to `help.v3` and added rule 4d (open-ended platform meta). Model now gives a short factual brand reply under 40 words and invites a specific question. We landed on warm-not-witty per design discussion (jokes age badly, hard to keep on-brand). Adversarial fixtures pin: rule 4d works AND jailbreak prefixes (greeting+hate, greeting+sonnet) still refuse via 4a/4b.
 - [x] "can i become a game developer" — added new corpus doc `game-sdk.md` covering the Game SDK, who can contribute, and what kinds of games fit; pulls from Feedback button as the entry point.

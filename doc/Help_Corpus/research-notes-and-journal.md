@@ -9,15 +9,22 @@ admin_only: false
 
 # Research notes
 
-The **research log** is your in-platform notebook for everything you do while
-training bots: what you tried, what you observed, what worked, what didn't, and
-what you'll try next. It lives in your Profile under **Training Journal**, and
-this page is the one-stop guide to using it well.
+You **manage your notes** from **Profile → Training Journal**. That accordion
+section on your Profile page is the home base for everything: writing notes,
+reading them back, filtering by outcome or tag, adding free-form entries,
+publishing to the community, exporting to Markdown, and the "Share with Guide"
+toggle. If you only remember one thing from this page, it's that path:
+**Profile → Training Journal**.
 
-This doc is long on purpose — it covers the basics ("what is this thing?") all
-the way through advanced workflow ("how should I structure my notes so future-me
-can tune the bot from them?"). Skim the headings; jump in at whatever level you
-need.
+You can also manage notes for a *specific* training run from inside the Gym:
+open the session, click the **Notes** drawer on the session detail panel, and
+add / edit / delete notes attached to that run. Those same notes show up in
+your Profile's Training Journal — it's one journal, two surfaces.
+
+The rest of this page is the long-form guide: what notes are, what notes vs
+entries are, how detailed to write them, how to use them to tune your bot, and
+how the publish / privacy controls work. Skim the headings; jump in at
+whatever level you need.
 
 ## What are research notes?
 

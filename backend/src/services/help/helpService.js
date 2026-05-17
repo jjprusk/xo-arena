@@ -84,6 +84,11 @@ const QUERY_ALIASES = [
   { match: /\bmc\b/gi,           add: 'monte carlo algorithm' },
   { match: /\bdqn\b/gi,          add: 'deep q network algorithm' },
   { match: /\brl\b/gi,           add: 'reinforcement learning' },
+  // Two-word spelling of AlphaZero — the corpus uses the one-word form
+  // exclusively, so "alpha zero" misses without this. The added context
+  // pulls retrieval toward the "Session recipe" section that answers
+  // "what's the recipe for training an alpha zero bot."
+  { match: /\balpha\s*zero\b/gi, add: 'alphazero session recipe simulations temperature episodes' },
   // Legacy brand name — XO Arena is the prior name of AI Arena. Users who
   // remember the old branding should land on the same overview docs.
   { match: /\bxo\s*arena\b/gi,   add: 'AI Arena platform overview' },
