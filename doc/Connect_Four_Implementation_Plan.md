@@ -12,6 +12,34 @@
 > - `Help_Corpus/matches-and-games.md`, `match-formats.md`, `match-design-rationale.md`, `solved-games-and-master.md` — match semantics + Master tier (already published to corpus)
 > - `Help_Corpus/algorithm-history-*.md`, `the-history-of-game-ai.md` — algorithm background pack (already published to corpus)
 
+## Status at a glance (2026-05-17)
+
+| Sprint | Status | Items | Notes |
+|---|---|---|---|
+| **Phase A — Architectural alignment (TTT only)** | | | |
+| A1 — SDK + game-as-prefix routing + slug rename | not started | 0/11 | First sprint. Includes DB migration `xo` → `tic-tac-toe`. |
+| A2 — Match-based play + match-level ELO | not started | 0/11 | Historical rows frozen at cutover; new matches use the new formula. |
+| A3a — Training data + UX rework (in-process) | not started | 0/13 | TrainingSession + TrainingMetric schema, presets, gating, multi-curve eval, checkpoints. |
+| A3b — Training worker process cutover | not started | 0/9 | New `xo-training` Fly app, Redis queue, pub/sub streaming. |
+| A4 — Multi-skill bot UI + auto-clone | not started | 0/13 | Phase 3.8 data layer is already shipped; this finishes the UI. |
+| **Phase B — Connect 4 build** | | | |
+| B1 — `packages/game-connect-four/` package | blocked on A1+A3 | 0/7 | Engine, Master solver, no UI. |
+| B2 — C4 play surface (desktop + mobile) | blocked on B1 | 0/9 | 6×7 board, mobile column-input (tap-to-preview, tap-to-confirm). |
+| B3 — C4 ranked + tournament | blocked on A2+B2 | 0/5 | Reuses match infra from A2; no new ELO code. |
+| B4 — C4 training, all five algorithms | blocked on A3+B1 | 0/8 | Rule-Based / Minimax / MCTS / DQN / AlphaZero. |
+| B5 — Master tier + Master Challenge | blocked on B1+B2 | 0/11 | Perfect-play solver, off-ladder, best-of-2 Challenge format. |
+| **Phase C — Polish** | | | |
+| C1 — Journey + coaching updates | not started | 0/3 | New onboarding milestone post-first-ranked-TTT-win. |
+| C2 — Training UX completions | not started | 0/3 | Stop-early, 7-day rollback, advanced disclosure. |
+| C3 — Corpus completions | not started | 0/3 | Cost/preset docs queue + C4-specific examples. |
+| C4 — Accessibility + mobile polish | not started | 0/3 | Keyboard nav, screen-reader labels, gesture conflicts. |
+| C5 — Observability sweep | not started | 0/2 | C4 dashboards + alert thresholds. |
+| **Total** | | **0/111** | |
+
+Update this table as sprints land. Each `- [ ]` flipped to `- [x]` in the body should be reflected in the `Items` column.
+
+---
+
 ## Goal
 
 Ship Connect 4 as the platform's second game, alongside Tic-Tac-Toe, with:
