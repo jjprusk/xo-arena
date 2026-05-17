@@ -22,8 +22,8 @@ import { initialGameState } from './logic.js'
 // A custom game can change the colors entirely by overriding these tokens in meta.js.
 
 const MARK_COLOR = {
-  X: 'var(--game-mark-x)',
-  O: 'var(--game-mark-o)',
+  X: 'var(--game-mark-1)',
+  O: 'var(--game-mark-2)',
 }
 
 // ── Constants ──────────────────────────────────────────────────────────────────

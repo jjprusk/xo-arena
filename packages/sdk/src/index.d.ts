@@ -108,7 +108,7 @@ export type GameSettings = Record<string, unknown>
 export interface GameSession {
   /** Stable identifier for this table/match. */
   tableId: string
-  /** Game identifier matching GameMeta.id (e.g. 'xo', 'connect4'). */
+  /** Game identifier matching GameMeta.id (e.g. 'tic-tac-toe', 'connect-four'). */
   gameId: string
   /** All players seated at the table. */
   players: Player[]
@@ -287,7 +287,8 @@ export interface GameLayout {
 export interface GameMeta {
   /**
    * Stable, lowercase identifier used throughout the platform.
-   * Must be unique across all registered games. Examples: 'xo', 'connect4', 'poker'.
+   * Must be unique across all registered games. Kebab-case is canonical.
+   * Examples: 'tic-tac-toe', 'connect-four', 'poker'.
    */
   id: string
 
@@ -321,6 +322,20 @@ export interface GameMeta {
    * Defaults to standard (max-w-md) if omitted.
    */
   layout?: GameLayout
+
+  /**
+   * Hint to the platform about how players make moves in this game.
+   *
+   *   'cell'   — players target a specific cell on the board (e.g. Tic-Tac-Toe).
+   *   'column' — players choose a column and the piece settles by game rules
+   *              (e.g. Connect Four — drop into a column, gravity does the rest).
+   *
+   * The platform uses this to render appropriate accessibility labels and
+   * mobile gesture hints. The game component still implements its own input
+   * logic; this hint does not change move dispatch. Omit when input style is
+   * neither (e.g. real-time games).
+   */
+  inputMode?: 'cell' | 'column'
 
   /**
    * Game-specific CSS custom property overrides.
@@ -428,13 +443,30 @@ export interface BotPersona {
   /**
    * Rough difficulty level for UI presentation and future makeMove dispatch.
    * Use this (not id) when the logic varies by difficulty.
+   *
+   * The 'master' tier denotes perfect / solved-game play, distinct from
+   * 'expert'. Reserved for games that are mathematically solved at a level
+   * that breaks the rated ladder (e.g. Connect Four's first-player-wins
+   * Master tier). Pair with `offLadder: true` so matches against this
+   * persona do not affect ELO.
    */
-  difficulty: 'beginner' | 'easy' | 'medium' | 'hard' | 'expert'
+  difficulty: 'beginner' | 'easy' | 'medium' | 'hard' | 'expert' | 'master'
   /**
    * Algorithm driving this persona (e.g. 'minimax', 'qlearning', 'alphazero').
    * Use this (not id) when the logic varies by algorithm.
    */
   algorithm: string
+  /**
+   * When true, matches played against this persona do NOT update the user's
+   * ELO or classification standing. Used for off-ladder challenges such as
+   * the Connect Four Master tier, where the game is solved and a structural
+   * loss carries no skill signal.
+   *
+   * Defaults to false (rated). The platform's match-completion handler
+   * inspects this flag and skips ELO updates when true; per-bot stats
+   * (e.g. "vs Master" record) are tracked separately by the platform.
+   */
+  offLadder?: boolean
 }
 
 /** Configuration for a training session, returned by BotInterface.getTrainingConfig. */
