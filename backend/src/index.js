@@ -55,12 +55,24 @@ import { startMetricsSnapshotCron } from './services/metricsSnapshotService.js'
 const PORT = process.env.PORT || 3000
 
 // A1.4 — game-as-prefix route layer. Registered BEFORE the flat mounts below
-// so /api/v1/games/:slug/bots takes precedence over /api/v1/games's other routes.
-// Each prefix mount runs the slug validator first; unknown slugs 404 cleanly.
-// Inner handlers read req.gameId (set by validator) and req.query.gameId is
-// injected for back-compat with handlers that pre-date the prefix.
+// so /api/v1/games/:slug/<sub> takes precedence over /api/v1/games's other
+// routes. Each prefix mount runs the slug validator first; unknown slugs 404
+// cleanly. Inner handlers read req.gameId (set by validator); req.query.gameId
+// is also injected for back-compat with handlers that pre-date the prefix.
+//
+// "Pure" game-scoped routers (bots, play, skills, ml, puzzles, leaderboard)
+// are the natural prefix consumers. "Dual-addressable" routers (tables, the
+// renamed game-results) are reachable BOTH via the prefix (per-game scope)
+// AND via their flat mounts below (cross-game scope, used by admin views).
 registerRoutes(app, {
-  '/games/:slug/bots': [validateGameSlug, botsRouter],
+  '/games/:slug/bots':         [validateGameSlug, botsRouter],
+  '/games/:slug/play':         [validateGameSlug, playRouter],
+  '/games/:slug/skills':       [validateGameSlug, skillsRouter],
+  '/games/:slug/ml':           [validateGameSlug, mlRouter],
+  '/games/:slug/puzzles':      [validateGameSlug, puzzlesRouter],
+  '/games/:slug/leaderboard':  [validateGameSlug, leaderboardRouter],
+  '/games/:slug/tables':       [validateGameSlug, tablesRouter],
+  '/games/:slug/results':      [validateGameSlug, gamesRouter],
 })
 
 registerRoutes(app, {
