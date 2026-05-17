@@ -10,6 +10,8 @@ import db from './lib/db.js'
 import { runSeed } from '../prisma/seed.js'
 import { seedCorpus as seedHelpCorpus, reindexAllIfStale as reindexHelpCorpusIfStale } from './services/help/corpusSeeder.js'
 import { startHelpRateLimitSweep } from './middleware/helpRateLimit.js'
+import { startResearchPublishRateLimitSweep } from './middleware/researchPublishRateLimit.js'
+import { startResearchLogExportCron } from './jobs/researchLogExport.js'
 import aiRouter from './routes/ai.js'
 import logsRouter from './routes/logs.js'
 import usersRouter from './routes/users.js'
@@ -24,6 +26,7 @@ import adminRouter from './routes/admin.js'
 import adminPerfBaselinesRouter from './routes/adminPerfBaselines.js'
 import helpAdminRouter from './routes/helpAdmin.js'
 import helpRouter from './routes/help.js'
+import researchRouter from './routes/research.js'
 import botsRouter from './routes/bots.js'
 import botGamesRouter from './routes/botGames.js'
 import feedbackRouter from './routes/feedback.js'
@@ -60,6 +63,7 @@ registerRoutes(app, {
   '/admin/perf': adminPerfBaselinesRouter,
   '/admin/help': helpAdminRouter,
   '/help':       helpRouter,
+  '/research':   researchRouter,
   '/games': gamesRouter,
   '/ml': mlRouter,
   '/skills': skillsRouter,
@@ -155,6 +159,8 @@ startDispatcher()
 startExpiredNotificationPruner()
 startMetricsSnapshotCron()
 startHelpRateLimitSweep()
+startResearchPublishRateLimitSweep()
+startResearchLogExportCron()
 
 // SSE+POST is the only realtime transport (Realtime_Migration_Plan.md
 // Phase 8). socket.io was removed in this commit.

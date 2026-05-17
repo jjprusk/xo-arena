@@ -2,6 +2,7 @@
 import React, { useState, useEffect, useRef } from 'react'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import { Card, SectionLabel, SESSION_COLOR, SESSION_BADGE } from './gymShared.jsx'
+import SessionNotesDrawer from '../research/SessionNotesDrawer.jsx'
 
 function StatCell({ label, value }) {
   return (
@@ -105,6 +106,7 @@ export default function SessionsTab({ model, sessions }) {
                   {sel.summary.avgQDelta != null && <StatCell label="Avg Q-Δ" value={sel.summary.avgQDelta.toFixed(4)} />}
                 </>}
               </div>
+              <SessionNotesDrawer sessionId={sel.id} />
             </div>
           )}
         </div>
