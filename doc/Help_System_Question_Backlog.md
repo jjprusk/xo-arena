@@ -55,6 +55,7 @@ First two: you guide where to start. Third: my judgment. Fourth: a shape hint, n
 ## Backlog
 
 <!-- Append new questions here. One per line. Verbatim phrasing. -->
+-  [ ] "how to I manage my notes" -suggest: jumps to the steps without ever saying where they're managed from
 - [ ] "what is the recipe for training an alpha zero bot" - suggest: create a new doc that references the existing ai training documentation recipes.
 - [ ] "take me to page x" - suggest: either provide link to that page or explain that the page doesn't exist.
 - [x] "specific settings for my mc bot" — added `mc → monte carlo` query alias; corpus already had `algorithm-monte-carlo.md`; now surfaces the recommended-settings table.
