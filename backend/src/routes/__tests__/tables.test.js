@@ -59,7 +59,7 @@ function makeApp() {
 
 const baseTable = {
   id: 'tbl_1',
-  gameId: 'xo',
+  gameId: 'tic-tac-toe',
   status: 'FORMING',
   createdById: 'ba_user_1',
   minPlayers: 2,
@@ -88,12 +88,12 @@ describe('POST /api/v1/tables', () => {
     const app = makeApp()
     const res = await request(app)
       .post('/api/v1/tables')
-      .send({ gameId: 'xo', minPlayers: 2, maxPlayers: 2 })
+      .send({ gameId: 'tic-tac-toe', minPlayers: 2, maxPlayers: 2 })
     expect(res.status).toBe(201)
     expect(res.body.table.id).toBe('tbl_1')
     expect(db.table.create).toHaveBeenCalledWith(expect.objectContaining({
       data: expect.objectContaining({
-        gameId: 'xo',
+        gameId: 'tic-tac-toe',
         createdById: 'ba_user_1',
         minPlayers: 2,
         maxPlayers: 2,
@@ -120,7 +120,7 @@ describe('POST /api/v1/tables', () => {
     const app = makeApp()
     const res = await request(app)
       .post('/api/v1/tables')
-      .send({ gameId: 'xo', minPlayers: 0, maxPlayers: 2 })
+      .send({ gameId: 'tic-tac-toe', minPlayers: 0, maxPlayers: 2 })
     expect(res.status).toBe(400)
     expect(res.body.error).toMatch(/minPlayers/)
   })
@@ -129,7 +129,7 @@ describe('POST /api/v1/tables', () => {
     const app = makeApp()
     const res = await request(app)
       .post('/api/v1/tables')
-      .send({ gameId: 'xo', minPlayers: 4, maxPlayers: 2 })
+      .send({ gameId: 'tic-tac-toe', minPlayers: 4, maxPlayers: 2 })
     expect(res.status).toBe(400)
     expect(res.body.error).toMatch(/maxPlayers/)
   })
@@ -138,7 +138,7 @@ describe('POST /api/v1/tables', () => {
     const app = makeApp()
     const res = await request(app)
       .post('/api/v1/tables')
-      .send({ gameId: 'xo', minPlayers: 2, maxPlayers: 2, isPrivate: 'yes' })
+      .send({ gameId: 'tic-tac-toe', minPlayers: 2, maxPlayers: 2, isPrivate: 'yes' })
     expect(res.status).toBe(400)
     expect(res.body.error).toMatch(/isPrivate/)
   })
@@ -146,18 +146,18 @@ describe('POST /api/v1/tables', () => {
   it('dispatches table.created on the bus for public tables', async () => {
     db.table.create.mockResolvedValue(baseTable)
     const app = makeApp()
-    await request(app).post('/api/v1/tables').send({ gameId: 'xo', minPlayers: 2, maxPlayers: 2 })
+    await request(app).post('/api/v1/tables').send({ gameId: 'tic-tac-toe', minPlayers: 2, maxPlayers: 2 })
     expect(dispatch).toHaveBeenCalledWith({
       type: 'table.created',
       targets: { broadcast: true },
-      payload: { tableId: 'tbl_1', gameId: 'xo', maxPlayers: 2 },
+      payload: { tableId: 'tbl_1', gameId: 'tic-tac-toe', maxPlayers: 2 },
     })
   })
 
   it('does NOT dispatch for private tables (share-link only)', async () => {
     db.table.create.mockResolvedValue({ ...baseTable, isPrivate: true })
     const app = makeApp()
-    await request(app).post('/api/v1/tables').send({ gameId: 'xo', minPlayers: 2, maxPlayers: 2, isPrivate: true })
+    await request(app).post('/api/v1/tables').send({ gameId: 'tic-tac-toe', minPlayers: 2, maxPlayers: 2, isPrivate: true })
     expect(dispatch).not.toHaveBeenCalled()
   })
 })
@@ -393,7 +393,7 @@ describe('POST /api/v1/tables/:id/join', () => {
       targets: { broadcast: true },
       payload: {
         tableId:          'tbl_1',
-        gameId:           'xo',
+        gameId:           'tic-tac-toe',
         userId:           'ba_user_1',
         seatIndex:        0,
         stakeholders:     ['ba_user_1'],     // creator + newly-seated (same user here)
@@ -550,7 +550,7 @@ describe('POST /api/v1/tables/:id/leave', () => {
       targets: { broadcast: true },
       payload: {
         tableId:          'tbl_1',
-        gameId:           'xo',
+        gameId:           'tic-tac-toe',
         userId:           'ba_user_1',
         seatIndex:        0,
         stakeholders:     ['ba_user_1', 'ba_user_2'],
@@ -581,7 +581,7 @@ describe('POST /api/v1/tables/:id/leave', () => {
       targets: { broadcast: true },
       payload: {
         tableId:          'tbl_1',
-        gameId:           'xo',
+        gameId:           'tic-tac-toe',
         userId:           'ba_user_1',
         seatIndex:        0,
         stakeholders:     ['ba_user_1'],     // creator only (nobody left seated)
@@ -620,7 +620,7 @@ describe('DELETE /api/v1/tables/:id', () => {
     expect(dispatch).toHaveBeenCalledWith(expect.objectContaining({
       type: 'table.deleted',
       targets: { broadcast: true },
-      payload: { tableId: 'tbl_1', gameId: 'xo' },
+      payload: { tableId: 'tbl_1', gameId: 'tic-tac-toe' },
     }))
   })
 

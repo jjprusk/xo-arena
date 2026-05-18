@@ -9,10 +9,12 @@
 
 import db from '../lib/db.js'
 import { getSystemConfig } from './skillService.js'
+import { GAME_IDS } from '../constants/games.js'
 
 const K_FACTOR = 32
 const DEFAULT_PROVISIONAL_THRESHOLD = 5
-const GAME_ID = 'xo'
+// A1.6 will parameterize this; for now point it at the canonical TTT slug.
+const GAME_ID = GAME_IDS.TIC_TAC_TOE
 
 // Fixed ELO ratings for AI opponents (used for expected-score computation)
 const AI_ELO = {

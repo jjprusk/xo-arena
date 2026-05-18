@@ -234,7 +234,7 @@ describe('POST /practice — happy path response shape', () => {
     expect(createTableTracked).toHaveBeenCalledTimes(1)
     const call = createTableTracked.mock.calls[0][0]
     expect(call.data).toMatchObject({
-      gameId:       'xo',
+      gameId:       'tic-tac-toe',
       isPrivate:    true,
       isTournament: false,
       status:       'ACTIVE',

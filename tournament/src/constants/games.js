@@ -6,11 +6,10 @@
 // `packages/` workspace grows a game-registry module, both services should
 // migrate to consuming it.
 //
-// Today: TIC_TAC_TOE = 'xo' (matches the live DB).
-// A1.5 will flip canonical to 'tic-tac-toe' atomically in both services.
+// As of A1.5b: canonical slug is 'tic-tac-toe'; 'xo' is a legacy alias.
 
 export const GAME_IDS = Object.freeze({
-  TIC_TAC_TOE: 'xo',
+  TIC_TAC_TOE:  'tic-tac-toe',
   CONNECT_FOUR: 'connect-four',
 })
 
@@ -21,7 +20,7 @@ export const REGISTERED_GAME_IDS = new Set([
 export const DEFAULT_GAME_ID = GAME_IDS.TIC_TAC_TOE
 
 export const LEGACY_SLUG_MAP = Object.freeze({
-  'tic-tac-toe': GAME_IDS.TIC_TAC_TOE,
+  'xo': GAME_IDS.TIC_TAC_TOE,
 })
 
 export function resolveGameSlug(slug) {

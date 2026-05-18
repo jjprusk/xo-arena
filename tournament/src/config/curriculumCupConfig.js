@@ -14,9 +14,11 @@
  * this config to size the bracket and pick opponent tiers.
  */
 
+import { GAME_IDS } from '../constants/games.js'
+
 export const CURRICULUM_CUP_CONFIG = Object.freeze({
   name:            'Curriculum Cup',
-  game:            'xo',
+  game:            GAME_IDS.TIC_TAC_TOE,
   mode:            'BOT_VS_BOT',           // bots play, human spectates
   format:          'FLASH',                // spawned-on-demand, no registration window
   bracketType:     'SINGLE_ELIM',

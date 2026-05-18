@@ -1,43 +1,42 @@
-import { describe, it, expect } from 'vitest'
-import express from 'express'
-import request from 'supertest'
-
+import { describe, it, expect, vi } from 'vitest'
 import { validateGameSlug } from '../gameSlug.js'
 
-function buildApp() {
-  const app = express()
-  app.use(express.json())
-  app.use(
-    '/api/games/:slug/echo',
-    validateGameSlug,
-    (req, res) => {
-      res.json({
-        gameId:       req.gameId,
-        queryGameId:  req.query.gameId,
-        slugParam:    req.params.slug,
-      })
-    },
-  )
-  return app
+function makeRes() {
+  return {
+    statusCode: 200,
+    body:       null,
+    status(code) { this.statusCode = code; return this },
+    json(body)  { this.body = body; return this },
+  }
 }
 
 describe('tournament: validateGameSlug middleware', () => {
-  it('accepts canonical slug xo', async () => {
-    const res = await request(buildApp()).get('/api/games/xo/echo')
-    expect(res.status).toBe(200)
-    expect(res.body.gameId).toBe('xo')
+  it('accepts canonical slug tic-tac-toe', () => {
+    const req  = { params: { slug: 'tic-tac-toe' }, query: {} }
+    const res  = makeRes()
+    const next = vi.fn()
+    validateGameSlug(req, res, next)
+    expect(next).toHaveBeenCalledOnce()
+    expect(req.gameId).toBe('tic-tac-toe')
   })
 
-  it('normalizes tic-tac-toe alias to canonical xo', async () => {
-    const res = await request(buildApp()).get('/api/games/tic-tac-toe/echo')
-    expect(res.status).toBe(200)
-    expect(res.body.gameId).toBe('xo')
+  it('normalizes legacy xo alias to canonical tic-tac-toe', () => {
+    const req  = { params: { slug: 'xo' }, query: {} }
+    const res  = makeRes()
+    const next = vi.fn()
+    validateGameSlug(req, res, next)
+    expect(next).toHaveBeenCalledOnce()
+    expect(req.gameId).toBe('tic-tac-toe')
   })
 
-  it('404s on unknown slug with helpful body', async () => {
-    const res = await request(buildApp()).get('/api/games/poker/echo')
-    expect(res.status).toBe(404)
+  it('404s on unknown slug with helpful body', () => {
+    const req  = { params: { slug: 'poker' }, query: {} }
+    const res  = makeRes()
+    const next = vi.fn()
+    validateGameSlug(req, res, next)
+    expect(next).not.toHaveBeenCalled()
+    expect(res.statusCode).toBe(404)
     expect(res.body.error).toMatch(/Unknown game slug: poker/)
-    expect(res.body.acceptedSlugs).toContain('xo')
+    expect(res.body.acceptedSlugs).toContain('tic-tac-toe')
   })
 })

@@ -10,6 +10,7 @@ import { cloneAndSeedPersona, seedExistingSystemBot, syncTemplateSeedsToTourname
 import { assertBotHasSkillForGame } from '../lib/registrationGuards.js'
 import { cloneCurriculumCup } from '../lib/curriculumCupService.js'
 import { expectedGameCount } from '../lib/bracketMath.js'
+import { GAME_IDS } from '../constants/games.js'
 
 // Coerce a client-supplied date-ish value to a Prisma-safe value.
 // Crucially, empty string / null must map to `null`, NOT `new Date(null)`
@@ -618,7 +619,7 @@ router.post('/:id/fill-qa-bots', requireTournamentAdmin, async (req, res, next) 
           botActive:     true,
           botModelId:    modelId,
           nameConfirmed: true,
-          gameElo: { create: { gameId: 'xo', rating: 1200 } },
+          gameElo: { create: { gameId: GAME_IDS.TIC_TAC_TOE, rating: 1200 } },
         },
         update: { botModelId: modelId, botActive: true },
       })
@@ -684,7 +685,7 @@ router.post('/:id/add-seeded-bot', requireTournamentAdmin, async (req, res, next
         botActive:     true,
         botModelId:    modelId,
         nameConfirmed: true,
-        gameElo: { create: { gameId: tournament.game ?? 'xo', rating: 1200 } },
+        gameElo: { create: { gameId: tournament.game ?? GAME_IDS.TIC_TAC_TOE, rating: 1200 } },
       },
     })
 

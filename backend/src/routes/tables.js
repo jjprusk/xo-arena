@@ -1,5 +1,5 @@
 // Copyright © 2026 Joe Pruskowski. All rights reserved.
-import { GAME_IDS } from '../constants/games.js'
+import { GAME_IDS, resolveGameSlug } from '../constants/games.js'
 
 /**
  * Tables CRUD — Phase 3.1.
@@ -210,12 +210,13 @@ async function withSeatDisplay(input) {
 router.post('/', requireAuth, async (req, res, next) => {
   try {
     const {
-      gameId,
+      gameId: rawGameId,
       minPlayers,
       maxPlayers,
       isPrivate    = false,
       isTournament = false,
     } = req.body ?? {}
+    const gameId = typeof rawGameId === 'string' ? (resolveGameSlug(rawGameId) ?? rawGameId) : rawGameId
 
     if (typeof gameId     !== 'string' || !gameId)         return res.status(400).json({ error: 'gameId required' })
     if (!Number.isInteger(minPlayers) || minPlayers < 1)   return res.status(400).json({ error: 'minPlayers must be a positive integer' })
@@ -297,7 +298,8 @@ router.post('/', requireAuth, async (req, res, next) => {
  */
 router.get('/', optionalAuth, async (req, res, next) => {
   try {
-    const { mine, status, gameId, search, since } = req.query
+    const { mine, status, gameId: rawGameId, search, since } = req.query
+    const gameId = typeof rawGameId === 'string' ? (resolveGameSlug(rawGameId) ?? rawGameId) : rawGameId
     const limit = Math.min(Math.max(parseInt(req.query.limit, 10) || 20, 1), 200)
     const page  = Math.max(1, parseInt(req.query.page, 10) || 1)
     const skip  = (page - 1) * limit

@@ -393,7 +393,7 @@ describe('listBots — includeSkills', () => {
       { id: 'b1', displayName: 'A', botModelType: 'ml', gameElo: [{ rating: 1300 }] },
     ])
     db.botSkill.findMany.mockResolvedValue([
-      { id: 's1', botId: 'b1', gameId: 'xo', algorithm: 'qlearning' },
+      { id: 's1', botId: 'b1', gameId: 'tic-tac-toe', algorithm: 'qlearning' },
     ])
 
     const result = await listBots({ ownerId: 'owner_1' })
@@ -401,7 +401,7 @@ describe('listBots — includeSkills', () => {
     expect(result).toHaveLength(1)
     expect(result[0]).not.toHaveProperty('skills')
     expect(result[0].eloRating).toBe(1300)
-    expect(result[0].playableGameIds).toEqual(['xo'])
+    expect(result[0].playableGameIds).toEqual(['tic-tac-toe'])
     // Even without includeSkills we issue a single botSkill query to
     // build playableGameIds — but only one, never per-bot.
     expect(db.botSkill.findMany).toHaveBeenCalledTimes(1)
@@ -415,13 +415,13 @@ describe('listBots — includeSkills', () => {
       { id: 'b2', displayName: 'B', botModelType: 'ml', gameElo: [] },
     ])
     db.botSkill.findMany.mockResolvedValue([
-      { id: 's1', botId: 'b1', gameId: 'xo',       algorithm: 'qlearning' },
+      { id: 's1', botId: 'b1', gameId: 'tic-tac-toe',       algorithm: 'qlearning' },
       { id: 's2', botId: 'b1', gameId: 'connect4', algorithm: 'dqn'       },
-      { id: 's3', botId: 'b2', gameId: 'xo',       algorithm: 'minimax'   },
+      { id: 's3', botId: 'b2', gameId: 'tic-tac-toe',       algorithm: 'minimax'   },
     ])
     db.gameElo.findMany.mockResolvedValue([
-      { userId: 'b1', gameId: 'xo',       rating: 1450, gamesPlayed: 12 },
-      { userId: 'b2', gameId: 'xo',       rating: 1200, gamesPlayed: 0  },
+      { userId: 'b1', gameId: 'tic-tac-toe',       rating: 1450, gamesPlayed: 12 },
+      { userId: 'b2', gameId: 'tic-tac-toe',       rating: 1200, gamesPlayed: 0  },
       // b1's connect4 skill intentionally has no ELO row — must surface as null
     ])
 
@@ -433,7 +433,7 @@ describe('listBots — includeSkills', () => {
 
     const [b1, b2] = result
     expect(b1.skills).toHaveLength(2)
-    const xoSkill = b1.skills.find(s => s.gameId === 'xo')
+    const xoSkill = b1.skills.find(s => s.gameId === 'tic-tac-toe')
     const c4Skill = b1.skills.find(s => s.gameId === 'connect4')
     expect(xoSkill.elo).toEqual(expect.objectContaining({ rating: 1450, gamesPlayed: 12 }))
     expect(c4Skill.elo).toBeNull()

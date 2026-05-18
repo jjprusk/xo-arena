@@ -130,7 +130,7 @@ describe('POST /api/v1/bots/:id/train-guided', () => {
   it('creates a Q-Learning skill, calls startTraining, and returns sessionId + skillId + channelPrefix', async () => {
     db.botSkill.findFirst.mockResolvedValue(null)              // no existing skill
     mlSvc.createModel.mockResolvedValue({ id: 'sk_new' })
-    db.botSkill.update.mockResolvedValue({ id: 'sk_new', botId: 'bot_42', gameId: 'xo' })
+    db.botSkill.update.mockResolvedValue({ id: 'sk_new', botId: 'bot_42', gameId: 'tic-tac-toe' })
     db.trainingSession.findFirst.mockResolvedValue(null)       // no running session
     mlSvc.startTraining.mockResolvedValue({ id: 'sess_99', status: 'RUNNING' })
 

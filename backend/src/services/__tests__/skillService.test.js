@@ -38,35 +38,35 @@ describe('resolveSkillForGame', () => {
   it('returns { id, algorithm } for a bot that has a BotSkill row for the game', async () => {
     db.botSkill.findFirst.mockResolvedValue({ id: 'sk_123', algorithm: 'q_learning' })
 
-    const result = await resolveSkillForGame('bot_abc', 'xo')
+    const result = await resolveSkillForGame('bot_abc', 'tic-tac-toe')
 
     expect(result).toEqual({ id: 'sk_123', algorithm: 'q_learning' })
     // Verify the exact Prisma query shape — if this shifts, the unique
     // index semantics have changed and the test needs updating deliberately.
     expect(db.botSkill.findFirst).toHaveBeenCalledWith({
-      where:  { botId: 'bot_abc', gameId: 'xo' },
+      where:  { botId: 'bot_abc', gameId: 'tic-tac-toe' },
       select: { id: true, algorithm: true },
     })
   })
 
   it('returns null when no BotSkill row matches (the "returned null" log path)', async () => {
     db.botSkill.findFirst.mockResolvedValue(null)
-    const result = await resolveSkillForGame('bot_abc', 'xo')
+    const result = await resolveSkillForGame('bot_abc', 'tic-tac-toe')
     expect(result).toBeNull()
   })
 
   it('queries by the composite (botId, gameId) key — different gameId misses', async () => {
     // Simulate DB: bot has skill for xo, not for connect4.
     db.botSkill.findFirst.mockImplementation(async ({ where }) => {
-      if (where.botId === 'bot_abc' && where.gameId === 'xo') {
+      if (where.botId === 'bot_abc' && where.gameId === 'tic-tac-toe') {
         return { id: 'sk_xo_1', algorithm: 'minimax' }
       }
       return null
     })
 
-    expect(await resolveSkillForGame('bot_abc', 'xo')).toEqual({ id: 'sk_xo_1', algorithm: 'minimax' })
+    expect(await resolveSkillForGame('bot_abc', 'tic-tac-toe')).toEqual({ id: 'sk_xo_1', algorithm: 'minimax' })
     expect(await resolveSkillForGame('bot_abc', 'connect4')).toBeNull()
-    expect(await resolveSkillForGame('bot_xyz', 'xo')).toBeNull()
+    expect(await resolveSkillForGame('bot_xyz', 'tic-tac-toe')).toBeNull()
   })
 })
 

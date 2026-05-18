@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from 'vitest'
+import { describe, it, expect } from 'vitest'
 import express from 'express'
 import request from 'supertest'
 
@@ -24,21 +24,21 @@ function buildApp() {
 }
 
 describe('validateGameSlug middleware', () => {
-  it('accepts the canonical slug (xo today) and lifts req.gameId', async () => {
-    const app = buildApp()
-    const res = await request(app).get('/api/v1/games/xo/echo')
-    expect(res.status).toBe(200)
-    expect(res.body.gameId).toBe('xo')
-    expect(res.body.queryGameId).toBe('xo')
-  })
-
-  it('accepts the future-form alias (tic-tac-toe) and normalizes to canonical', async () => {
+  it('accepts the canonical slug (tic-tac-toe) and lifts req.gameId', async () => {
     const app = buildApp()
     const res = await request(app).get('/api/v1/games/tic-tac-toe/echo')
     expect(res.status).toBe(200)
-    // resolveGameSlug normalizes 'tic-tac-toe' to 'xo' during the A1.4 → A1.5 window
-    expect(res.body.gameId).toBe('xo')
-    expect(res.body.queryGameId).toBe('xo')
+    expect(res.body.gameId).toBe('tic-tac-toe')
+    expect(res.body.queryGameId).toBe('tic-tac-toe')
+  })
+
+  it('accepts the legacy alias (xo) and normalizes to canonical', async () => {
+    const app = buildApp()
+    const res = await request(app).get('/api/v1/games/xo/echo')
+    expect(res.status).toBe(200)
+    // resolveGameSlug normalizes legacy 'xo' to canonical 'tic-tac-toe' post-A1.5b
+    expect(res.body.gameId).toBe('tic-tac-toe')
+    expect(res.body.queryGameId).toBe('tic-tac-toe')
   })
 
   it('returns 404 with a helpful error body for unknown slugs', async () => {
@@ -48,8 +48,8 @@ describe('validateGameSlug middleware', () => {
     expect(res.body.error).toMatch(/Unknown game slug: poker/)
     expect(res.body.slug).toBe('poker')
     expect(Array.isArray(res.body.acceptedSlugs)).toBe(true)
-    expect(res.body.acceptedSlugs).toContain('xo')
     expect(res.body.acceptedSlugs).toContain('tic-tac-toe')
+    expect(res.body.acceptedSlugs).toContain('xo')
   })
 
   it('returns 404 (with slug shown as null) when called without a slug param', async () => {
@@ -66,10 +66,10 @@ describe('validateGameSlug middleware', () => {
     app.use('/api/v1/games/:slug/echo', validateGameSlug, (req, res) => {
       res.json({ gameId: req.gameId, queryGameId: req.query.gameId, other: req.query.other })
     })
-    const res = await request(app).get('/api/v1/games/xo/echo?other=keepme')
+    const res = await request(app).get('/api/v1/games/tic-tac-toe/echo?other=keepme')
     expect(res.status).toBe(200)
-    expect(res.body.gameId).toBe('xo')
-    expect(res.body.queryGameId).toBe('xo')  // injected
-    expect(res.body.other).toBe('keepme')    // preserved
+    expect(res.body.gameId).toBe('tic-tac-toe')
+    expect(res.body.queryGameId).toBe('tic-tac-toe')  // injected
+    expect(res.body.other).toBe('keepme')             // preserved
   })
 })

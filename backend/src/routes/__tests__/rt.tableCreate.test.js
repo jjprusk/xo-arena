@@ -241,7 +241,7 @@ describe('POST /api/v1/rt/tables', () => {
       id: 'user_1', betterAuthId: 'ba_user_1', displayName: 'A',
     })
     flow.createHvbTable.mockResolvedValueOnce({
-      ok: false, code: 'NO_SKILL', message: 'Bot has no skill for game "xo"',
+      ok: false, code: 'NO_SKILL', message: 'Bot has no skill for game "tic-tac-toe"',
     })
 
     const res = await request(app)
