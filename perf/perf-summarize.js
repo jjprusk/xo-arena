@@ -43,10 +43,17 @@ const OUT_PATH  = join(REPO_ROOT, 'doc', 'Performance_Trend.md')
 // is treated as a single "run".
 const RUN_WINDOW_MS = 15 * 60 * 1000
 
-// Metric regression threshold — flag if a p95 grew by >10% vs. previous
-// same-env run. Choose 10% to filter the typical p95 noise band; tighten
-// to 5% later when RUM data lets us compute real envelope.
-const REGRESSION_THRESHOLD_PCT = 10
+// Regression detector — compare each metric against the rolling median
+// of the previous N same-env runs, flagging only when the current sample
+// exceeds the median by >REGRESSION_THRESHOLD_PCT%.
+//
+// Previously this compared current vs. the *single* prior run with a 10%
+// threshold. On metrics with single-sample σ in the ±15% range (dsk
+// Ready, backend worst p95) that produced ~30% false-positive rate and
+// trained operators to ignore the flag. The rolling median + wider
+// threshold flags only persistent moves, not noise.
+const ROLLING_WINDOW = 5
+const REGRESSION_THRESHOLD_PCT = 25
 
 // ── Parse all baseline files ─────────────────────────────────────────────────
 function parseFilename(f) {
@@ -142,45 +149,71 @@ function metricsForRun(run) {
   return m
 }
 
-// ── Δ vs previous same-env run ───────────────────────────────────────────────
+// ── Δ vs previous same-env run + regression vs. rolling median ────────────────
+function median(values) {
+  const xs = values.filter(v => v != null).slice().sort((a, b) => a - b)
+  if (xs.length === 0) return null
+  const m = Math.floor(xs.length / 2)
+  return xs.length % 2 ? xs[m] : (xs[m - 1] + xs[m]) / 2
+}
+
 function computeDeltas(rows) {
-  // rows are sorted newest first; "prev" for a row means the next row down
-  // with the same env.
+  // rows are sorted newest first. "prev" (for the delta column display)
+  // is the single most recent same-env run; the rolling median uses up
+  // to ROLLING_WINDOW prior same-env runs (excluding the current row).
+  const fields = [
+    { k: 'mob_ready',         label: 'mob Ready' },
+    { k: 'dsk_ready',         label: 'dsk Ready' },
+    { k: 'mob_lcp',           label: 'mob LCP'   },
+    { k: 'sse_p50',           label: 'SSE p50'   },
+    { k: 'sse_p95',           label: 'SSE p95'   },
+    { k: 'mob_tbt',           label: 'mob TBT'   },
+    { k: 'backend_worst_p95', label: 'backend p95' },
+    { k: 'img_kb',            label: 'img KB'    },
+    { k: 'js_kb',             label: 'js KB'     },
+  ]
   for (let i = 0; i < rows.length; i++) {
     const cur  = rows[i]
-    const prev = rows.slice(i + 1).find(r => r.env === cur.env)
     cur.delta = {}
     cur.regressions = []
+    const sameEnvOlder = rows.slice(i + 1).filter(r => r.env === cur.env)
+    const prev = sameEnvOlder[0]
     if (!prev) continue
-    const fields = [
-      { k: 'mob_ready',         label: 'mob Ready' },
-      { k: 'dsk_ready',         label: 'dsk Ready' },
-      { k: 'mob_lcp',           label: 'mob LCP'   },
-      { k: 'sse_p50',           label: 'SSE p50'   },
-      { k: 'sse_p95',           label: 'SSE p95'   },
-      { k: 'mob_tbt',           label: 'mob TBT'   },
-      { k: 'backend_worst_p95', label: 'backend p95' },
-      { k: 'img_kb',            label: 'img KB'    },
-      { k: 'js_kb',             label: 'js KB'     },
-    ]
+    const window = sameEnvOlder.slice(0, ROLLING_WINDOW)
     for (const { k, label } of fields) {
       const a = cur[k], b = prev[k]
       if (a == null || b == null || b === 0) continue
-      const pct = ((a - b) / b) * 100
-      cur.delta[k] = pct
-      // Regression: bigger is worse for everything we track here.
-      if (pct > REGRESSION_THRESHOLD_PCT) {
-        cur.regressions.push({ k, label, prev: b, cur: a, pct })
+      // Delta column still shows %-change vs. single prior run — it's
+      // the most intuitive read for "what just happened?"
+      cur.delta[k] = ((a - b) / b) * 100
+      // Regression flag uses the rolling median to filter single-sample
+      // noise. Need ≥3 prior samples for the median to be meaningful;
+      // until then no metric is flagged.
+      const windowValues = window.map(r => r[k]).filter(v => v != null && v !== 0)
+      if (windowValues.length < 3) continue
+      const med = median(windowValues)
+      if (med == null || med === 0) continue
+      const pctVsMedian = ((a - med) / med) * 100
+      if (pctVsMedian > REGRESSION_THRESHOLD_PCT) {
+        cur.regressions.push({ k, label, prev: med, cur: a, pct: pctVsMedian })
       }
     }
+    // Index regressions by metric key so per-cell rendering can show ⚠️
+    // only where the rolling-median detector actually flagged. Keeps the
+    // inline arrows consistent with the Regressions section below.
+    cur.flagged = Object.fromEntries(cur.regressions.map(x => [x.k, true]))
   }
 }
 
 // ── Format helpers ───────────────────────────────────────────────────────────
-function fmtDelta(pct, { suppressWarn = false } = {}) {
+function fmtDelta(pct, { suppressWarn = false, flagged = false } = {}) {
   if (pct == null || !isFinite(pct)) return ''
   const sign = pct >= 0 ? '+' : ''
-  const arrow = pct > REGRESSION_THRESHOLD_PCT && !suppressWarn ? ' ⚠️'
+  // ⚠️ now reflects the rolling-median regression detector (passed in
+  // explicitly via `flagged`), not the raw delta. The directional arrow
+  // for "got faster" still triggers on a single-run drop because a
+  // visible "↓" is useful even on a noisy metric.
+  const arrow = flagged && !suppressWarn ? ' ⚠️'
               : pct < -5 ? ' ↓'
               : ''
   return `${sign}${pct.toFixed(0)}%${arrow}`
@@ -275,7 +308,7 @@ function main() {
   out.push('- Backend endpoint p95 (worst of measured): **≤ 200 ms**')
   out.push('- Mobile TBT p50: **≤ 100 ms**')
   out.push('')
-  out.push('Regressions flagged ⚠️ when a p95 grew >' + REGRESSION_THRESHOLD_PCT + '% vs the previous same-env run.')
+  out.push('Regressions flagged ⚠️ when a metric exceeds the rolling median of the previous ' + ROLLING_WINDOW + ' same-env runs by >' + REGRESSION_THRESHOLD_PCT + '%. The Δ column still shows %-change vs. the single most recent same-env run (intuitive read; ignore the directional arrows for noise within ±15%).')
   out.push('')
 
   // ── Cold-page table ───────────────────────────────────────────────────────
@@ -292,12 +325,12 @@ function main() {
       `| ${r.date}`,
       `${(r.version ?? '—').padEnd(19)}`,
       `${r.env.padEnd(4)}`,
-      `${v(r.mob_ready)} ${fmtDelta(r.delta.mob_ready)}`.trim(),
-      `${v(r.dsk_ready)} ${fmtDelta(r.delta.dsk_ready)}`.trim(),
-      `${v(r.mob_lcp)}   ${fmtDelta(r.delta.mob_lcp)}`.trim(),
-      `${v(r.mob_tbt)} ${fmtDelta(r.delta.mob_tbt)}`.trim(),
-      `${v(r.img_kb, '')} ${fmtDelta(r.delta.img_kb)}`.trim(),
-      `${v(r.js_kb, '')} ${fmtDelta(r.delta.js_kb)}`.trim(),
+      `${v(r.mob_ready)} ${fmtDelta(r.delta.mob_ready, { flagged: r.flagged?.mob_ready })}`.trim(),
+      `${v(r.dsk_ready)} ${fmtDelta(r.delta.dsk_ready, { flagged: r.flagged?.dsk_ready })}`.trim(),
+      `${v(r.mob_lcp)}   ${fmtDelta(r.delta.mob_lcp, { flagged: r.flagged?.mob_lcp })}`.trim(),
+      `${v(r.mob_tbt)} ${fmtDelta(r.delta.mob_tbt, { flagged: r.flagged?.mob_tbt })}`.trim(),
+      `${v(r.img_kb, '')} ${fmtDelta(r.delta.img_kb, { flagged: r.flagged?.img_kb })}`.trim(),
+      `${v(r.js_kb, '')} ${fmtDelta(r.delta.js_kb, { flagged: r.flagged?.js_kb })}`.trim(),
       `${reg} |`,
     ].join(' | '))
   }
@@ -318,10 +351,10 @@ function main() {
       `| ${r.date}`,
       `${(r.version ?? '—').padEnd(19)}`,
       `${r.env.padEnd(4)}`,
-      `${v(r.sse_p50)} ${fmtDelta(r.delta.sse_p50, { suppressWarn: sseRecovery })}`.trim(),
-      `${v(r.sse_p95)} ${fmtDelta(r.delta.sse_p95, { suppressWarn: sseRecovery })}`.trim(),
+      `${v(r.sse_p50)} ${fmtDelta(r.delta.sse_p50, { suppressWarn: sseRecovery, flagged: r.flagged?.sse_p50 })}`.trim(),
+      `${v(r.sse_p95)} ${fmtDelta(r.delta.sse_p95, { suppressWarn: sseRecovery, flagged: r.flagged?.sse_p95 })}`.trim(),
       `${failStr.padStart(8)}`,
-      `${v(r.backend_worst_p95)} ${fmtDelta(r.delta.backend_worst_p95)}`.trim(),
+      `${v(r.backend_worst_p95)} ${fmtDelta(r.delta.backend_worst_p95, { flagged: r.flagged?.backend_worst_p95 })}`.trim(),
       `${v(r.inp_max)}`,
       `${note} |`,
     ].join(' | '))

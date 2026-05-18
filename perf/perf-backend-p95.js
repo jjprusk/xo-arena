@@ -55,7 +55,13 @@ const positional = args.find(a => !a.startsWith('--'))
 const TARGET = (args.find(a => a.startsWith('--target='))?.split('=')[1]) ?? null
 const REQUESTS    = parseInt(args.find(a => a.startsWith('--requests='))?.split('=')[1]    ?? '200') || 200
 const CONCURRENCY = parseInt(args.find(a => a.startsWith('--concurrency='))?.split('=')[1] ?? '5')   || 5
-const WARMUP_REQS = parseInt(args.find(a => a.startsWith('--warmup='))?.split('=')[1]      ?? '10')  || 10
+// Warmup default of 50 (was 10) ensures the in-process bots cache + the
+// DB connection pool are fully populated before measurement starts. With
+// only 10 warmup requests at concurrency=5, the first batch of measured
+// requests can land on cold cache entries (TTL 60s, key per gameId) and
+// dominate the p95 calculation. 50 / 5 = 10 batches — enough to hit every
+// cache key the bench touches plus a buffer.
+const WARMUP_REQS = parseInt(args.find(a => a.startsWith('--warmup='))?.split('=')[1]      ?? '50')  || 50
 
 function resolveBase() {
   if (positional)              return positional

@@ -12,6 +12,7 @@ import { seedCorpus as seedHelpCorpus, reindexAllIfStale as reindexHelpCorpusIfS
 import { startHelpRateLimitSweep } from './middleware/helpRateLimit.js'
 import { startResearchPublishRateLimitSweep } from './middleware/researchPublishRateLimit.js'
 import { startResearchLogExportCron } from './jobs/researchLogExport.js'
+import { prewarmCache } from './startup/prewarmCache.js'
 import aiRouter from './routes/ai.js'
 import logsRouter from './routes/logs.js'
 import usersRouter from './routes/users.js'
@@ -194,6 +195,14 @@ startResearchLogExportCron()
 app.set('io', null)
 startTournamentBridge(null)
 startTableGc(null)
+
+// Prewarm the in-process bots cache before serving traffic. Without this,
+// the first burst of post-deploy requests hits the cold path and drags
+// `/api/v1/bots?gameId=...` p95 from ~30 ms to ~150 ms for the full TTL
+// window. Awaited so server.listen() (and thus Fly.io's healthcheck) only
+// flips to ready after the cache is warm.
+await prewarmCache()
+
 server.listen(PORT, () => {
   logger.info(`XO Arena backend running on port ${PORT}`)
 })
