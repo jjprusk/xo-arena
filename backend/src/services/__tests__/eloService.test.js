@@ -21,7 +21,7 @@ vi.mock('../skillService.js', () => ({
   getSystemConfig: vi.fn().mockResolvedValue(5),
 }))
 
-const { updatePlayerEloAfterPvAI, updateBothElosAfterPvBot, updatePlayersEloAfterPvP } =
+const { updatePlayerEloAfterPvAI, updateBothElosAfterPvBot, updateBothElosAfterBotVsBot, updatePlayersEloAfterPvP } =
   await import('../eloService.js')
 const db = (await import('../../lib/db.js')).default
 
@@ -128,5 +128,100 @@ describe('updatePlayersEloAfterPvP', () => {
     db.gameElo.findUnique.mockRejectedValue(new Error('db down'))
     const result = await updatePlayersEloAfterPvP('usr_1', 'usr_2', 'PLAYER1_WIN')
     expect(result).toBeUndefined()
+  })
+})
+
+describe('options.gameId — multi-game parameterization', () => {
+  it('threads custom gameId through GameElo lookup + upsert', async () => {
+    db.gameElo.findUnique.mockResolvedValue({ rating: 1200 })
+
+    await updatePlayerEloAfterPvAI('usr_1', 'PLAYER1_WIN', 'novice', { gameId: 'connect-four' })
+
+    expect(db.gameElo.findUnique).toHaveBeenCalledWith({
+      where: { userId_gameId: { userId: 'usr_1', gameId: 'connect-four' } },
+    })
+    expect(db.gameElo.upsert).toHaveBeenCalledWith(expect.objectContaining({
+      where:  { userId_gameId: { userId: 'usr_1', gameId: 'connect-four' } },
+      create: expect.objectContaining({ gameId: 'connect-four' }),
+    }))
+  })
+
+  it('defaults gameId to the canonical TTT slug when omitted', async () => {
+    db.gameElo.findUnique.mockResolvedValue({ rating: 1200 })
+
+    await updatePlayerEloAfterPvAI('usr_1', 'DRAW', 'intermediate')
+
+    expect(db.gameElo.findUnique).toHaveBeenCalledWith({
+      where: { userId_gameId: { userId: 'usr_1', gameId: 'tic-tac-toe' } },
+    })
+  })
+
+  it('threads gameId through both sides of PvBot', async () => {
+    db.gameElo.findUnique.mockResolvedValue({ rating: 1200 })
+    db.user.findUnique.mockResolvedValue({ botGamesPlayed: 0, botProvisional: true })
+
+    await updateBothElosAfterPvBot('usr_1', 'bot_1', 'PLAYER1_WIN', { gameId: 'connect-four' })
+
+    const eloLookups = db.gameElo.findUnique.mock.calls.map(c => c[0].where.userId_gameId.gameId)
+    expect(eloLookups.every(g => g === 'connect-four')).toBe(true)
+    const upserts = db.gameElo.upsert.mock.calls.map(c => c[0].where.userId_gameId.gameId)
+    expect(upserts).toEqual(['connect-four', 'connect-four'])
+  })
+})
+
+describe('options.offLadder — skip ELO update', () => {
+  it('returns skipped:true and does NOT touch the DB on PvAI', async () => {
+    const result = await updatePlayerEloAfterPvAI('usr_1', 'AI_WIN', 'master', { offLadder: true })
+
+    expect(result).toEqual({ newElo: null, delta: 0, skipped: true })
+    expect(db.gameElo.findUnique).not.toHaveBeenCalled()
+    expect(db.gameElo.upsert).not.toHaveBeenCalled()
+    expect(db.userEloHistory.create).not.toHaveBeenCalled()
+    expect(db.$transaction).not.toHaveBeenCalled()
+  })
+
+  it('returns skipped:true on PvBot — no DB writes for either side', async () => {
+    const result = await updateBothElosAfterPvBot('usr_1', 'bot_1', 'PLAYER1_WIN', { offLadder: true })
+
+    expect(result.skipped).toBe(true)
+    expect(result.human).toEqual({ newElo: null, delta: 0 })
+    expect(result.bot).toEqual({ newElo: null, delta: 0 })
+    expect(db.gameElo.findUnique).not.toHaveBeenCalled()
+    expect(db.gameElo.upsert).not.toHaveBeenCalled()
+    expect(db.userEloHistory.create).not.toHaveBeenCalled()
+    expect(db.user.update).not.toHaveBeenCalled()
+  })
+
+  it('returns skipped:true on BotVsBot — bot stats untouched', async () => {
+    const result = await updateBothElosAfterBotVsBot('bot_1', 'bot_2', 'PLAYER1_WIN', { offLadder: true })
+
+    expect(result.skipped).toBe(true)
+    expect(result.bot1).toEqual({ newElo: null, delta: 0 })
+    expect(result.bot2).toEqual({ newElo: null, delta: 0 })
+    expect(db.gameElo.findUnique).not.toHaveBeenCalled()
+    expect(db.user.update).not.toHaveBeenCalled()
+  })
+
+  it('returns skipped:true on PvP — both players left intact', async () => {
+    const result = await updatePlayersEloAfterPvP('usr_1', 'usr_2', 'PLAYER1_WIN', { offLadder: true })
+
+    expect(result.skipped).toBe(true)
+    expect(result.player1).toEqual({ newElo: null, delta: 0 })
+    expect(result.player2).toEqual({ newElo: null, delta: 0 })
+    expect(db.gameElo.findUnique).not.toHaveBeenCalled()
+    expect(db.userEloHistory.create).not.toHaveBeenCalled()
+  })
+
+  it('offLadder:false (or omitted) takes the normal ELO path', async () => {
+    db.gameElo.findUnique.mockResolvedValue({ rating: 1200 })
+
+    const r1 = await updatePlayerEloAfterPvAI('usr_1', 'PLAYER1_WIN', 'novice')
+    expect(r1.skipped).toBeUndefined()
+    expect(r1.delta).toBeGreaterThan(0)
+
+    db.user.findUnique.mockResolvedValue({ botGamesPlayed: 0, botProvisional: true })
+    const r2 = await updateBothElosAfterPvBot('usr_1', 'bot_1', 'PLAYER1_WIN', { offLadder: false })
+    expect(r2.skipped).toBeUndefined()
+    expect(r2.human.delta).toBeGreaterThan(0)
   })
 })

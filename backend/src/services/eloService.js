@@ -4,7 +4,15 @@
  *
  * Computes ELO updates after game outcomes and persists them to GameElo.
  * AI opponents have fixed ELO ratings by difficulty level.
- * Bot opponents (HVB) use their live GameElo for 'xo'.
+ * Bot opponents (HVB) use their live GameElo.
+ *
+ * Multi-game ready (A1.6): every public function accepts `{ gameId, offLadder }`
+ * as a trailing options argument. `gameId` defaults to the canonical TTT slug
+ * so existing single-game callers keep working untouched. `offLadder: true`
+ * (per SDK `BotPersona.offLadder`) short-circuits the entire update: no
+ * GameElo writes, no UserEloHistory rows, no bot-stats bumps. Reserved for
+ * matches where a structural loss carries no skill signal (e.g. Connect Four
+ * Master tier — first-player-wins solved game).
  */
 
 import db from '../lib/db.js'
@@ -13,8 +21,6 @@ import { GAME_IDS } from '../constants/games.js'
 
 const K_FACTOR = 32
 const DEFAULT_PROVISIONAL_THRESHOLD = 5
-// A1.6 will parameterize this; for now point it at the canonical TTT slug.
-const GAME_ID = GAME_IDS.TIC_TAC_TOE
 
 // Fixed ELO ratings for AI opponents (used for expected-score computation)
 const AI_ELO = {
@@ -22,6 +28,12 @@ const AI_ELO = {
   intermediate: 1200,
   advanced:     1500,
   master:       1800,
+}
+
+function normalizeOptions(options) {
+  const gameId    = options?.gameId    ?? GAME_IDS.TIC_TAC_TOE
+  const offLadder = options?.offLadder === true
+  return { gameId, offLadder }
 }
 
 /**
@@ -40,20 +52,20 @@ function computeNewElo(currentElo, opponentElo, actualScore) {
   return Math.round((currentElo + K_FACTOR * (actualScore - expected)) * 10) / 10
 }
 
-/** Get the current ELO rating for a user in the XO game (defaults to 1200). */
-async function getUserElo(userId) {
+/** Get the current ELO rating for a user in a given game (defaults to 1200). */
+async function getUserElo(userId, gameId) {
   const row = await db.gameElo.findUnique({
-    where: { userId_gameId: { userId, gameId: GAME_ID } },
+    where: { userId_gameId: { userId, gameId } },
   })
   return row?.rating ?? 1200
 }
 
 /** Upsert GameElo for a user. Increments gamesPlayed. */
-function upsertGameElo(userId, rating) {
+function upsertGameElo(userId, gameId, rating) {
   return db.gameElo.upsert({
-    where: { userId_gameId: { userId, gameId: GAME_ID } },
+    where: { userId_gameId: { userId, gameId } },
     update: { rating, gamesPlayed: { increment: 1 } },
-    create: { userId, gameId: GAME_ID, rating, gamesPlayed: 1 },
+    create: { userId, gameId, rating, gamesPlayed: 1 },
   })
 }
 
@@ -61,10 +73,13 @@ function upsertGameElo(userId, rating) {
  * Update ELO for a human player after a PvAI game.
  * outcome: 'PLAYER1_WIN' | 'AI_WIN' | 'DRAW'
  * difficulty: 'novice' | 'intermediate' | 'advanced' | 'master'
+ * options.gameId / options.offLadder per module docstring.
  */
-export async function updatePlayerEloAfterPvAI(userId, outcome, difficulty) {
+export async function updatePlayerEloAfterPvAI(userId, outcome, difficulty, options = {}) {
+  const { gameId, offLadder } = normalizeOptions(options)
+  if (offLadder) return { newElo: null, delta: 0, skipped: true }
   try {
-    const currentElo = await getUserElo(userId)
+    const currentElo = await getUserElo(userId, gameId)
     const opponentElo = AI_ELO[difficulty?.toLowerCase()] ?? AI_ELO.intermediate
     const actualScore = outcome === 'PLAYER1_WIN' ? 1 : outcome === 'DRAW' ? 0.5 : 0
     const outcomeLabel = outcome === 'PLAYER1_WIN' ? 'win' : outcome === 'DRAW' ? 'draw' : 'loss'
@@ -73,7 +88,7 @@ export async function updatePlayerEloAfterPvAI(userId, outcome, difficulty) {
     const delta = newElo - currentElo
 
     await db.$transaction([
-      upsertGameElo(userId, newElo),
+      upsertGameElo(userId, gameId, newElo),
       db.userEloHistory.create({
         data: {
           userId,
@@ -97,12 +112,21 @@ export async function updatePlayerEloAfterPvAI(userId, outcome, difficulty) {
  * humanId: domain User.id of the human player (player1)
  * botId:   domain User.id of the bot (player2)
  * outcome: 'PLAYER1_WIN' | 'PLAYER2_WIN' | 'DRAW'
+ * options.gameId / options.offLadder per module docstring.
  */
-export async function updateBothElosAfterPvBot(humanId, botId, outcome) {
+export async function updateBothElosAfterPvBot(humanId, botId, outcome, options = {}) {
+  const { gameId, offLadder } = normalizeOptions(options)
+  if (offLadder) {
+    return {
+      human: { newElo: null, delta: 0 },
+      bot:   { newElo: null, delta: 0 },
+      skipped: true,
+    }
+  }
   try {
     const [humanElo, botEloRow, botData, threshold] = await Promise.all([
-      getUserElo(humanId),
-      db.gameElo.findUnique({ where: { userId_gameId: { userId: botId, gameId: GAME_ID } } }),
+      getUserElo(humanId, gameId),
+      db.gameElo.findUnique({ where: { userId_gameId: { userId: botId, gameId } } }),
       db.user.findUnique({ where: { id: botId }, select: { botGamesPlayed: true, botProvisional: true } }),
       getSystemConfig('bots.provisionalGames', DEFAULT_PROVISIONAL_THRESHOLD),
     ])
@@ -121,8 +145,8 @@ export async function updateBothElosAfterPvBot(humanId, botId, outcome) {
     const nowProvisional = botData?.botProvisional && newGamesPlayed < threshold
 
     await db.$transaction([
-      upsertGameElo(humanId, humanNewElo),
-      upsertGameElo(botId, botNewElo),
+      upsertGameElo(humanId, gameId, humanNewElo),
+      upsertGameElo(botId, gameId, botNewElo),
       db.user.update({ where: { id: botId }, data: { botGamesPlayed: newGamesPlayed, botProvisional: nowProvisional } }),
       db.userEloHistory.create({
         data: {
@@ -158,12 +182,21 @@ export async function updateBothElosAfterPvBot(humanId, botId, outcome) {
  * bot1Id: domain User.id of the X player (bot1)
  * bot2Id: domain User.id of the O player (bot2)
  * outcome: 'PLAYER1_WIN' | 'PLAYER2_WIN' | 'DRAW'
+ * options.gameId / options.offLadder per module docstring.
  */
-export async function updateBothElosAfterBotVsBot(bot1Id, bot2Id, outcome) {
+export async function updateBothElosAfterBotVsBot(bot1Id, bot2Id, outcome, options = {}) {
+  const { gameId, offLadder } = normalizeOptions(options)
+  if (offLadder) {
+    return {
+      bot1: { newElo: null, delta: 0 },
+      bot2: { newElo: null, delta: 0 },
+      skipped: true,
+    }
+  }
   try {
     const [bot1EloRow, bot2EloRow, bot1Data, bot2Data, threshold] = await Promise.all([
-      db.gameElo.findUnique({ where: { userId_gameId: { userId: bot1Id, gameId: GAME_ID } } }),
-      db.gameElo.findUnique({ where: { userId_gameId: { userId: bot2Id, gameId: GAME_ID } } }),
+      db.gameElo.findUnique({ where: { userId_gameId: { userId: bot1Id, gameId } } }),
+      db.gameElo.findUnique({ where: { userId_gameId: { userId: bot2Id, gameId } } }),
       db.user.findUnique({ where: { id: bot1Id }, select: { botGamesPlayed: true, botProvisional: true } }),
       db.user.findUnique({ where: { id: bot2Id }, select: { botGamesPlayed: true, botProvisional: true } }),
       getSystemConfig('bots.provisionalGames', DEFAULT_PROVISIONAL_THRESHOLD),
@@ -188,8 +221,8 @@ export async function updateBothElosAfterBotVsBot(bot1Id, bot2Id, outcome) {
     const newGames2 = (bot2Data?.botGamesPlayed ?? 0) + 1
 
     await db.$transaction([
-      upsertGameElo(bot1Id, newR1),
-      upsertGameElo(bot2Id, newR2),
+      upsertGameElo(bot1Id, gameId, newR1),
+      upsertGameElo(bot2Id, gameId, newR2),
       db.user.update({
         where: { id: bot1Id },
         data: {
@@ -236,12 +269,23 @@ export async function updateBothElosAfterBotVsBot(bot1Id, bot2Id, outcome) {
 /**
  * Update ELO for both players after a PvP game.
  * outcome: 'PLAYER1_WIN' | 'PLAYER2_WIN' | 'DRAW'
+ * options.gameId / options.offLadder per module docstring. (PvP rarely sets
+ * offLadder since there's no AI persona involved, but the flag is honored
+ * for symmetry — e.g. casual / unrated rooms.)
  */
-export async function updatePlayersEloAfterPvP(player1Id, player2Id, outcome) {
+export async function updatePlayersEloAfterPvP(player1Id, player2Id, outcome, options = {}) {
+  const { gameId, offLadder } = normalizeOptions(options)
+  if (offLadder) {
+    return {
+      player1: { newElo: null, delta: 0 },
+      player2: { newElo: null, delta: 0 },
+      skipped: true,
+    }
+  }
   try {
     const [p1Elo, p2Elo] = await Promise.all([
-      getUserElo(player1Id),
-      getUserElo(player2Id),
+      getUserElo(player1Id, gameId),
+      getUserElo(player2Id, gameId),
     ])
 
     const p1Score = outcome === 'PLAYER1_WIN' ? 1 : outcome === 'PLAYER2_WIN' ? 0 : 0.5
@@ -254,8 +298,8 @@ export async function updatePlayersEloAfterPvP(player1Id, player2Id, outcome) {
     const p2Outcome = p2Score === 1 ? 'win' : p2Score === 0 ? 'loss' : 'draw'
 
     await db.$transaction([
-      upsertGameElo(player1Id, p1NewElo),
-      upsertGameElo(player2Id, p2NewElo),
+      upsertGameElo(player1Id, gameId, p1NewElo),
+      upsertGameElo(player2Id, gameId, p2NewElo),
       db.userEloHistory.create({
         data: {
           userId: player1Id,
