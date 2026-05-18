@@ -60,7 +60,7 @@ describe('useGameSDK SSE+POST gameflow branch', () => {
       .mockResolvedValueOnce({ tableId: 'tbl_1', mark: 'X', action: 'host_reattach' })       // join
 
     const { result } = renderHook(() =>
-      useGameSDK({ gameId: 'xo', currentUser: { id: 'u1', displayName: 'Alice' } }),
+      useGameSDK({ gameId: 'tic-tac-toe', currentUser: { id: 'u1', displayName: 'Alice' } }),
     )
 
     await waitFor(() => {
@@ -83,7 +83,7 @@ describe('useGameSDK SSE+POST gameflow branch', () => {
     })
 
     const { result } = renderHook(() =>
-      useGameSDK({ gameId: 'xo', joinSlug: 'abc', currentUser: { id: 'g1', displayName: 'B' } }),
+      useGameSDK({ gameId: 'tic-tac-toe', joinSlug: 'abc', currentUser: { id: 'g1', displayName: 'B' } }),
     )
 
     await waitFor(() => {
@@ -107,7 +107,7 @@ describe('useGameSDK SSE+POST gameflow branch', () => {
     // Phase 3.8.5.2 — picker payload is identity-scoped; the hook never
     // forwards a botSkillId, even if a caller (legacy) tries to pass one.
     const { result } = renderHook(() =>
-      useGameSDK({ gameId: 'xo', botUserId: 'bot_1', currentUser: { id: 'u1' } }),
+      useGameSDK({ gameId: 'tic-tac-toe', botUserId: 'bot_1', currentUser: { id: 'u1' } }),
     )
 
     await waitFor(() => {
@@ -138,7 +138,7 @@ describe('useGameSDK SSE+POST gameflow branch', () => {
       .mockResolvedValueOnce({ tableId: 'tbl_1', mark: 'X', action: 'host_reattach' })
 
     const { result } = renderHook(() =>
-      useGameSDK({ gameId: 'xo', currentUser: { id: 'u1' } }),
+      useGameSDK({ gameId: 'tic-tac-toe', currentUser: { id: 'u1' } }),
     )
     await waitFor(() => expect(result.current.session?.tableId).toBe('abc'))
 
@@ -157,7 +157,7 @@ describe('useGameSDK SSE+POST gameflow branch', () => {
       .mockResolvedValueOnce({ tableId: 'tbl_1', mark: 'X', action: 'host_reattach' })
 
     const { result } = renderHook(() =>
-      useGameSDK({ gameId: 'xo', currentUser: { id: 'u1' } }),
+      useGameSDK({ gameId: 'tic-tac-toe', currentUser: { id: 'u1' } }),
     )
     await waitFor(() => expect(eventStreamRegistry.latest?.enabled).toBe(true))
 
@@ -180,7 +180,7 @@ describe('useGameSDK SSE+POST gameflow branch', () => {
       .mockResolvedValueOnce({ tableId: 'tbl_1', mark: 'X', action: 'host_reattach' })
 
     const { result } = renderHook(() =>
-      useGameSDK({ gameId: 'xo', currentUser: { id: 'u1' } }),
+      useGameSDK({ gameId: 'tic-tac-toe', currentUser: { id: 'u1' } }),
     )
     await waitFor(() => expect(eventStreamRegistry.latest?.enabled).toBe(true))
 
@@ -194,7 +194,7 @@ describe('useGameSDK SSE+POST gameflow branch', () => {
       .mockResolvedValueOnce({ tableId: 'tbl_1', mark: 'O', action: 'host_reattach' })
 
     const { result } = renderHook(() =>
-      useGameSDK({ gameId: 'xo', currentUser: { id: 'u1' } }),
+      useGameSDK({ gameId: 'tic-tac-toe', currentUser: { id: 'u1' } }),
     )
     await waitFor(() => expect(eventStreamRegistry.latest?.enabled).toBe(true))
 
@@ -240,7 +240,7 @@ describe('useGameSDK SSE+POST gameflow branch', () => {
     it('skips the rtFetch chain entirely when a playBundle is provided', async () => {
       const { result } = renderHook(() =>
         useGameSDK({
-          gameId: 'xo',
+          gameId: 'tic-tac-toe',
           botUserId: bundle.bot.id,
           currentUser: { id: 'u1', displayName: 'Alice' },
           playBundle: bundle,
@@ -265,7 +265,7 @@ describe('useGameSDK SSE+POST gameflow branch', () => {
         .mockResolvedValueOnce({ tableId: 'tbl_1', mark: 'X', action: 'host_reattach' })
 
       renderHook(() =>
-        useGameSDK({ gameId: 'xo', currentUser: { id: 'u1', displayName: 'Alice' } }),
+        useGameSDK({ gameId: 'tic-tac-toe', currentUser: { id: 'u1', displayName: 'Alice' } }),
       )
 
       await waitFor(() => {
@@ -285,7 +285,7 @@ describe('useGameSDK SSE+POST gameflow branch', () => {
 
       renderHook(() =>
         useGameSDK({
-          gameId: 'xo', joinSlug: 'abc',
+          gameId: 'tic-tac-toe', joinSlug: 'abc',
           currentUser: { id: 'u1' },
           playBundle: bundle,  // present but should be ignored
         }),
@@ -306,7 +306,7 @@ describe('useGameSDK SSE+POST gameflow branch', () => {
       .mockResolvedValueOnce({ tableId: 'tbl_1', mark: 'X', action: 'host_reattach' })
 
     const { result } = renderHook(() =>
-      useGameSDK({ gameId: 'xo', currentUser: { id: 'u1' } }),
+      useGameSDK({ gameId: 'tic-tac-toe', currentUser: { id: 'u1' } }),
     )
     await waitFor(() => expect(eventStreamRegistry.latest?.enabled).toBe(true))
 

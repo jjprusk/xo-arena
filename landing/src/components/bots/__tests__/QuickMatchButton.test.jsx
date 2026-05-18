@@ -39,9 +39,9 @@ describe('<QuickMatchButton />', () => {
     fireEvent.click(screen.getByTestId('quick-match-button'))
 
     await waitFor(() => expect(mockNavigate).toHaveBeenCalled())
-    expect(mockApi.bots.quickMatch).toHaveBeenCalledWith({ gameId: 'xo', eloWindow: 100, token: null })
+    expect(mockApi.bots.quickMatch).toHaveBeenCalledWith({ gameId: 'tic-tac-toe', eloWindow: 100, token: null })
     expect(mockRtFetch).toHaveBeenCalledWith('/rt/tables', {
-      body: { kind: 'hvb', botUserId: 'b_picked', gameId: 'xo', spectatorAllowed: true },
+      body: { kind: 'hvb', botUserId: 'b_picked', gameId: 'tic-tac-toe', spectatorAllowed: true },
     })
     expect(mockNavigate).toHaveBeenCalledWith('/play?join=qm-slug', expect.objectContaining({ state: expect.objectContaining({ from: expect.any(String) }) }))
   })

@@ -24,7 +24,7 @@ const OWNER_TABS = [
 // Game catalog for the filter dropdown. Only xo ships today; the constant
 // is here so the picker is in place when the second game lands.
 const GAMES = [
-  { id: 'xo', label: 'Tic-tac-toe' },
+  { id: 'tic-tac-toe', label: 'Tic-tac-toe' },
 ]
 
 export default function BotFilterBar({

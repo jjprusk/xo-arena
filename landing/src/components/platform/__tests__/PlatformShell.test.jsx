@@ -9,7 +9,7 @@ function wrap(children) {
 }
 
 const xoMeta = {
-  id: 'xo',
+  id: 'tic-tac-toe',
   title: 'XO',
   layout: { preferredWidth: 'compact' },
   theme:  { tokens: { '--game-mark-1': '#111' } },
@@ -165,8 +165,8 @@ describe('PlatformShell — sidebar content', () => {
         <div>game</div>
       </PlatformShell>,
     )
-    expect(screen.getByRole('link', { name: /gym/i })).toHaveAttribute('href', '/gym?gameId=xo')
-    expect(screen.getByRole('link', { name: /puzzles/i })).toHaveAttribute('href', '/puzzles?gameId=xo')
+    expect(screen.getByRole('link', { name: /gym/i })).toHaveAttribute('href', '/gym?gameId=tic-tac-toe')
+    expect(screen.getByRole('link', { name: /puzzles/i })).toHaveAttribute('href', '/puzzles?gameId=tic-tac-toe')
   })
 
   it('hides game tabs when the game does not support training or puzzles', () => {

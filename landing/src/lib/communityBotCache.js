@@ -25,7 +25,7 @@ function isStale() {
 export async function getCommunityBot() {
   if (_cache && !isStale()) return _cache
   if (!_inflight) {
-    _inflight = api.bots.list({ gameId: 'xo' })
+    _inflight = api.bots.list({ gameId: 'tic-tac-toe' })
       .then(res => {
         const bots    = res.bots ?? []
         const builtIn = bots

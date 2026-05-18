@@ -61,7 +61,7 @@ export function GameView({ joinSlug, tournamentMatchId, tournamentId, authSessio
   const [gameState, setGameState] = useState({ currentTurn: null, winner: null, isDraw: false })
 
   const { session, sdk, phase, abandoned, kicked, seriesResult, opponentLeft } = useGameSDK({
-    gameId:           'xo',
+    gameId:           'tic-tac-toe',
     joinSlug,
     tournamentMatchId,
     tournamentId,
@@ -358,7 +358,7 @@ export default function PlayPage() {
     // The shared in-flight promise dedups them — second mount picks up the
     // first mount's result. Cleared on resolve/reject so a user navigating
     // back to /play later gets a fresh table.
-    sharedPlayBotRequest ??= api.play.startBot({ gameId: 'xo' })
+    sharedPlayBotRequest ??= api.play.startBot({ gameId: 'tic-tac-toe' })
       .finally(() => { sharedPlayBotRequest = null })
     sharedPlayBotRequest
       .then(res => {

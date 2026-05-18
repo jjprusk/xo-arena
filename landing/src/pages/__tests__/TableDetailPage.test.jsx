@@ -60,7 +60,7 @@ function renderAt(path) {
 
 const baseTable = {
   id: 'tbl_1',
-  gameId: 'xo',
+  gameId: 'tic-tac-toe',
   status: 'FORMING',
   maxPlayers: 2,
   isPrivate: false,

@@ -36,7 +36,7 @@ function useSseIdleWarning({ enabled, channel, onWarn }) {
  * interact with auth, transport, or platform internals directly.
  *
  * @param {object} options
- * @param {string}  options.gameId         - e.g. 'xo'
+ * @param {string}  options.gameId         - e.g. 'tic-tac-toe'
  * @param {string|null} options.joinSlug   - room slug to join; null = create new room
  * @param {string|null} options.tournamentMatchId
  * @param {string|null} options.tournamentId

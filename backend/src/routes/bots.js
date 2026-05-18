@@ -13,6 +13,11 @@ import cache from '../utils/cache.js'
 import { GAME_IDS, resolveGameSlug } from '../constants/games.js'
 
 const BOTS_CACHE_KEY    = 'bots:public'
+// Per-gameId cache keys are always constructed from the *canonical* slug
+// (e.g. 'bots:gameId:tic-tac-toe'). Callers route raw query params through
+// resolveGameSlug before reaching this key builder, so legacy 'xo' never
+// surfaces here even when a stale client sends '?gameId=xo'. Don't pass an
+// unnormalized slug.
 const BOTS_GAMEID_KEY   = (gameId) => `bots:gameId:${gameId}`
 const BOTS_TTL_MS       = 60_000  // 60 seconds
 // All bots-list cache keys share the `bots:` prefix — mutations invalidate
