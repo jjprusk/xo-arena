@@ -41,11 +41,14 @@ async function dismissWelcomeOnLoad(page) {
  */
 async function closeGuideIfOpen(page) {
   // The Guide renders both an orb (always visible) and a drawer (when
-  // open). The drawer is what intercepts clicks on admin pages. Target
-  // the dialog's explicit × close button rather than the orb.
-  const dialogClose = page.locator('dialog[aria-label="Guide"] button', { hasText: '×' })
-  if (await dialogClose.first().isVisible().catch(() => false)) {
-    await dialogClose.first().click({ force: true }).catch(() => {})
+  // open). The drawer is what intercepts clicks on admin pages. The
+  // panel is a `<div role="dialog" aria-label="Guide">` (not a `<dialog>`
+  // element), so target the close button by its accessible name instead
+  // of by tag — the original `dialog[aria-label="Guide"]` selector
+  // never matched.
+  const close = page.getByRole('button', { name: 'Close Guide' })
+  if (await close.first().isVisible().catch(() => false)) {
+    await close.first().click({ force: true }).catch(() => {})
     await page.waitForTimeout(300)
   }
 }

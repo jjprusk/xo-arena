@@ -62,6 +62,13 @@ services:
       # Read-only baseline directory for the admin Health dashboard's
       # "Perf Baselines" panel. Unset on Fly.io → panel is disabled.
       PERF_BASELINES_DIR: /app/perf/baselines
+      # Local dev runs without an OPENAI_API_KEY by default. The help
+      # corpus reindex pipeline (admin create/edit doc) calls the embed
+      # client inline — without this flag it tries OpenAI, fails, and
+      # 500s the admin endpoint even though the DB row was already
+      # written. Stub mode keeps reindex deterministic and offline.
+      # Staging/prod override this with a real key.
+      HELP_EMBED_STUB: "1"
     ports:
       - "3000:3000"
     volumes:

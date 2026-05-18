@@ -358,7 +358,14 @@ export default function PlayPage() {
     // The shared in-flight promise dedups them — second mount picks up the
     // first mount's result. Cleared on resolve/reject so a user navigating
     // back to /play later gets a fresh table.
-    sharedPlayBotRequest ??= api.play.startBot({ gameId: 'tic-tac-toe' })
+    // Pass the bearer token when one is available. Guests get null and
+    // the server seats them as `guest:<sseSession>`; signed-in users
+    // need the token so the table is seated against their betterAuthId
+    // — otherwise every subsequent rt POST (which always sends Bearer)
+    // resolves to a different seatId and 403s with NOT_A_PLAYER.
+    sharedPlayBotRequest ??= getToken()
+      .catch(() => null)
+      .then(token => api.play.startBot({ gameId: 'tic-tac-toe' }, token))
       .finally(() => { sharedPlayBotRequest = null })
     sharedPlayBotRequest
       .then(res => {

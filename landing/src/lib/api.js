@@ -107,8 +107,15 @@ export const api = {
      * the perf-ready critical path. The shared EventSource opens in
      * parallel using `?sseSession=<id>` to claim the pre-allocated session.
      */
-    startBot: ({ gameId = 'tic-tac-toe', botUserId } = {}) =>
-      api.post('/play/bot', { gameId, ...(botUserId ? { botUserId } : {}) }),
+    // Token is optional — the endpoint accepts anonymous callers (guest
+    // PvAI flow). When a signed-in user lands here, the token is required
+    // so the server resolves the caller as the user (seatId =
+    // user.betterAuthId) rather than a guest. Without it, the table seat
+    // is `guest:<sseSession>` while subsequent move POSTs (which always
+    // attach the Bearer via rtFetch) resolve to the user's betterAuthId
+    // → seat mismatch → 403 NOT_A_PLAYER.
+    startBot: ({ gameId = 'tic-tac-toe', botUserId } = {}, token) =>
+      api.post('/play/bot', { gameId, ...(botUserId ? { botUserId } : {}) }, token),
   },
 
   research: {

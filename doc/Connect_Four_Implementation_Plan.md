@@ -17,7 +17,7 @@
 | Sprint | Status | Items | Notes |
 |---|---|---|---|
 | **Phase A — Architectural alignment (TTT only)** | | | |
-| A1 — SDK + game-as-prefix routing + slug rename | not started | 0/11 | First sprint. Includes DB migration `xo` → `tic-tac-toe`. |
+| A1 — SDK + game-as-prefix routing + slug rename | in progress | 9/10 | Legacy `xo` alias kept active via `LEGACY_SLUG_MAP`; 301 redirects + map removal moved to C6. A1.11 (regression sweep) pending. |
 | A2 — Match-based play + match-level ELO | not started | 0/11 | Historical rows frozen at cutover; new matches use the new formula. |
 | A3a — Training data + UX rework (in-process) | not started | 0/13 | TrainingSession + TrainingMetric schema, presets, gating, multi-curve eval, checkpoints. |
 | A3b — Training worker process cutover | not started | 0/9 | New `xo-training` Fly app, Redis queue, pub/sub streaming. |
@@ -34,7 +34,8 @@
 | C3 — Corpus completions | not started | 0/3 | Cost/preset docs queue + C4-specific examples. |
 | C4 — Accessibility + mobile polish | not started | 0/3 | Keyboard nav, screen-reader labels, gesture conflicts. |
 | C5 — Observability sweep | not started | 0/2 | C4 dashboards + alert thresholds. |
-| **Total** | | **0/111** | |
+| C6 — Legacy slug cleanup | blocked on B exit | 0/3 | Drop `LEGACY_SLUG_MAP`, add 301 redirects from `/xo*`, scrub residual `xo` literals. |
+| **Total** | | **9/113** | |
 
 Update this table as sprints land. Each `- [ ]` flipped to `- [x]` in the body should be reflected in the `Items` column.
 
@@ -70,17 +71,18 @@ This is enforced in the phase structure below: **Phase A is TTT-only**, **Phase 
 
 **Goal:** Move TTT onto the routes and slug that the platform will use long-term, with the SDK contract extended to cover anything Connect 4 will need.
 
-- [ ] SDK audit — confirm the current contract (per `Game_SDK_Developer_Guide.md`) suffices for a 6×7 column-input game with a perfect-play "Master" tier. Identify any gaps.
-- [ ] Extend SDK if needed (likely: `meta.inputMode: 'cell' | 'column'`, `meta.matchFormat` hints, `meta.masterStrategy` hook for off-ladder perfect-play bots). Bump SDK version; update `Game_SDK_Developer_Guide.md`.
-- [ ] Refactor `packages/game-xo/` to consume any new SDK fields explicitly. No hidden TTT assumptions.
-- [ ] Add `/games/<slug>/...` route layer to backend (`/api/v1/games/<slug>/...`), landing (`/games/<slug>/...`), and tournament service.
-- [ ] DB migration: rename `xo` → `tic-tac-toe` in `BotSkill.gameId`, `GameElo.gameId`, `Tournament.game`, and any other gameId-bearing rows. Single migration; no dual-write phase.
-- [ ] Backend code: strip `GAME_ID = 'xo'` constant from `eloService.js`; parameterize every gameId-aware function.
-- [ ] Backend cache keys: rename `bots:gameId:xo` → `bots:gameId:tic-tac-toe`. Flush on deploy.
-- [ ] Landing: update `BotFilterBar.GAMES`, route definitions, deep-link parsers, picker UI.
-- [ ] 301 redirects from old paths (`/play/xo` → `/games/tic-tac-toe/play`, etc.) for one release; remove in A2 cleanup.
-- [ ] Update all docs in `/doc/Help_Corpus/` that reference the slug `xo` (search-and-replace pass).
+- [x] SDK audit — confirm the current contract (per `Game_SDK_Developer_Guide.md`) suffices for a 6×7 column-input game with a perfect-play "Master" tier. Identify any gaps.
+- [x] Extend SDK if needed (likely: `meta.inputMode: 'cell' | 'column'`, `meta.matchFormat` hints, `meta.masterStrategy` hook for off-ladder perfect-play bots). Bump SDK version; update `Game_SDK_Developer_Guide.md`.
+- [x] Refactor `packages/game-xo/` to consume any new SDK fields explicitly. No hidden TTT assumptions.
+- [x] Add `/games/<slug>/...` route layer to backend (`/api/v1/games/<slug>/...`), landing (`/games/<slug>/...`), and tournament service.
+- [x] DB migration: rename `xo` → `tic-tac-toe` in `BotSkill.gameId`, `GameElo.gameId`, `Tournament.game`, and any other gameId-bearing rows. Single migration; no dual-write phase.
+- [x] Backend code: strip `GAME_ID = 'xo'` constant from `eloService.js`; parameterize every gameId-aware function.
+- [x] Backend cache keys: rename `bots:gameId:xo` → `bots:gameId:tic-tac-toe`. Flush on deploy.
+- [x] Landing: update `BotFilterBar.GAMES`, route definitions, deep-link parsers, picker UI.
+- [x] Update all docs in `/doc/Help_Corpus/` that reference the slug `xo` (search-and-replace pass).
 - [ ] Tests: regression suite passes; e2e journey + smoke pass on staging.
+
+> **Moved to C6** — 301 redirects from `/xo*` paths and `LEGACY_SLUG_MAP` removal. Doing them here would shorten the deprecation window to days; doing them in C6 (after Phase B ships) gives external callers — cached client bundles, bookmarks, anyone polling our API — multiple release cycles to migrate.
 
 ### A2 — Match-based play + match-level ELO (TTT)
 
@@ -268,6 +270,17 @@ This is enforced in the phase structure below: **Phase A is TTT-only**, **Phase 
 
 - [ ] C4-specific dashboards: completion rate per tier, AZ Master-draw-rate over time, training queue depth, worker CPU/RAM under typical load.
 - [ ] Alert thresholds: dead-letter queue depth, training session failures per hour, API latency regression during heavy training.
+
+### C6 — Legacy slug cleanup
+
+**Goal:** Drop the `xo` → `tic-tac-toe` alias once Phase B has shipped and external callers have had multiple release cycles to migrate. Cleanup, not architecture — sequenced here on purpose so the deprecation window is long enough that nothing in the wild still calls the old slug.
+
+**Pre-conditions:** Phase B is shipped to production. No staging or production access logs show requests with `gameId=xo` or path `/play/xo*` for at least one release cycle (≥ 2 weeks). Verify via the request logs / observability dashboards before starting.
+
+- [ ] Add `301 Moved Permanently` redirects in `landing/server.js` and (if needed) the backend for legacy paths: `/play/xo*` → `/games/tic-tac-toe/play*`, `/xo/*` → `/games/tic-tac-toe/*`. Keep the redirects in place for one further release.
+- [ ] Remove `LEGACY_SLUG_MAP` from `backend/src/constants/games.js` and `tournament/src/constants/games.js`. `resolveGameSlug('xo')` should now return `null` (caller's `?? rawGameId` fallback then surfaces "Unknown game slug" 404 via `validateGameSlug`).
+- [ ] Sweep for any residual `'xo'` literals in code (excluding migration files, historical perf-trace doc citations, and Help_Corpus search-alias tags). Update or delete each one.
+- [ ] Update `Game_SDK_Developer_Guide.md` to drop the "legacy alias accepted" caveat — kebab-case canonical slugs only.
 
 ---
 

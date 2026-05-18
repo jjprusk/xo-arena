@@ -76,14 +76,17 @@ describe('embedClient — OpenAI path', () => {
   let originalEnv
   let originalVitest
   let originalKey
+  let originalStub
 
   beforeEach(() => {
     originalEnv    = process.env.NODE_ENV
     originalVitest = process.env.VITEST
     originalKey    = process.env.OPENAI_API_KEY
+    originalStub   = process.env.HELP_EMBED_STUB
     // Escape the stub-mode escape hatches so embedTexts() routes to OpenAI.
     process.env.NODE_ENV = 'development'
     delete process.env.VITEST
+    delete process.env.HELP_EMBED_STUB
     process.env.OPENAI_API_KEY = 'sk-test-fake-key'
     fetchSpy = vi.spyOn(globalThis, 'fetch')
   })
@@ -92,6 +95,8 @@ describe('embedClient — OpenAI path', () => {
     process.env.NODE_ENV = originalEnv
     if (originalVitest === undefined) delete process.env.VITEST
     else process.env.VITEST = originalVitest
+    if (originalStub === undefined) delete process.env.HELP_EMBED_STUB
+    else process.env.HELP_EMBED_STUB = originalStub
     if (originalKey === undefined) delete process.env.OPENAI_API_KEY
     else process.env.OPENAI_API_KEY = originalKey
     fetchSpy.mockRestore()
