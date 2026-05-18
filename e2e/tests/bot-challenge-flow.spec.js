@@ -97,12 +97,16 @@ test.describe('Bot Challenge — guest entry points', () => {
   })
 
   test('home Quick Match: guest gets paired with a real bot and lands on the board', async ({ page }) => {
+    // The home page exposes "Play against a bot" (deep-links to
+    // /play?action=vs-community-bot). The standalone QuickMatchButton
+    // testid lives on /bots; the home CTA exercises the same guest-PvAI
+    // shape via the collapsed POST /api/v1/play/bot flow.
     await page.goto('/')
-    const qm = page.getByTestId('quick-match-button')
-    await qm.waitFor({ state: 'visible', timeout: 15_000 })
-    await qm.click()
-
-    await expectLandedOnPlayBoard(page)
+    await page.getByRole('link', { name: /Play against a bot/i }).click()
+    // vs-community-bot lands directly on /play (without `?join=`) — the
+    // collapsed POST /play/bot returns the table + opening board in-band.
+    await expect(page).toHaveURL(/\/play/, { timeout: 15_000 })
+    await expect(boardLocator(page)).toBeVisible({ timeout: 15_000 })
   })
 
   // HomePage's "Play against a bot" CTA exercises the single-shot
@@ -158,9 +162,19 @@ test.describe('Bot Challenge — guest entry points', () => {
     ])
     const { bots: activeBots = [] } = await botsRes.json()
     const { leaderboard = [] }      = await lbRes.json()
-    const activeIds  = new Set(activeBots.map(b => b.id))
-    const targetBotId = leaderboard.find(e => e.user.isBot && activeIds.has(e.user.id))?.user.id
-    if (!targetBotId) test.skip(true, 'no active bot is on the leaderboard — skip')
+    // Phase 3.8+ requires a per-game BotSkill row before /rt/tables hvb
+    // will accept the bot — without it, createHvbTable returns NO_SKILL
+    // (400). The leaderboard surfaces every historical bot, including
+    // legacy test bots that never had a tic-tac-toe skill provisioned;
+    // pin to the intersection of "playable for this game" so the click
+    // exercises the real path rather than a defensive reject.
+    const playableIds = new Set(
+      activeBots
+        .filter(b => Array.isArray(b.playableGameIds) && b.playableGameIds.includes('tic-tac-toe'))
+        .map(b => b.id),
+    )
+    const targetBotId = leaderboard.find(e => e.user.isBot && playableIds.has(e.user.id))?.user.id
+    if (!targetBotId) test.skip(true, 'no tic-tac-toe-playable bot on the leaderboard — skip')
 
     await page.goto('/rankings')
     // Look for the challenge button whose aria-label matches our target.

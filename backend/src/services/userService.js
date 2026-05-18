@@ -5,6 +5,7 @@
 import db from '../lib/db.js'
 import { Prisma } from '@xo-arena/db'
 import { DEFAULT_CONFIG as ML_DEFAULT_CONFIG } from '@xo-arena/ai'
+import { GAME_IDS } from '../constants/games.js'
 
 const RESERVED_BOT_NAMES = ['rusty', 'copper', 'sterling', 'magnus']
 
@@ -133,9 +134,9 @@ export async function getBotByModelId(botModelId) {
 export async function resetBotElo(botId) {
   return db.$transaction([
     db.gameElo.upsert({
-      where: { userId_gameId: { userId: botId, gameId: 'xo' } },
+      where: { userId_gameId: { userId: botId, gameId: GAME_IDS.TIC_TAC_TOE } },
       update: { rating: 1200, gamesPlayed: 0 },
-      create: { userId: botId, gameId: 'xo', rating: 1200, gamesPlayed: 0 },
+      create: { userId: botId, gameId: GAME_IDS.TIC_TAC_TOE, rating: 1200, gamesPlayed: 0 },
     }),
     db.user.update({
       where: { id: botId },
@@ -417,7 +418,7 @@ export async function checkBotName({ name, ownerId } = {}) {
   return { available: true }
 }
 
-export async function createBot(ownerId, { name, algorithm, difficulty, modelType, competitive, avatarUrl, ownerBaId, gameId = 'xo' } = {}) {
+export async function createBot(ownerId, { name, algorithm, difficulty, modelType, competitive, avatarUrl, ownerBaId, gameId = GAME_IDS.TIC_TAC_TOE } = {}) {
   if (!name || !name.trim()) throw Object.assign(new Error('Bot name is required'), { code: 'INVALID_NAME' })
   const trimmedName = name.trim()
 
@@ -607,7 +608,7 @@ export async function listBots({ ownerId, includeInactive = false, includeSkills
       botInTournament: true,
       botOwnerId: true,
       createdAt: true,
-      gameElo: { where: { gameId: 'xo' }, select: { rating: true } },
+      gameElo: { where: { gameId: GAME_IDS.TIC_TAC_TOE }, select: { rating: true } },
     },
     orderBy: { createdAt: 'desc' },
   })

@@ -91,7 +91,7 @@ describe('TablesPage', () => {
       tables: [
         {
           id: 'tbl_1',
-          gameId: 'xo',
+          gameId: 'tic-tac-toe',
           status: 'FORMING',
           maxPlayers: 2,
           seats: [

@@ -28,6 +28,7 @@ import * as tableFlow from '../services/tableFlowService.js'
 import { listBots } from '../services/userService.js'
 import db from '../lib/db.js'
 import logger from '../logger.js'
+import { GAME_IDS, resolveGameSlug } from '../constants/games.js'
 
 const router = Router()
 router.use(optionalAuth)
@@ -98,10 +99,12 @@ async function resolveCaller(req, fallbackSessionId) {
 //   500  internal
 router.post('/bot', async (req, res) => {
   try {
-    const { gameId = 'xo', botUserId: requestedBotUserId = null } = req.body ?? {}
-    if (typeof gameId !== 'string' || !gameId) {
+    const { gameId: rawGameId = GAME_IDS.TIC_TAC_TOE, botUserId: requestedBotUserId = null } = req.body ?? {}
+    if (typeof rawGameId !== 'string' || !rawGameId) {
       return res.status(400).json({ error: 'gameId required', code: 'BAD_REQUEST' })
     }
+    // Normalize legacy slugs (e.g. 'xo' → 'tic-tac-toe') for clients on cached bundles.
+    const gameId = resolveGameSlug(rawGameId) ?? rawGameId
 
     // Step 1: resolve the bot (caller-supplied or community default).
     let botUserId = requestedBotUserId

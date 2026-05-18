@@ -10,6 +10,7 @@ import { unregisterTable, getSocketAdapterState } from '../realtime/socketHandle
 import logger from '../logger.js'
 import { getSnapshots, getLatestSnapshot, getAlerts, getTableCreateErrors, getGcStats, getTableReleased } from '../lib/resourceCounters.js'
 import { deleteModel, getSystemConfig, setSystemConfig } from '../services/skillService.js'
+import { GAME_IDS } from '../constants/games.js'
 import { hasRole } from '../utils/roles.js'
 import {
   listFeedback,
@@ -364,7 +365,7 @@ router.get('/users', async (req, res, next) => {
           avatarUrl: true,
           banned: true,
           lastActiveAt: true,
-          gameElo: { where: { gameId: 'xo' }, select: { rating: true } },
+          gameElo: { where: { gameId: GAME_IDS.TIC_TAC_TOE }, select: { rating: true } },
           userRoles: { select: { role: true, grantedAt: true } },
           createdAt: true,
           _count: { select: { gamesAsPlayer1: true } },
@@ -434,7 +435,7 @@ router.patch('/users/:id', async (req, res, next) => {
       id: true, betterAuthId: true, username: true, displayName: true,
       email: true, avatarUrl: true, banned: true,
       createdAt: true, botLimit: true,
-      gameElo: { where: { gameId: 'xo' }, select: { rating: true } },
+      gameElo: { where: { gameId: GAME_IDS.TIC_TAC_TOE }, select: { rating: true } },
       userRoles: { select: { role: true, grantedAt: true } },
       _count: { select: { gamesAsPlayer1: true } },
     }
@@ -457,9 +458,9 @@ router.patch('/users/:id', async (req, res, next) => {
     // Update GameElo if eloRating was provided
     if (eloOverride !== undefined) {
       await db.gameElo.upsert({
-        where: { userId_gameId: { userId: req.params.id, gameId: 'xo' } },
+        where: { userId_gameId: { userId: req.params.id, gameId: GAME_IDS.TIC_TAC_TOE } },
         update: { rating: eloOverride },
-        create: { userId: req.params.id, gameId: 'xo', rating: eloOverride, gamesPlayed: 0 },
+        create: { userId: req.params.id, gameId: GAME_IDS.TIC_TAC_TOE, rating: eloOverride, gamesPlayed: 0 },
       })
       user = await db.user.findUnique({ where: { id: req.params.id }, select: USER_SELECT })
     }
@@ -553,7 +554,7 @@ router.get('/users/:id', async (req, res, next) => {
         id: true, betterAuthId: true, username: true, displayName: true,
         email: true, avatarUrl: true, banned: true,
         oauthProvider: true, createdAt: true, botLimit: true,
-        gameElo: { where: { gameId: 'xo' }, select: { rating: true } },
+        gameElo: { where: { gameId: GAME_IDS.TIC_TAC_TOE }, select: { rating: true } },
         userRoles: { select: { role: true, grantedAt: true } },
         _count: { select: { gamesAsPlayer1: true } },
       },
@@ -722,7 +723,7 @@ router.get('/ml/models', async (req, res, next) => {
         : [],
       botIds.length
         ? db.gameElo.findMany({
-            where: { userId: { in: botIds }, gameId: 'xo' },
+            where: { userId: { in: botIds }, gameId: GAME_IDS.TIC_TAC_TOE },
             select: { userId: true, rating: true },
           })
         : [],
@@ -1047,7 +1048,7 @@ router.get('/bots', async (req, res, next) => {
           id: true,
           displayName: true,
           avatarUrl: true,
-          gameElo: { where: { gameId: 'xo' }, select: { rating: true } },
+          gameElo: { where: { gameId: GAME_IDS.TIC_TAC_TOE }, select: { rating: true } },
           botModelType: true,
           botModelId: true,
           botActive: true,

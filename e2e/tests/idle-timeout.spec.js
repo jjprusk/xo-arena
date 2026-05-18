@@ -269,9 +269,10 @@ test.describe('Idle timeout — warn + pong + forfeit', () => {
       .toBeVisible({ timeout: totalMs })
 
     // The signed-in user must NOT be the winner (they got force-forfeited).
-    // The post-game banner shows the outcome; we tolerate either "Opponent
-    // wins" / "You lose" / "Bot wins" wording the variant chose.
-    const loseSignals = page.getByText(/opponent wins|you lose|bot wins|loss/i).first()
+    // The post-game banner shows the outcome; tolerate the various
+    // wordings the variant chose. As of XO's GameComponent this surfaces
+    // as "You forfeited (timed out)" via a role=status node.
+    const loseSignals = page.getByText(/forfeited|opponent wins|you lose|bot wins|loss/i).first()
     await expect(loseSignals).toBeVisible({ timeout: 3_000 })
   })
 })

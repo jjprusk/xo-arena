@@ -237,8 +237,10 @@ describe('reindexAllIfStale', () => {
   it('reindexes when stale chunks exist (live mode)', async () => {
     const origNodeEnv = process.env.NODE_ENV
     const origVitest  = process.env.VITEST
+    const origStub    = process.env.HELP_EMBED_STUB
     process.env.NODE_ENV = 'production'
     delete process.env.VITEST
+    delete process.env.HELP_EMBED_STUB
 
     // Override fetch so the OpenAI embed call inside reindexDoc → insertChunks
     // doesn't actually hit the network. Each call returns one fake 384-dim
@@ -284,6 +286,8 @@ describe('reindexAllIfStale', () => {
       process.env.NODE_ENV = origNodeEnv
       if (origVitest === undefined) delete process.env.VITEST
       else process.env.VITEST = origVitest
+      if (origStub === undefined) delete process.env.HELP_EMBED_STUB
+      else process.env.HELP_EMBED_STUB = origStub
       if (origKey === undefined) delete process.env.OPENAI_API_KEY
       else process.env.OPENAI_API_KEY = origKey
       fetchSpy.mockRestore()

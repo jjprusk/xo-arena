@@ -44,7 +44,7 @@ function makeTemplate(overrides = {}) {
     id:                      'tpl_daily',
     name:                    'Daily 3-Player',
     description:             null,
-    game:                    'xo',
+    game:                    'tic-tac-toe',
     mode:                    'MIXED',
     format:                  'SINGLE_ELIM',
     bracketType:             'SINGLE_ELIM',

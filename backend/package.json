@@ -1,6 +1,6 @@
 {
   "name": "@xo-arena/backend",
-  "version": "1.4.0-alpha-5.9",
+  "version": "1.4.0-alpha-5.10",
   "private": true,
   "type": "module",
   "scripts": {

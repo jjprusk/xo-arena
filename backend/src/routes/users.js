@@ -6,6 +6,7 @@ import { getUserCredits } from '../services/creditService.js'
 import { findOwnedBots, deleteUserWithBots } from '../services/userDeletionService.js'
 import db from '../lib/db.js'
 import logger from '../logger.js'
+import { GAME_IDS } from '../constants/games.js'
 
 /**
  * Fetch bot-specific profile fields for a bot User row.
@@ -457,7 +458,7 @@ router.get('/:id', optionalAuth, async (req, res, next) => {
     const isSelf = req.auth?.userId && user.betterAuthId === req.auth.userId
     const [botData, eloRow] = await Promise.all([
       user.isBot ? getBotProfileData(user) : null,
-      db.gameElo.findUnique({ where: { userId_gameId: { userId: user.id, gameId: 'xo' } } }),
+      db.gameElo.findUnique({ where: { userId_gameId: { userId: user.id, gameId: GAME_IDS.TIC_TAC_TOE } } }),
     ])
 
     const data = {
@@ -551,7 +552,7 @@ router.get('/:id/elo-history', async (req, res, next) => {
         orderBy: { recordedAt: 'desc' },
         take: 50,
       }),
-      db.gameElo.findUnique({ where: { userId_gameId: { userId: req.params.id, gameId: 'xo' } } }),
+      db.gameElo.findUnique({ where: { userId_gameId: { userId: req.params.id, gameId: GAME_IDS.TIC_TAC_TOE } } }),
     ])
     if (!user) return res.status(404).json({ error: 'User not found' })
 

@@ -13,6 +13,7 @@ export const meta = {
     preferredWidth: 'compact',
     aspectRatio:    '1/1',
   },
+  inputMode:        'cell',
   theme: platformDefaultTheme,
   supportsBots:     true,
   supportsTraining: true,

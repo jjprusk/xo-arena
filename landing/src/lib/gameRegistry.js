@@ -3,5 +3,5 @@
 // Add entries here as new games ship — both TablesPage and TournamentForm import from this.
 
 export const GAMES = [
-  { id: 'xo', label: 'XO (Tic-Tac-Toe)', minPlayers: 2, maxPlayers: 2 },
+  { id: 'tic-tac-toe', label: 'XO (Tic-Tac-Toe)', minPlayers: 2, maxPlayers: 2 },
 ]

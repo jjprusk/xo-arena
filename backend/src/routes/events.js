@@ -193,7 +193,14 @@ router.get('/stream', optionalSessionCookie, async (req, res) => {
         // Idle subsystem: disconnect-forfeit owns the next 60s of grace —
         // any pending idle warn/forfeit on this user's tables would now be
         // a duplicate (or stale, if the user reconnects on another node).
-        if (uid) {
+        //
+        // BUT — if the user still has *another* live SSE session (which is
+        // the common case during a warm reopen: `useEventStream.reopenSharedStream`
+        // opens the new EventSource before closing the old one), this dispose
+        // is just a session-swap. Cancelling here would kill idle timers
+        // armed against the user that they will continue interacting with.
+        // Only cancel when this was the user's last session.
+        if (uid && sseSessions.forUser(uid).length === 0) {
           const { cancelAllForUser } = await import('../realtime/idleTimers.js')
           cancelAllForUser(uid)
         }

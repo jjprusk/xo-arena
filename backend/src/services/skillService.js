@@ -25,6 +25,7 @@ import logger from '../logger.js'
 import { appendToStream } from '../lib/eventStream.js'
 import { completeStep as completeJourneyStep } from './journeyService.js'
 import { grantDiscoveryReward } from './discoveryRewardsService.js'
+import { GAME_IDS } from '../constants/games.js'
 
 // ─── In-memory caches ───────────────────────────────────────────────────────
 
@@ -151,7 +152,7 @@ export async function setSystemConfig(key, value) {
   })
 }
 
-export async function createModel({ name, description, algorithm = 'qlearning', config = {}, createdBy = null, gameId = 'xo' }) {
+export async function createModel({ name, description, algorithm = 'qlearning', config = {}, createdBy = null, gameId = GAME_IDS.TIC_TAC_TOE }) {
   const mergedConfig = { ...DEFAULT_CONFIG, ...config }
 
   // For DQN: resolve and validate the neural network shape, then bake layerSizes in.
@@ -430,8 +431,8 @@ export async function updateElo(modelAId, modelBId, outcome) {
   ])
 
   const [eloA, eloB] = await Promise.all([
-    botA ? db.gameElo.findUnique({ where: { userId_gameId: { userId: botA.id, gameId: 'xo' } } }) : null,
-    botB ? db.gameElo.findUnique({ where: { userId_gameId: { userId: botB.id, gameId: 'xo' } } }) : null,
+    botA ? db.gameElo.findUnique({ where: { userId_gameId: { userId: botA.id, gameId: GAME_IDS.TIC_TAC_TOE } } }) : null,
+    botB ? db.gameElo.findUnique({ where: { userId_gameId: { userId: botB.id, gameId: GAME_IDS.TIC_TAC_TOE } } }) : null,
   ])
 
   const rA = eloA?.rating ?? 1000
@@ -446,13 +447,13 @@ export async function updateElo(modelAId, modelBId, outcome) {
   const ops = []
   if (botA) {
     ops.push(
-      db.gameElo.upsert({ where: { userId_gameId: { userId: botA.id, gameId: 'xo' } }, update: { rating: newA }, create: { userId: botA.id, gameId: 'xo', rating: newA } }),
+      db.gameElo.upsert({ where: { userId_gameId: { userId: botA.id, gameId: GAME_IDS.TIC_TAC_TOE } }, update: { rating: newA }, create: { userId: botA.id, gameId: GAME_IDS.TIC_TAC_TOE, rating: newA } }),
       db.mLEloHistory.create({ data: { modelId: modelAId, eloRating: newA, delta: parseFloat((newA - rA).toFixed(2)), opponentId: modelBId, opponentType: 'ML', outcome: outcome === 'WIN' ? 'WIN' : outcome === 'DRAW' ? 'DRAW' : 'LOSS' } }),
     )
   }
   if (botB) {
     ops.push(
-      db.gameElo.upsert({ where: { userId_gameId: { userId: botB.id, gameId: 'xo' } }, update: { rating: newB }, create: { userId: botB.id, gameId: 'xo', rating: newB } }),
+      db.gameElo.upsert({ where: { userId_gameId: { userId: botB.id, gameId: GAME_IDS.TIC_TAC_TOE } }, update: { rating: newB }, create: { userId: botB.id, gameId: GAME_IDS.TIC_TAC_TOE, rating: newB } }),
       db.mLEloHistory.create({ data: { modelId: modelBId, eloRating: newB, delta: parseFloat((newB - rB).toFixed(2)), opponentId: modelAId, opponentType: 'ML', outcome: outcome === 'WIN' ? 'LOSS' : outcome === 'DRAW' ? 'DRAW' : 'WIN' } }),
     )
   }
@@ -940,7 +941,7 @@ export async function finishTrainingFromFrontend(sessionId, { weights, stats, it
       if (!botUser) return  // no bot linked to this skill — skip calibration
 
       const [calibGameElo, freshModel] = await Promise.all([
-        db.gameElo.findUnique({ where: { userId_gameId: { userId: botUser.id, gameId: 'xo' } } }),
+        db.gameElo.findUnique({ where: { userId_gameId: { userId: botUser.id, gameId: GAME_IDS.TIC_TAC_TOE } } }),
         db.botSkill.findUnique({ where: { id: modelId } }),
       ])
       const calibEngine = _greedyEngine(freshModel)
@@ -963,9 +964,9 @@ export async function finishTrainingFromFrontend(sessionId, { weights, stats, it
       const delta = parseFloat((currentElo - startElo).toFixed(2))
       const outcome = delta > 0 ? 'WIN' : delta < 0 ? 'LOSS' : 'DRAW'
       await db.gameElo.upsert({
-        where: { userId_gameId: { userId: botUser.id, gameId: 'xo' } },
+        where: { userId_gameId: { userId: botUser.id, gameId: GAME_IDS.TIC_TAC_TOE } },
         update: { rating: currentElo },
-        create: { userId: botUser.id, gameId: 'xo', rating: currentElo },
+        create: { userId: botUser.id, gameId: GAME_IDS.TIC_TAC_TOE, rating: currentElo },
       })
       await db.mLEloHistory.create({ data: { modelId, eloRating: currentElo, delta, opponentType: 'MINIMAX', outcome } })
       logger.info({ modelId, newElo: currentElo, delta }, 'ELO calibrated after frontend training')
@@ -1525,7 +1526,7 @@ async function _finishSession(sessionId, modelId, engine, iterations, status, { 
     const botUser = await db.user.findFirst({ where: { botModelId: modelId, isBot: true }, select: { id: true } })
     if (botUser) {
       const [calibGameElo, freshModel] = await Promise.all([
-        db.gameElo.findUnique({ where: { userId_gameId: { userId: botUser.id, gameId: 'xo' } } }),
+        db.gameElo.findUnique({ where: { userId_gameId: { userId: botUser.id, gameId: GAME_IDS.TIC_TAC_TOE } } }),
         db.botSkill.findUnique({ where: { id: modelId } }),
       ])
       const calibEngine = _greedyEngine(freshModel)
@@ -1548,9 +1549,9 @@ async function _finishSession(sessionId, modelId, engine, iterations, status, { 
       const delta = parseFloat((currentElo - startElo).toFixed(2))
       const outcome = delta > 0 ? 'WIN' : delta < 0 ? 'LOSS' : 'DRAW'
       await db.gameElo.upsert({
-        where: { userId_gameId: { userId: botUser.id, gameId: 'xo' } },
+        where: { userId_gameId: { userId: botUser.id, gameId: GAME_IDS.TIC_TAC_TOE } },
         update: { rating: currentElo },
-        create: { userId: botUser.id, gameId: 'xo', rating: currentElo },
+        create: { userId: botUser.id, gameId: GAME_IDS.TIC_TAC_TOE, rating: currentElo },
       })
       await db.mLEloHistory.create({ data: { modelId, eloRating: currentElo, delta, opponentType: 'MINIMAX', outcome } })
       logger.info({ modelId, newElo: currentElo, delta }, 'ELO calibrated after training')

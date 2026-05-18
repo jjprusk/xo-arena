@@ -9,6 +9,7 @@ import { Resend } from 'resend'
 import { requireAuth, requireSupport } from '../middleware/auth.js'
 import db from '../lib/db.js'
 import logger from '../logger.js'
+import { GAME_IDS } from '../constants/games.js'
 import {
   listFeedback,
   getUnreadCount,
@@ -205,7 +206,7 @@ router.get('/users', async (req, res, next) => {
         email:       true,
         createdAt:   true,
         banned:      true,
-        gameElo:     { where: { gameId: 'xo' }, select: { rating: true } },
+        gameElo:     { where: { gameId: GAME_IDS.TIC_TAC_TOE }, select: { rating: true } },
       },
     })
 

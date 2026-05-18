@@ -21,7 +21,7 @@ import { rtFetch } from '../../lib/rtSession.js'
 
 export default function ChallengeButton({
   botUserId,
-  gameId         = 'xo',
+  gameId         = 'tic-tac-toe',
   variant        = 'default',
   label          = 'Challenge',
   source         = 'unknown',  // analytics tag — passed through to track()

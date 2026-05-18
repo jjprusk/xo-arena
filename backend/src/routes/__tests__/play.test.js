@@ -53,7 +53,7 @@ const builtinBot = {
   botModelId:      'builtin:minimax:0',
   botModelType:    'minimax',
   botOwnerId:      null,
-  playableGameIds: ['xo'],
+  playableGameIds: ['tic-tac-toe'],
 }
 
 beforeEach(() => {
@@ -77,7 +77,7 @@ describe('POST /api/v1/play/bot', () => {
 
     const res = await request(makeApp())
       .post('/api/v1/play/bot')
-      .send({ gameId: 'xo' })
+      .send({ gameId: 'tic-tac-toe' })
 
     expect(res.status).toBe(200)
     expect(res.body).toMatchObject({
@@ -92,7 +92,7 @@ describe('POST /api/v1/play/bot', () => {
     expect(flow.createHvbTable).toHaveBeenCalledWith(expect.objectContaining({
       seatId:    'guest:mint_abc',
       botUserId: 'bot_rusty',
-      gameId:    'xo',
+      gameId:    'tic-tac-toe',
     }))
     // Session pre-registered and tracking the created table.
     expect(sseSessions.tablesFor('mint_abc')).toContain('tbl_1')
@@ -116,7 +116,7 @@ describe('POST /api/v1/play/bot', () => {
 
     const res = await request(makeApp())
       .post('/api/v1/play/bot')
-      .send({ gameId: 'xo' })
+      .send({ gameId: 'tic-tac-toe' })
 
     expect(res.status).toBe(200)
     expect(flow.createHvbTable).toHaveBeenCalledWith(expect.objectContaining({
@@ -143,7 +143,7 @@ describe('POST /api/v1/play/bot', () => {
 
     const res = await request(makeApp())
       .post('/api/v1/play/bot')
-      .send({ gameId: 'xo', botUserId: 'bot_custom' })
+      .send({ gameId: 'tic-tac-toe', botUserId: 'bot_custom' })
 
     expect(res.status).toBe(200)
     expect(userSvc.listBots).not.toHaveBeenCalled()
@@ -164,14 +164,14 @@ describe('POST /api/v1/play/bot', () => {
       board: Array(9).fill(null), currentTurn: 'X',
     })
 
-    await request(makeApp()).post('/api/v1/play/bot').send({ gameId: 'xo' })
+    await request(makeApp()).post('/api/v1/play/bot').send({ gameId: 'tic-tac-toe' })
 
     expect(flow.createHvbTable).toHaveBeenCalledWith(expect.objectContaining({
       botUserId: 'b_rusty',
     }))
   })
 
-  it('defaults gameId to "xo" when body omits it', async () => {
+  it('defaults gameId to "tic-tac-toe" when body omits it', async () => {
     userSvc.listBots.mockResolvedValueOnce([builtinBot])
     flow.createHvbTable.mockResolvedValueOnce({
       ok: true, table: { id: 't' }, slug: 's', label: 'l', mark: 'X',
@@ -179,7 +179,7 @@ describe('POST /api/v1/play/bot', () => {
     })
     const res = await request(makeApp()).post('/api/v1/play/bot').send({})
     expect(res.status).toBe(200)
-    expect(flow.createHvbTable).toHaveBeenCalledWith(expect.objectContaining({ gameId: 'xo' }))
+    expect(flow.createHvbTable).toHaveBeenCalledWith(expect.objectContaining({ gameId: 'tic-tac-toe' }))
   })
 
   it('400s when gameId is explicitly blank', async () => {
@@ -192,7 +192,7 @@ describe('POST /api/v1/play/bot', () => {
     userSvc.listBots.mockResolvedValueOnce([])
     const res = await request(makeApp())
       .post('/api/v1/play/bot')
-      .send({ gameId: 'xo' })
+      .send({ gameId: 'tic-tac-toe' })
     expect(res.status).toBe(404)
     expect(res.body.code).toBe('BOT_NOT_FOUND')
     // No session should leak on failure.
@@ -207,7 +207,7 @@ describe('POST /api/v1/play/bot', () => {
 
     const res = await request(makeApp())
       .post('/api/v1/play/bot')
-      .send({ gameId: 'xo' })
+      .send({ gameId: 'tic-tac-toe' })
 
     expect(res.status).toBe(404)
     expect(sseSessions.get('mint_abc')).toBeNull()
@@ -219,7 +219,7 @@ describe('POST /api/v1/play/bot', () => {
 
     const res = await request(makeApp())
       .post('/api/v1/play/bot')
-      .send({ gameId: 'xo' })
+      .send({ gameId: 'tic-tac-toe' })
 
     expect(res.status).toBe(500)
     // Session was registered before the throw — accepted leak in this path
@@ -237,7 +237,7 @@ describe('POST /api/v1/play/bot', () => {
       board: Array(9).fill(null), currentTurn: 'X',
     })
 
-    await request(makeApp()).post('/api/v1/play/bot').send({ gameId: 'xo' })
+    await request(makeApp()).post('/api/v1/play/bot').send({ gameId: 'tic-tac-toe' })
 
     // db.user.findUnique should NOT be called when we already have the bot
     // row from listBots — saves a DB round-trip on the hot path.
@@ -256,7 +256,7 @@ describe('POST /api/v1/play/bot', () => {
 
     const res = await request(makeApp())
       .post('/api/v1/play/bot')
-      .send({ gameId: 'xo', botUserId: 'bot_x' })
+      .send({ gameId: 'tic-tac-toe', botUserId: 'bot_x' })
 
     expect(res.status).toBe(200)
     expect(res.body.bot).toMatchObject({ id: 'bot_x', displayName: 'BotX' })
@@ -277,8 +277,8 @@ describe('POST /api/v1/play/bot', () => {
       board: Array(9).fill(null), currentTurn: 'X',
     })
 
-    const a = await request(makeApp()).post('/api/v1/play/bot').send({ gameId: 'xo' })
-    const b = await request(makeApp()).post('/api/v1/play/bot').send({ gameId: 'xo' })
+    const a = await request(makeApp()).post('/api/v1/play/bot').send({ gameId: 'tic-tac-toe' })
+    const b = await request(makeApp()).post('/api/v1/play/bot').send({ gameId: 'tic-tac-toe' })
 
     expect(a.body.sseSessionId).toBe('mint_one')
     expect(b.body.sseSessionId).toBe('mint_two')

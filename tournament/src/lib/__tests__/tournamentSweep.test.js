@@ -66,7 +66,7 @@ describe('recoverPendingBotMatches', () => {
       {
         id:       't_xo',
         bestOfN:  3,
-        game:     'xo',
+        game:     'tic-tac-toe',
         rounds: [{
           matches: [
             { id: 'm1', status: 'PENDING', participant1Id: 'p1', participant2Id: 'p2' },
@@ -87,7 +87,7 @@ describe('recoverPendingBotMatches', () => {
       tournamentId: 't_xo',
       matchId:      'm1',
       bestOfN:      3,
-      gameId:       'xo',
+      gameId:       'tic-tac-toe',
       bot1: { id: 'bot_A', displayName: 'Rusty',  botModelId: 'seed:rusty:novice'  },
       bot2: { id: 'bot_B', displayName: 'Magnus', botModelId: 'seed:magnus:master' },
     })
@@ -101,7 +101,7 @@ describe('recoverPendingBotMatches', () => {
 
     db.tournament.findMany.mockResolvedValue([
       {
-        id: 't_mixed', bestOfN: 1, game: 'xo',
+        id: 't_mixed', bestOfN: 1, game: 'tic-tac-toe',
         rounds: [{
           matches: [
             { id: 'm_hvb', status: 'PENDING', participant1Id: 'p_human', participant2Id: 'p_bot' },
@@ -121,7 +121,7 @@ describe('recoverPendingBotMatches', () => {
   it('skips matches missing a participant (byes, in-progress pairing races)', async () => {
     db.tournament.findMany.mockResolvedValue([
       {
-        id: 't_bye', bestOfN: 1, game: 'xo',
+        id: 't_bye', bestOfN: 1, game: 'tic-tac-toe',
         rounds: [{
           matches: [
             { id: 'm_bye', status: 'PENDING', participant1Id: 'p1', participant2Id: null },
@@ -224,7 +224,7 @@ describe('autoCancel', () => {
     const tournament = {
       id: 't_unfilled',
       name: 'Daily 3-Player',
-      game: 'xo',
+      game: 'tic-tac-toe',
       templateId: 'tpl_daily',
       minParticipants: 3,
       participants: [
@@ -245,7 +245,7 @@ describe('autoCancel', () => {
         originalTournamentId: 't_unfilled',
         templateId:           'tpl_daily',
         name:                 'Daily 3-Player',
-        game:                 'xo',
+        game:                 'tic-tac-toe',
         minParticipants:      3,
         participantCount:     2,
       },
@@ -254,7 +254,7 @@ describe('autoCancel', () => {
 
   it('also DELETES when the tournament has zero participants', async () => {
     const tournament = {
-      id: 't_empty', name: 'Empty', game: 'xo', minParticipants: 2, participants: [],
+      id: 't_empty', name: 'Empty', game: 'tic-tac-toe', minParticipants: 2, participants: [],
     }
     await autoCancel(tournament, 0)
     expect(db.tournament.delete).toHaveBeenCalledWith({ where: { id: 't_empty' } })

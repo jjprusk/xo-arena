@@ -8,7 +8,7 @@
  * the swr layer adds localStorage persistence on top of that.
  *
  * Filter shape (all optional):
- *   gameId   — string (currently 'xo'; reserved for multi-game)
+ *   gameId   — string (currently 'tic-tac-toe'; reserved for multi-game)
  *   eloMin   — number  (filter by gameElo.rating ≥ eloMin)
  *   eloMax   — number  (filter by gameElo.rating ≤ eloMax)
  *   owner    — 'mine' | 'community' | 'all'  (community = ownerless built-ins)

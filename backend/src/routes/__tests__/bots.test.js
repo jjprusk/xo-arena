@@ -204,12 +204,14 @@ describe('GET /api/v1/bots', () => {
     // and stores the filtered result under `bots:gameId:<x>`.
     cache.get.mockReturnValue(null)
     listBots.mockResolvedValue([
-      { id: 'bot_xo_a',  displayName: 'A', playableGameIds: ['xo'] },
-      { id: 'bot_xo_b',  displayName: 'B', playableGameIds: ['xo', 'connect4'] },
+      { id: 'bot_xo_a',  displayName: 'A', playableGameIds: ['tic-tac-toe'] },
+      { id: 'bot_xo_b',  displayName: 'B', playableGameIds: ['tic-tac-toe', 'connect4'] },
       { id: 'bot_other', displayName: 'C', playableGameIds: ['connect4'] },
       { id: 'bot_none',  displayName: 'D', playableGameIds: [] },
     ])
 
+    // Legacy 'xo' slug is normalized to 'tic-tac-toe' at the handler boundary,
+    // so the cache key is stored under the canonical slug.
     const res = await request(app).get('/api/v1/bots?gameId=xo')
 
     expect(res.status).toBe(200)
@@ -218,7 +220,7 @@ describe('GET /api/v1/bots', () => {
     expect(res.headers['x-cache']).toBe('MISS')
     // The cached value is the *filtered* list, not the full bot table.
     expect(cache.set).toHaveBeenCalledWith(
-      'bots:gameId:xo',
+      'bots:gameId:tic-tac-toe',
       [
         expect.objectContaining({ id: 'bot_xo_a' }),
         expect.objectContaining({ id: 'bot_xo_b' }),
@@ -228,8 +230,9 @@ describe('GET /api/v1/bots', () => {
   })
 
   it('gameId filter cache HIT → returns cached bots, no listBots call', async () => {
-    const cached = [{ id: 'bot_cached', displayName: 'Cached', playableGameIds: ['xo'] }]
-    cache.get.mockImplementation(key => (key === 'bots:gameId:xo' ? cached : null))
+    const cached = [{ id: 'bot_cached', displayName: 'Cached', playableGameIds: ['tic-tac-toe'] }]
+    // Legacy '?gameId=xo' normalizes to canonical so the cache key is the canonical slug.
+    cache.get.mockImplementation(key => (key === 'bots:gameId:tic-tac-toe' ? cached : null))
 
     const res = await request(app).get('/api/v1/bots?gameId=xo')
 
@@ -242,7 +245,7 @@ describe('GET /api/v1/bots', () => {
   it('gameId filter with includeInactive=true bypasses cache entirely', async () => {
     // Admin path: skip cache so an admin querying inactive bots gets a
     // fresh result and doesn't bloat the key space.
-    listBots.mockResolvedValue([{ id: 'bot_a', playableGameIds: ['xo'], botActive: false }])
+    listBots.mockResolvedValue([{ id: 'bot_a', playableGameIds: ['tic-tac-toe'], botActive: false }])
     cache.get.mockReturnValue('SHOULD-NOT-BE-USED')
 
     const res = await request(app).get('/api/v1/bots?gameId=xo&includeInactive=true')
@@ -257,7 +260,7 @@ describe('GET /api/v1/bots', () => {
   it('gameId filter with no matching skills → empty list', async () => {
     cache.get.mockReturnValue(null)
     listBots.mockResolvedValue([
-      { id: 'bot_a', playableGameIds: ['xo'] },
+      { id: 'bot_a', playableGameIds: ['tic-tac-toe'] },
     ])
 
     const res = await request(app).get('/api/v1/bots?gameId=connect4')
@@ -298,11 +301,11 @@ describe('GET /api/v1/bots/:id', () => {
       createdAt: new Date('2026-04-01'),
     })
     mockDb.botSkill.findMany.mockResolvedValue([
-      { id: 'skill_xo',       botId: 'bot_1', gameId: 'xo',       algorithm: 'minimax', createdAt: new Date('2026-04-01') },
+      { id: 'skill_xo',       botId: 'bot_1', gameId: 'tic-tac-toe',       algorithm: 'minimax', createdAt: new Date('2026-04-01') },
       { id: 'skill_connect4', botId: 'bot_1', gameId: 'connect4', algorithm: 'minimax', createdAt: new Date('2026-04-15') },
     ])
     mockDb.gameElo.findMany.mockResolvedValue([
-      { gameId: 'xo',       rating: 1450, gamesPlayed: 12 },
+      { gameId: 'tic-tac-toe',       rating: 1450, gamesPlayed: 12 },
       { gameId: 'connect4', rating: 1200, gamesPlayed: 0  },
     ])
 
@@ -311,7 +314,7 @@ describe('GET /api/v1/bots/:id', () => {
     expect(res.status).toBe(200)
     expect(res.body.bot.id).toBe('bot_1')
     expect(res.body.bot.skills).toHaveLength(2)
-    expect(res.body.bot.skills[0].elo).toEqual({ gameId: 'xo', rating: 1450, gamesPlayed: 12 })
+    expect(res.body.bot.skills[0].elo).toEqual({ gameId: 'tic-tac-toe', rating: 1450, gamesPlayed: 12 })
     expect(res.body.bot.skills[1].elo).toEqual({ gameId: 'connect4', rating: 1200, gamesPlayed: 0 })
   })
 
@@ -324,7 +327,7 @@ describe('GET /api/v1/bots/:id', () => {
       createdAt: new Date(),
     })
     mockDb.botSkill.findMany.mockResolvedValue([
-      { id: 'skill_xo', botId: 'bot_2', gameId: 'xo', algorithm: 'minimax' },
+      { id: 'skill_xo', botId: 'bot_2', gameId: 'tic-tac-toe', algorithm: 'minimax' },
     ])
     mockDb.gameElo.findMany.mockResolvedValue([])
 
@@ -448,7 +451,7 @@ describe('POST /api/v1/bots', () => {
         // Legacy keys an old client might still send:
         algorithm: 'ml',
         modelType: 'DQN',
-        gameId: 'xo',
+        gameId: 'tic-tac-toe',
         difficulty: 'novice',
       })
 
@@ -964,13 +967,13 @@ describe('POST /api/v1/bots/:id/skills', () => {
   it('first skill on a skill-less bot → 201, sets botModelId, returns created:true', async () => {
     arrangeOwnedBot({ botModelId: null })
     mockDb.botSkill.findFirst.mockResolvedValue(null)
-    const created = { id: 'skill_new', botId: 'bot_1', gameId: 'xo', algorithm: 'minimax' }
+    const created = { id: 'skill_new', botId: 'bot_1', gameId: 'tic-tac-toe', algorithm: 'minimax' }
     mockDb.botSkill.create.mockResolvedValue(created)
     mockDb.user.update.mockResolvedValue({})
 
     const res = await request(app)
       .post('/api/v1/bots/bot_1/skills')
-      .send({ gameId: 'xo', algorithm: 'minimax', modelType: 'minimax' })
+      .send({ gameId: 'tic-tac-toe', algorithm: 'minimax', modelType: 'minimax' })
 
     expect(res.status).toBe(201)
     expect(res.body.created).toBe(true)
@@ -984,12 +987,12 @@ describe('POST /api/v1/bots/:id/skills', () => {
 
   it('idempotent: existing skill for (botId, gameId) → 200, created:false, no create, no botModelId update', async () => {
     arrangeOwnedBot({ botModelId: 'skill_old' })
-    const existing = { id: 'skill_old', botId: 'bot_1', gameId: 'xo', algorithm: 'minimax' }
+    const existing = { id: 'skill_old', botId: 'bot_1', gameId: 'tic-tac-toe', algorithm: 'minimax' }
     mockDb.botSkill.findFirst.mockResolvedValue(existing)
 
     const res = await request(app)
       .post('/api/v1/bots/bot_1/skills')
-      .send({ gameId: 'xo', algorithm: 'minimax' })
+      .send({ gameId: 'tic-tac-toe', algorithm: 'minimax' })
 
     expect(res.status).toBe(200)
     expect(res.body.created).toBe(false)
@@ -1028,7 +1031,7 @@ describe('POST /api/v1/bots/:id/skills', () => {
 
     const res = await request(app)
       .post('/api/v1/bots/bot_1/skills')
-      .send({ gameId: 'xo', algorithm: 'bogus' })
+      .send({ gameId: 'tic-tac-toe', algorithm: 'bogus' })
 
     expect(res.status).toBe(400)
     expect(res.body.code).toBe('INVALID_ALGORITHM')
@@ -1040,7 +1043,7 @@ describe('POST /api/v1/bots/:id/skills', () => {
 
     const res = await request(app)
       .post('/api/v1/bots/bot_1/skills')
-      .send({ gameId: 'xo', algorithm: 'minimax' })
+      .send({ gameId: 'tic-tac-toe', algorithm: 'minimax' })
 
     expect(res.status).toBe(403)
     expect(mockDb.botSkill.create).not.toHaveBeenCalled()
@@ -1054,7 +1057,7 @@ describe('POST /api/v1/bots/:id/skills', () => {
 
     const res = await request(app)
       .post('/api/v1/bots/bot_unknown/skills')
-      .send({ gameId: 'xo', algorithm: 'minimax' })
+      .send({ gameId: 'tic-tac-toe', algorithm: 'minimax' })
 
     expect(res.status).toBe(404)
   })
@@ -1104,7 +1107,7 @@ describe('DELETE /api/v1/bots/:id/skills/:skillId', () => {
 
   it('deletes the primary skill, repoints botModelId to remaining skill', async () => {
     arrangeOwnedBot({ botModelId: 'skill_xo' })
-    mockDb.botSkill.findUnique.mockResolvedValue({ id: 'skill_xo', botId: 'bot_1', gameId: 'xo' })
+    mockDb.botSkill.findUnique.mockResolvedValue({ id: 'skill_xo', botId: 'bot_1', gameId: 'tic-tac-toe' })
 
     const txDelete = vi.fn().mockResolvedValue({})
     const txFindFirst = vi.fn().mockResolvedValue({ id: 'skill_c4' })
@@ -1128,7 +1131,7 @@ describe('DELETE /api/v1/bots/:id/skills/:skillId', () => {
 
   it('deletes the only/primary skill, repoints botModelId to null', async () => {
     arrangeOwnedBot({ botModelId: 'skill_xo' })
-    mockDb.botSkill.findUnique.mockResolvedValue({ id: 'skill_xo', botId: 'bot_1', gameId: 'xo' })
+    mockDb.botSkill.findUnique.mockResolvedValue({ id: 'skill_xo', botId: 'bot_1', gameId: 'tic-tac-toe' })
 
     const txDelete = vi.fn().mockResolvedValue({})
     const txFindFirst = vi.fn().mockResolvedValue(null)
@@ -1151,7 +1154,7 @@ describe('DELETE /api/v1/bots/:id/skills/:skillId', () => {
 
   it('skill belongs to a different bot → 404', async () => {
     arrangeOwnedBot({ botModelId: 'skill_xo' })
-    mockDb.botSkill.findUnique.mockResolvedValue({ id: 'skill_other', botId: 'bot_other', gameId: 'xo' })
+    mockDb.botSkill.findUnique.mockResolvedValue({ id: 'skill_other', botId: 'bot_other', gameId: 'tic-tac-toe' })
 
     const res = await request(app).delete('/api/v1/bots/bot_1/skills/skill_other')
 

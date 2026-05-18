@@ -9,10 +9,10 @@ function wrap(children) {
 }
 
 const xoMeta = {
-  id: 'xo',
+  id: 'tic-tac-toe',
   title: 'XO',
   layout: { preferredWidth: 'compact' },
-  theme:  { tokens: { '--game-mark-x': '#111' } },
+  theme:  { tokens: { '--game-mark-1': '#111' } },
   supportsTraining: true,
   supportsPuzzles:  true,
 }
@@ -36,21 +36,21 @@ describe('resolveThemeVars', () => {
   })
   it('merges base tokens with dark overrides when isDark=true', () => {
     const theme = {
-      tokens: { '--game-mark-x': '#111', '--game-mark-o': '#222' },
-      dark:   { '--game-mark-x': '#eee' },
-      light:  { '--game-mark-x': '#000' },
+      tokens: { '--game-mark-1': '#111', '--game-mark-2': '#222' },
+      dark:   { '--game-mark-1': '#eee' },
+      light:  { '--game-mark-1': '#000' },
     }
     expect(resolveThemeVars(theme, true)).toEqual({
-      '--game-mark-x': '#eee',
-      '--game-mark-o': '#222',
+      '--game-mark-1': '#eee',
+      '--game-mark-2': '#222',
     })
   })
   it('merges base tokens with light overrides when isDark=false', () => {
     const theme = {
-      tokens: { '--game-mark-x': '#111' },
-      light:  { '--game-mark-x': '#000' },
+      tokens: { '--game-mark-1': '#111' },
+      light:  { '--game-mark-1': '#000' },
     }
-    expect(resolveThemeVars(theme, false)).toEqual({ '--game-mark-x': '#000' })
+    expect(resolveThemeVars(theme, false)).toEqual({ '--game-mark-1': '#000' })
   })
 })
 
@@ -165,8 +165,8 @@ describe('PlatformShell — sidebar content', () => {
         <div>game</div>
       </PlatformShell>,
     )
-    expect(screen.getByRole('link', { name: /gym/i })).toHaveAttribute('href', '/gym?gameId=xo')
-    expect(screen.getByRole('link', { name: /puzzles/i })).toHaveAttribute('href', '/puzzles?gameId=xo')
+    expect(screen.getByRole('link', { name: /gym/i })).toHaveAttribute('href', '/gym?gameId=tic-tac-toe')
+    expect(screen.getByRole('link', { name: /puzzles/i })).toHaveAttribute('href', '/puzzles?gameId=tic-tac-toe')
   })
 
   it('hides game tabs when the game does not support training or puzzles', () => {

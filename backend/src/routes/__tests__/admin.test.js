@@ -563,7 +563,7 @@ describe('GET /api/v1/admin/tournaments/auto-dropped', () => {
   it('returns count + items for the default period (week)', async () => {
     db.tournamentAutoDrop.count.mockResolvedValue(3)
     db.tournamentAutoDrop.findMany.mockResolvedValue([
-      { id: 'd1', name: 'Daily 3-Player', game: 'xo', minParticipants: 3, participantCount: 2, droppedAt: new Date() },
+      { id: 'd1', name: 'Daily 3-Player', game: 'tic-tac-toe', minParticipants: 3, participantCount: 2, droppedAt: new Date() },
     ])
 
     const res = await request(app).get('/api/v1/admin/tournaments/auto-dropped')

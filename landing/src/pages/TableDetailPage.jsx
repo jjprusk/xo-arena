@@ -34,7 +34,7 @@ const STATUS_META = {
 }
 
 function gameLabel(gameId) {
-  return gameId === 'xo' ? 'XO (Tic-Tac-Toe)' : gameId
+  return gameId === 'tic-tac-toe' ? 'XO (Tic-Tac-Toe)' : gameId
 }
 
 export default function TableDetailPage() {

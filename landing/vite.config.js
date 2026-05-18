@@ -81,13 +81,21 @@ export default defineConfig(({ mode }) => ({
       allow: ['..'],
     },
     proxy: {
-      // Tournament service endpoints
+      // Tournament service endpoints — flat (legacy) and game-prefix (A1.4) shapes.
+      // Regex keys (^...) match BEFORE the /api catch-all so prefix paths reach
+      // tournament rather than falling through to backend.
       '/api/tournaments':    { target: TOURNAMENT_URL, changeOrigin: true },
       '/api/matches':        { target: TOURNAMENT_URL, changeOrigin: true },
       '/api/classification': { target: TOURNAMENT_URL, changeOrigin: true },
       '/api/recurring':      { target: TOURNAMENT_URL, changeOrigin: true },
       '/api/bot-matches':    { target: TOURNAMENT_URL, changeOrigin: true },
-      // Backend (auth + game API + sockets)
+      '^/api/games/[^/]+/tournaments':    { target: TOURNAMENT_URL, changeOrigin: true },
+      '^/api/games/[^/]+/matches':        { target: TOURNAMENT_URL, changeOrigin: true },
+      '^/api/games/[^/]+/classification': { target: TOURNAMENT_URL, changeOrigin: true },
+      '^/api/games/[^/]+/recurring':      { target: TOURNAMENT_URL, changeOrigin: true },
+      '^/api/games/[^/]+/bot-matches':    { target: TOURNAMENT_URL, changeOrigin: true },
+      // Backend (auth + game API + sockets) — game-prefix paths for backend
+      // routes (e.g. /api/v1/games/:slug/bots) fall through this catch-all.
       '/api':       { target: BACKEND_URL, changeOrigin: true },
       '/socket.io': { target: BACKEND_URL, changeOrigin: true, ws: true },
     },

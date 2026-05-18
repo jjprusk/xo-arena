@@ -19,7 +19,7 @@ import BotFilterBar from '../components/bots/BotFilterBar.jsx'
 import ChallengeButton from '../components/bots/ChallengeButton.jsx'
 import QuickMatchButton from '../components/bots/QuickMatchButton.jsx'
 
-const DEFAULT_GAME_ID = 'xo'
+const DEFAULT_GAME_ID = 'tic-tac-toe'
 
 function paramsToFilters(sp) {
   const owner   = sp.get('owner')

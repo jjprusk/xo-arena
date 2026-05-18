@@ -13,6 +13,7 @@ import { botGameRunner } from '../realtime/botGameRunner.js'
 import { completeStep as completeJourneyStep } from '../services/journeyService.js'
 import { grantDiscoveryReward } from '../services/discoveryRewardsService.js'
 import { pickCoachingCard } from '../config/coachingCardRules.js'
+import { GAME_IDS } from '../constants/games.js'
 
 // ─── Pending PVP match registry (Redis-backed) ────────────────────────────────
 // Stores state for PVP tournament matches waiting for players to join the
@@ -322,7 +323,7 @@ export async function handleEvent(_io, channel, data) {
       // occurrence). Without this lookup the admin-visible pacing
       // field was a no-op and every bot match ran at the runner's
       // built-in 1500ms default.
-      const { tournamentId, matchId, gameId = 'xo', bot1, bot2, bestOfN } = data
+      const { tournamentId, matchId, gameId = GAME_IDS.TIC_TAC_TOE, bot1, bot2, bestOfN } = data
       let moveDelayMs
       try {
         const t = await db.tournament.findUnique({

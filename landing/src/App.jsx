@@ -76,6 +76,25 @@ export default function App() {
           <Route path="/help" element={<HelpIndexPage />} />
           <Route path="/help/:slug" element={<HelpDocPage />} />
 
+          {/* A1.4 game-as-prefix mirror routes — render the same page components
+              under /games/:slug/... so users can deep-link into a specific game.
+              Page components that need the slug read it via useParams().
+              Cross-game / platform pages (home, profile, settings, help, admin,
+              users, support, etc.) stay flat — they aren't game-scoped. */}
+          <Route path="/games/:slug/play"           element={<PlayPage />} />
+          <Route path="/games/:slug/replay/:id"     element={<ReplayPage />} />
+          <Route path="/games/:slug/rankings"       element={<RankingsPage />} />
+          <Route path="/games/:slug/stats"          element={<StatsPage />} />
+          <Route path="/games/:slug/bots"           element={<BotDirectoryPage />} />
+          <Route path="/games/:slug/bots/:id"       element={<BotProfilePage />} />
+          <Route path="/games/:slug/gym"            element={<GymPage />} />
+          <Route path="/games/:slug/gym/guide"      element={<GymGuidePage />} />
+          <Route path="/games/:slug/puzzles"        element={<PuzzlePage />} />
+          <Route path="/games/:slug/tables"         element={<TablesPage />} />
+          <Route path="/games/:slug/tables/:id"     element={<TableDetailPage />} />
+          <Route path="/games/:slug/tournaments"    element={<TournamentsPage />} />
+          <Route path="/games/:slug/tournaments/:id" element={<TournamentDetailPage />} />
+
           {/* Admin routes — all guarded by AdminRoute, except /admin which
               uses AdminLandingRoute so HELP_ADMIN-only users land on their
               section instead of being bounced home. */}

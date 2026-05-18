@@ -103,8 +103,8 @@ describe('tableGcService sweep', () => {
     db.table.findMany.mockImplementation(async ({ where }) => {
       if (where?.status === 'FORMING') {
         return [
-          { id: 'tbl_empty_1',  gameId: 'xo', seats: [{ status: 'empty' }, { status: 'empty' }] },
-          { id: 'tbl_occupied', gameId: 'xo', seats: [{ userId: 'u1', status: 'occupied' }, { status: 'empty' }] },
+          { id: 'tbl_empty_1',  gameId: 'tic-tac-toe', seats: [{ status: 'empty' }, { status: 'empty' }] },
+          { id: 'tbl_occupied', gameId: 'tic-tac-toe', seats: [{ userId: 'u1', status: 'occupied' }, { status: 'empty' }] },
         ]
       }
       return []  // ACTIVE idle + demo sweep — empty
@@ -296,8 +296,8 @@ describe('tableGcService sweep', () => {
   describe('demo sweep', () => {
     it('deletes COMPLETED demo tables 2+ min past completion', async () => {
       const demos = [
-        { id: 'demo_1', gameId: 'xo', slug: 'mt-everest', status: 'COMPLETED' },
-        { id: 'demo_2', gameId: 'xo', slug: 'mt-k2',      status: 'COMPLETED' },
+        { id: 'demo_1', gameId: 'tic-tac-toe', slug: 'mt-everest', status: 'COMPLETED' },
+        { id: 'demo_2', gameId: 'tic-tac-toe', slug: 'mt-k2',      status: 'COMPLETED' },
       ]
       db.table.findMany.mockImplementation(async ({ where }) => {
         if (where?.isDemo === true) return demos

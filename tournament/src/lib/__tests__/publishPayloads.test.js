@@ -11,14 +11,14 @@ import { describe, it, expect } from 'vitest'
 import { buildBotMatchReadyPayload } from '../publishPayloads.js'
 
 describe('buildBotMatchReadyPayload', () => {
-  const tournament = { id: 't1', bestOfN: 3, game: 'xo' }
+  const tournament = { id: 't1', bestOfN: 3, game: 'tic-tac-toe' }
   const match      = { id: 'm1' }
   const p1User     = { id: 'u1', displayName: 'Rusty',   botModelId: 'seed:rusty:novice',  isBot: true }
   const p2User     = { id: 'u2', displayName: 'Magnus',  botModelId: 'seed:magnus:master', isBot: true }
 
   it('includes gameId sourced from tournament.game', () => {
     const payload = buildBotMatchReadyPayload(tournament, match, p1User, p2User)
-    expect(payload.gameId).toBe('xo')
+    expect(payload.gameId).toBe('tic-tac-toe')
   })
 
   it('passes through tournamentId, matchId, bestOfN', () => {
@@ -63,7 +63,7 @@ describe('buildBotMatchReadyPayload', () => {
       tournamentId: 't1',
       matchId:      'm1',
       bestOfN:      3,
-      gameId:       'xo',
+      gameId:       'tic-tac-toe',
       bot1: { id: 'u1', displayName: 'Rusty',  botModelId: 'seed:rusty:novice'  },
       bot2: { id: 'u2', displayName: 'Magnus', botModelId: 'seed:magnus:master' },
     })

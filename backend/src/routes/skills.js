@@ -10,6 +10,7 @@ import * as svc from '../services/skillService.js'
 import { extractRulesFromModel, extractRulesFromEnsemble } from '../services/ruleExtractionService.js'
 import { invalidateRuleSetCache } from '../ai/ruleBased.js'
 import db from '../lib/db.js'
+import { GAME_IDS } from '../constants/games.js'
 
 const router = Router()
 
@@ -80,7 +81,7 @@ router.post('/models', requireAuth, async (req, res, next) => {
     const { name, description, algorithm, config, gameId } = req.body
     if (!name?.trim()) return res.status(400).json({ error: 'name is required' })
     if (!await checkModelLimit(req, res)) return
-    const model = await svc.createModel({ name: name.trim(), description, algorithm, config, gameId: gameId ?? 'xo', createdBy: req.auth.userId })
+    const model = await svc.createModel({ name: name.trim(), description, algorithm, config, gameId: gameId ?? GAME_IDS.TIC_TAC_TOE, createdBy: req.auth.userId })
     res.status(201).json({ model })
   } catch (err) { next(err) }
 })

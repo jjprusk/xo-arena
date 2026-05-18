@@ -95,7 +95,7 @@ export function normalizeBusNotification(type, payload = {}, expiresAt = null) {
     // time we get here the event is already known to be relevant.
     case 'player.joined': {
       const who      = payload.actorDisplayName ?? 'Someone'
-      const gameName = payload.gameId === 'xo' ? 'XO' : (payload.gameId ?? 'table')
+      const gameName = payload.gameId === 'tic-tac-toe' ? 'XO' : (payload.gameId ?? 'table')
       const seat     = Number.isInteger(payload.seatIndex) ? `seat ${payload.seatIndex + 1}` : 'a seat'
       return {
         id,
@@ -110,7 +110,7 @@ export function normalizeBusNotification(type, payload = {}, expiresAt = null) {
     }
     case 'player.left': {
       const who      = payload.actorDisplayName ?? 'Someone'
-      const gameName = payload.gameId === 'xo' ? 'XO' : (payload.gameId ?? 'table')
+      const gameName = payload.gameId === 'tic-tac-toe' ? 'XO' : (payload.gameId ?? 'table')
       const seat     = Number.isInteger(payload.seatIndex) ? `seat ${payload.seatIndex + 1}` : 'a seat'
       return {
         id,

@@ -245,7 +245,7 @@ model BotSkill {
   createdBy      String?
   maxEpisodes    Int                 @default(100000)
   botId          String?             @map("bot_id")
-  gameId         String              @default("xo") @map("game_id")
+  gameId         String              @default("tic-tac-toe") @map("game_id")
   benchmarks     MLBenchmarkResult[]
   checkpoints    MLCheckpoint[]
   eloHistory     MLEloHistory[]

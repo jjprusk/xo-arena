@@ -30,9 +30,13 @@ app.use((req, res, next) => {
 
 app.get('/health', (_req, res) => res.json({ status: 'ok' }))
 
+// Each value may be a single router or an array of [middleware..., router].
+// Mirrors backend/src/app.js so prefix routes can attach guards (e.g. the
+// game-slug validator).
 export function registerRoutes(app, routes) {
-  for (const [path, router] of Object.entries(routes)) {
-    app.use(`/api${path}`, router)
+  for (const [path, handler] of Object.entries(routes)) {
+    const handlers = Array.isArray(handler) ? handler : [handler]
+    app.use(`/api${path}`, ...handlers)
   }
 }
 

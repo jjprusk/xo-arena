@@ -302,7 +302,7 @@ describe('startGame', () => {
     expect(mockTableCreate).toHaveBeenCalledTimes(1)
     const args = mockTableCreate.mock.calls[0][0]
     expect(args.data).toMatchObject({
-      gameId:            'xo',
+      gameId:            'tic-tac-toe',
       slug:              'cup-match-2',
       isTournament:      true,
       tournamentMatchId: 'm1',

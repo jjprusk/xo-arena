@@ -10,8 +10,14 @@ import { completeStep } from '../services/journeyService.js'
 import { deleteBot as deleteBotCascade, BuiltinBotProtectedError } from '../services/userDeletionService.js'
 import * as mlSvc from '../services/mlService.js'
 import cache from '../utils/cache.js'
+import { GAME_IDS, resolveGameSlug } from '../constants/games.js'
 
 const BOTS_CACHE_KEY    = 'bots:public'
+// Per-gameId cache keys are always constructed from the *canonical* slug
+// (e.g. 'bots:gameId:tic-tac-toe'). Callers route raw query params through
+// resolveGameSlug before reaching this key builder, so legacy 'xo' never
+// surfaces here even when a stale client sends '?gameId=xo'. Don't pass an
+// unnormalized slug.
 const BOTS_GAMEID_KEY   = (gameId) => `bots:gameId:${gameId}`
 const BOTS_TTL_MS       = 60_000  // 60 seconds
 // All bots-list cache keys share the `bots:` prefix — mutations invalidate
@@ -28,7 +34,8 @@ const router = Router()
  */
 router.get('/', async (req, res, next) => {
   try {
-    const { ownerId, includeInactive, gameId } = req.query
+    const { ownerId, includeInactive, gameId: rawGameId } = req.query
+    const gameId = typeof rawGameId === 'string' ? (resolveGameSlug(rawGameId) ?? rawGameId) : rawGameId
 
     // Owner-specific requests are user-scoped — never cache them. Always
     // include skills so the Profile bot list can render skill pills inline
@@ -166,9 +173,10 @@ router.get('/check-name', requireAuth, async (req, res, next) => {
  */
 router.get('/quick-match', optionalAuth, async (req, res, next) => {
   try {
-    const gameId    = typeof req.query.gameId === 'string' && req.query.gameId.length
+    const rawGameId = typeof req.query.gameId === 'string' && req.query.gameId.length
       ? req.query.gameId
-      : 'xo'
+      : GAME_IDS.TIC_TAC_TOE
+    const gameId    = resolveGameSlug(rawGameId) ?? rawGameId
     const eloWindowRaw = Number(req.query.eloWindow ?? 100)
     const eloWindow    = Number.isFinite(eloWindowRaw) && eloWindowRaw > 0 ? eloWindowRaw : 100
 
@@ -479,7 +487,7 @@ router.post('/:id/train-guided', requireAuth, async (req, res, next) => {
     }
 
     let skill = await db.botSkill.findFirst({
-      where:   { botId: bot.id, gameId: 'xo', algorithm: 'Q_LEARNING' },
+      where:   { botId: bot.id, gameId: GAME_IDS.TIC_TAC_TOE, algorithm: 'Q_LEARNING' },
       orderBy: { createdAt: 'desc' },
     })
 
@@ -492,7 +500,7 @@ router.post('/:id/train-guided', requireAuth, async (req, res, next) => {
       })
       skill = await db.botSkill.update({
         where: { id: created.id },
-        data:  { botId: bot.id, gameId: 'xo' },
+        data:  { botId: bot.id, gameId: GAME_IDS.TIC_TAC_TOE },
       })
     }
 
@@ -661,10 +669,11 @@ router.post('/:id/skills', requireAuth, async (req, res, next) => {
     if (!result) return
     const { bot } = result
 
-    const { gameId, algorithm, modelType } = req.body ?? {}
-    if (typeof gameId !== 'string' || !gameId.trim()) {
+    const { gameId: rawGameId, algorithm, modelType } = req.body ?? {}
+    if (typeof rawGameId !== 'string' || !rawGameId.trim()) {
       return res.status(400).json({ error: 'gameId is required', code: 'INVALID_GAME_ID' })
     }
+    const gameId = resolveGameSlug(rawGameId) ?? rawGameId
     if (typeof algorithm !== 'string' || !SUPPORTED_SKILL_ALGORITHMS.has(algorithm)) {
       return res.status(400).json({ error: 'algorithm is required and must be supported', code: 'INVALID_ALGORITHM' })
     }
@@ -814,9 +823,9 @@ router.post('/:id/reset-elo', requireAuth, async (req, res, next) => {
     await db.$transaction([
       db.userEloHistory.deleteMany({ where: { userId: bot.id } }),
       db.gameElo.upsert({
-        where: { userId_gameId: { userId: bot.id, gameId: 'xo' } },
+        where: { userId_gameId: { userId: bot.id, gameId: GAME_IDS.TIC_TAC_TOE } },
         update: { rating: 1200, gamesPlayed: 0 },
-        create: { userId: bot.id, gameId: 'xo', rating: 1200, gamesPlayed: 0 },
+        create: { userId: bot.id, gameId: GAME_IDS.TIC_TAC_TOE, rating: 1200, gamesPlayed: 0 },
       }),
       db.user.update({
         where: { id: bot.id },

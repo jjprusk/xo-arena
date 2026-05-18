@@ -18,7 +18,7 @@ function makeDb() {
 describe('assertBotHasSkillForGame', () => {
   it('passes humans straight through (the guard only applies to bots)', async () => {
     const db = makeDb()
-    const result = await assertBotHasSkillForGame({ db, userId: 'usr_human', isBot: false, gameId: 'xo' })
+    const result = await assertBotHasSkillForGame({ db, userId: 'usr_human', isBot: false, gameId: 'tic-tac-toe' })
     expect(result).toEqual({ ok: true })
     expect(db.botSkill.findFirst).not.toHaveBeenCalled()
   })
@@ -26,10 +26,10 @@ describe('assertBotHasSkillForGame', () => {
   it('passes bots that have a BotSkill for the tournament game', async () => {
     const db = makeDb()
     db.botSkill.findFirst.mockResolvedValue({ id: 'sk_xo_42' })
-    const result = await assertBotHasSkillForGame({ db, userId: 'bot_x', isBot: true, gameId: 'xo' })
+    const result = await assertBotHasSkillForGame({ db, userId: 'bot_x', isBot: true, gameId: 'tic-tac-toe' })
     expect(result).toEqual({ ok: true })
     expect(db.botSkill.findFirst).toHaveBeenCalledWith({
-      where:  { botId: 'bot_x', gameId: 'xo' },
+      where:  { botId: 'bot_x', gameId: 'tic-tac-toe' },
       select: { id: true },
     })
   })
@@ -37,23 +37,23 @@ describe('assertBotHasSkillForGame', () => {
   it('returns a 400 NO_SKILL with a Gym-pointing message when the bot has no matching skill', async () => {
     const db = makeDb()
     db.botSkill.findFirst.mockResolvedValue(null)
-    const result = await assertBotHasSkillForGame({ db, userId: 'bot_skilless', isBot: true, gameId: 'xo' })
+    const result = await assertBotHasSkillForGame({ db, userId: 'bot_skilless', isBot: true, gameId: 'tic-tac-toe' })
     expect(result.ok).toBe(false)
     expect(result.status).toBe(400)
     expect(result.body.code).toBe('NO_SKILL')
-    expect(result.body.error).toMatch(/no skill for "xo"/i)
+    expect(result.body.error).toMatch(/no skill for "tic-tac-toe"/i)
     expect(result.body.error).toMatch(/Gym/i)
   })
 
   it('keys the lookup by the requested gameId — wrong game = no skill', async () => {
     const db = makeDb()
     db.botSkill.findFirst.mockImplementation(async ({ where }) => (
-      where.botId === 'bot_xo_only' && where.gameId === 'xo'
+      where.botId === 'bot_xo_only' && where.gameId === 'tic-tac-toe'
         ? { id: 'sk_xo_only' }
         : null
     ))
 
-    const xoCheck = await assertBotHasSkillForGame({ db, userId: 'bot_xo_only', isBot: true, gameId: 'xo' })
+    const xoCheck = await assertBotHasSkillForGame({ db, userId: 'bot_xo_only', isBot: true, gameId: 'tic-tac-toe' })
     const c4Check = await assertBotHasSkillForGame({ db, userId: 'bot_xo_only', isBot: true, gameId: 'connect4' })
 
     expect(xoCheck.ok).toBe(true)
