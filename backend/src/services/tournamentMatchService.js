@@ -25,6 +25,7 @@ import {
   setPendingPvpMatchSlug,
 } from '../lib/tournamentBridge.js'
 import { createTableTracked } from '../lib/createTableTracked.js'
+import { GAME_IDS } from '../constants/games.js'
 
 export class TournamentMatchError extends Error {
   constructor(code, message) {
@@ -89,7 +90,7 @@ export async function joinMatchTable({ user, matchId }) {
     const marks = { [baId]: 'X' }
     const table = await createTableTracked({
       data: {
-        gameId: 'xo',
+        gameId: GAME_IDS.TIC_TAC_TOE,
         slug,
         createdById: baId,
         minPlayers: 2,
@@ -155,7 +156,7 @@ export async function joinMatchTable({ user, matchId }) {
     })
     if (hostUser) {
       const eloRow = await db.gameElo.findUnique({
-        where: { userId_gameId: { userId: hostUser.id, gameId: 'xo' } },
+        where: { userId_gameId: { userId: hostUser.id, gameId: GAME_IDS.TIC_TAC_TOE } },
       })
       hostElo = eloRow?.rating ?? null
     }
@@ -163,7 +164,7 @@ export async function joinMatchTable({ user, matchId }) {
   let guestElo = null
   if (user.id) {
     const eloRow = await db.gameElo.findUnique({
-      where: { userId_gameId: { userId: user.id, gameId: 'xo' } },
+      where: { userId_gameId: { userId: user.id, gameId: GAME_IDS.TIC_TAC_TOE } },
     })
     guestElo = eloRow?.rating ?? null
   }

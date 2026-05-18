@@ -10,6 +10,7 @@ import { completeStep } from '../services/journeyService.js'
 import { deleteBot as deleteBotCascade, BuiltinBotProtectedError } from '../services/userDeletionService.js'
 import * as mlSvc from '../services/mlService.js'
 import cache from '../utils/cache.js'
+import { GAME_IDS } from '../constants/games.js'
 
 const BOTS_CACHE_KEY    = 'bots:public'
 const BOTS_GAMEID_KEY   = (gameId) => `bots:gameId:${gameId}`
@@ -168,7 +169,7 @@ router.get('/quick-match', optionalAuth, async (req, res, next) => {
   try {
     const gameId    = typeof req.query.gameId === 'string' && req.query.gameId.length
       ? req.query.gameId
-      : 'xo'
+      : GAME_IDS.TIC_TAC_TOE
     const eloWindowRaw = Number(req.query.eloWindow ?? 100)
     const eloWindow    = Number.isFinite(eloWindowRaw) && eloWindowRaw > 0 ? eloWindowRaw : 100
 
@@ -479,7 +480,7 @@ router.post('/:id/train-guided', requireAuth, async (req, res, next) => {
     }
 
     let skill = await db.botSkill.findFirst({
-      where:   { botId: bot.id, gameId: 'xo', algorithm: 'Q_LEARNING' },
+      where:   { botId: bot.id, gameId: GAME_IDS.TIC_TAC_TOE, algorithm: 'Q_LEARNING' },
       orderBy: { createdAt: 'desc' },
     })
 
@@ -492,7 +493,7 @@ router.post('/:id/train-guided', requireAuth, async (req, res, next) => {
       })
       skill = await db.botSkill.update({
         where: { id: created.id },
-        data:  { botId: bot.id, gameId: 'xo' },
+        data:  { botId: bot.id, gameId: GAME_IDS.TIC_TAC_TOE },
       })
     }
 
@@ -814,9 +815,9 @@ router.post('/:id/reset-elo', requireAuth, async (req, res, next) => {
     await db.$transaction([
       db.userEloHistory.deleteMany({ where: { userId: bot.id } }),
       db.gameElo.upsert({
-        where: { userId_gameId: { userId: bot.id, gameId: 'xo' } },
+        where: { userId_gameId: { userId: bot.id, gameId: GAME_IDS.TIC_TAC_TOE } },
         update: { rating: 1200, gamesPlayed: 0 },
-        create: { userId: bot.id, gameId: 'xo', rating: 1200, gamesPlayed: 0 },
+        create: { userId: bot.id, gameId: GAME_IDS.TIC_TAC_TOE, rating: 1200, gamesPlayed: 0 },
       }),
       db.user.update({
         where: { id: bot.id },

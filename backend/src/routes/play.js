@@ -28,6 +28,7 @@ import * as tableFlow from '../services/tableFlowService.js'
 import { listBots } from '../services/userService.js'
 import db from '../lib/db.js'
 import logger from '../logger.js'
+import { GAME_IDS } from '../constants/games.js'
 
 const router = Router()
 router.use(optionalAuth)
@@ -98,7 +99,7 @@ async function resolveCaller(req, fallbackSessionId) {
 //   500  internal
 router.post('/bot', async (req, res) => {
   try {
-    const { gameId = 'xo', botUserId: requestedBotUserId = null } = req.body ?? {}
+    const { gameId = GAME_IDS.TIC_TAC_TOE, botUserId: requestedBotUserId = null } = req.body ?? {}
     if (typeof gameId !== 'string' || !gameId) {
       return res.status(400).json({ error: 'gameId required', code: 'BAD_REQUEST' })
     }

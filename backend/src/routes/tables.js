@@ -1,4 +1,6 @@
 // Copyright © 2026 Joe Pruskowski. All rights reserved.
+import { GAME_IDS } from '../constants/games.js'
+
 /**
  * Tables CRUD — Phase 3.1.
  *
@@ -432,7 +434,7 @@ router.post('/demo', requireAuth, async (req, res, next) => {
       dispatch({
         type: 'table.deleted',
         targets: { broadcast: true },
-        payload: { tableId: prior.id, gameId: 'xo' },
+        payload: { tableId: prior.id, gameId: GAME_IDS.TIC_TAC_TOE },
       }).catch(() => {})
     }
 
@@ -456,7 +458,7 @@ router.post('/demo', requireAuth, async (req, res, next) => {
       try {
         table = await createTableTracked({
           data: {
-            gameId:       'xo',
+            gameId:       GAME_IDS.TIC_TAC_TOE,
             slug,
             createdById:  req.auth.userId,
             minPlayers:   2,

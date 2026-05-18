@@ -38,6 +38,7 @@ import { formatTableLabel } from '../lib/tableLabel.js'
 import { resolveSkillForGame } from './skillService.js'
 import { getWinner, isBoardFull, WIN_LINES } from '@xo-arena/ai'
 import logger from '../logger.js'
+import { GAME_IDS } from '../constants/games.js'
 
 /**
  * Build a fresh previewState blob for a new table. Mirrors
@@ -383,7 +384,7 @@ export async function createPvpTable({ user, seatId, spectatorAllowed = true, ga
   const isGuest = !user?.betterAuthId
   const table = await createTableTracked({
     data: {
-      gameId:       'xo',
+      gameId:       GAME_IDS.TIC_TAC_TOE,
       slug,
       createdById:  user?.betterAuthId ?? 'anonymous',
       minPlayers:   2,
@@ -425,7 +426,7 @@ export async function createPvpTable({ user, seatId, spectatorAllowed = true, ga
 export async function createHvbTable({
   user,
   seatId,
-  gameId            = 'xo',
+  gameId            = GAME_IDS.TIC_TAC_TOE,
   botUserId,
   spectatorAllowed  = true,
   tournamentMatchId = null,
@@ -685,7 +686,7 @@ async function buildExtras(hostSeat, guestSeat, guestUserDomainId) {
     }
     if (!userRow) return { displayName, elo: null, isBot: false, ownerBaId: null }
     if (!displayName) displayName = userRow.displayName ?? null
-    const eloRow = await db.gameElo.findUnique({ where: { userId_gameId: { userId: userRow.id, gameId: 'xo' } } })
+    const eloRow = await db.gameElo.findUnique({ where: { userId_gameId: { userId: userRow.id, gameId: GAME_IDS.TIC_TAC_TOE } } })
     let ownerBaId = null
     if (userRow.isBot && userRow.botOwnerId) {
       const owner = await db.user.findUnique({

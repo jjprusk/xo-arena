@@ -1,6 +1,7 @@
 // Copyright © 2026 Joe Pruskowski. All rights reserved.
 import db from '../lib/db.js'
 import { ok, fail } from '../lib/safety.js'
+import { GAME_IDS } from '../../constants/games.js'
 
 const VALID_LEVELS = ['novice', 'intermediate', 'advanced', 'master']
 const DEFAULT_LEVEL = 'novice'
@@ -60,7 +61,7 @@ export async function seedTestBots(level = DEFAULT_LEVEL, ownerIdentifier = null
         nameConfirmed: true,
         ...(ownerId && { botOwnerId: ownerId }),
         gameElo: {
-          create: { gameId: 'xo', rating: 1200 },
+          create: { gameId: GAME_IDS.TIC_TAC_TOE, rating: 1200 },
         },
       },
     })
