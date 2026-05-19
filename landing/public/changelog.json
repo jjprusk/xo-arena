@@ -1,5 +1,10 @@
 [
   {
+    "version": "1.4.0-alpha-5.12",
+    "date": "2026-05-19",
+    "description": "A2 — ranked best-of-2 matches with match-level ELO, BO2 UI (banner + completion panel), tournament BO3 color rotation + game-3 tiebreaker, corpus alignment + pinned worked-example test"
+  },
+  {
     "version": "1.4.0-alpha-5.11",
     "date": "2026-05-18",
     "description": "Perf \u2014 cache prewarm at backend boot + rolling-median regression detector (fewer false-positive flags)"
