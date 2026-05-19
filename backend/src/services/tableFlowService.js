@@ -531,6 +531,46 @@ export async function rematchRankedTableInPlace({ matchId, nextSpawn }) {
     data:  { status: 'ACTIVE', previewState: ps },
   })
 
+  // Push the fresh board to subscribers so the client flips out of
+  // phase=finished and renders game N+1. Without this the client stays
+  // pinned to the prior game's terminal state and the only way out is a
+  // manual rematch click — which defeats the in-place rematch.
+  //
+  // Must `await` (not fire-and-forget) — when the bot draws X for game 2
+  // we dispatch its opening move below, and that path will emit its own
+  // `state.moved`. If `state.start` hadn't reached Redis first, the two
+  // events could land out of order and the client's currentTurn would
+  // snap back to 'X' (the start event's value) after the moved event
+  // updated it to 'O', leaving the user stuck on "Opponent's turn".
+  await appendToStream(
+    `table:${updated.id}:state`,
+    {
+      kind:        'start',
+      board:       ps.board,
+      currentTurn: ps.currentTurn,
+      scores:      ps.scores ?? { X: 0, O: 0 },
+      round:       ps.round,
+      // Carry the freshly-swapped marks so subscribers can refresh their
+      // local mapping. Without this the client still thinks the human
+      // plays the prior game's mark, and the bot's first move in game N+1
+      // gets rendered as if the human had played it.
+      marks:       ps.marks,
+      botMark:     ps.botMark ?? null,
+    },
+    { userId: '*' },
+  ).catch(() => {})
+
+  // If the bot drew X for this game it has to move first — without this
+  // the board renders with currentTurn='X' but the bot never plays, so
+  // the human (now playing O) can't make their first move and the game
+  // stalls. Mirrors rematchGame's dispatch on tournament rematches.
+  if (ps.currentTurn === botMark) {
+    const { dispatchBotMove } = await getSocketHandlerHelpers()
+    dispatchBotMove(updated, null).catch((err) =>
+      logger.warn({ err }, 'Failed to dispatch bot opening move on ranked rematch')
+    )
+  }
+
   return { table: updated, previewState: ps, humanMark, botMark }
 }
 

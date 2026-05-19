@@ -15,6 +15,20 @@ vi.mock('../../lib/db.js', () => ({
   },
 }))
 
+const evt = vi.hoisted(() => ({
+  appendToStream: vi.fn().mockResolvedValue(undefined),
+}))
+vi.mock('../../lib/eventStream.js', () => evt)
+
+// The source uses a lazy dynamic import('../realtime/socketHandler.js') to
+// fetch dispatchBotMove + friends. Mock the whole module so the import resolves
+// without booting the real handler graph. We don't assert on dispatch counts —
+// the .catch() in the source intentionally swallows any failure here, and the
+// e2e covers the live bot-opening path.
+vi.mock('../../realtime/socketHandler.js', () => ({
+  dispatchBotMove: vi.fn().mockResolvedValue(undefined),
+}))
+
 import db from '../../lib/db.js'
 import { rematchRankedTableInPlace } from '../tableFlowService.js'
 
@@ -120,6 +134,26 @@ describe('rematchRankedTableInPlace — happy path', () => {
     expect(r.botMark).toBe('O')
     expect(r.previewState.marks).toEqual({ [HUMAN_SEAT]: 'X', [BOT_SEAT]: 'O' })
     expect(r.previewState.botMark).toBe('O')
+  })
+
+  it('emits a state.start event so subscribers flip out of phase=finished', async () => {
+    db.table.findFirst.mockResolvedValueOnce(existingTable())
+    db.table.update.mockImplementation(({ data }) => Promise.resolve({ id: 'tbl_r1', ...data }))
+
+    await rematchRankedTableInPlace({
+      matchId: 'm1',
+      nextSpawn: { sequence: 2, firstMoverId: 'p2', secondMoverId: 'p1', p1IsFirstMover: false },
+    })
+
+    const startCall = evt.appendToStream.mock.calls.find(c => c[1]?.kind === 'start')
+    expect(startCall).toBeDefined()
+    expect(startCall[0]).toBe('table:tbl_r1:state')
+    expect(startCall[1]).toMatchObject({
+      kind:        'start',
+      board:       Array(9).fill(null),
+      currentTurn: 'X',
+      round:       2,
+    })
   })
 
   it('returns null if the table has malformed seats (defensive)', async () => {

@@ -10,6 +10,8 @@ import { useGuideStore } from '../store/guideStore.js'
 import { deriveCurrentPhase } from '../components/guide/JourneyCard.jsx'
 import SignInModal from '../components/ui/SignInModal.jsx'
 import IdleWarnOverlay from '../components/play/IdleWarnOverlay.jsx'
+import MatchProgressBanner from '../components/play/MatchProgressBanner.jsx'
+import MatchCompletePanel from '../components/play/MatchCompletePanel.jsx'
 import { api } from '../lib/api.js'
 import { getToken } from '../lib/getToken.js'
 
@@ -60,7 +62,7 @@ export function GameView({ joinSlug, tournamentMatchId, tournamentId, authSessio
 
   const [gameState, setGameState] = useState({ currentTurn: null, winner: null, isDraw: false })
 
-  const { session, sdk, phase, abandoned, kicked, seriesResult, opponentLeft } = useGameSDK({
+  const { session, sdk, phase, abandoned, kicked, seriesResult, opponentLeft, matchState } = useGameSDK({
     gameId:           'tic-tac-toe',
     joinSlug,
     tournamentMatchId,
@@ -241,6 +243,10 @@ export function GameView({ joinSlug, tournamentMatchId, tournamentId, authSessio
         >
           {(phase === 'playing' || phase === 'finished') && (
             <>
+              <MatchProgressBanner
+                matchState={matchState}
+                myMark={session?.settings?.myMark ?? null}
+              />
               <XOGame session={session} sdk={sdk} />
               {/* perf-v2 marker — flips when the user can actually see + use
                   the board (post-create synthetic start event for HvB, or the
@@ -252,6 +258,12 @@ export function GameView({ joinSlug, tournamentMatchId, tournamentId, authSessio
             </>
           )}
         </PlatformShell>
+
+        <MatchCompletePanel
+          matchState={matchState}
+          currentUserId={currentUser?.id ?? null}
+          leaveHref={leaveHref}
+        />
 
         {/* "Still there?" overlay — surfaces when the server fires an idle
             warn on user:<id>:idle, gives the player a chance to pong

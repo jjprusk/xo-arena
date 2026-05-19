@@ -283,6 +283,17 @@ router.post('/ranked-bot', requireAuth, async (req, res) => {
 
     sseSessions.joinTable(sseSessionId, result.table.id)
 
+    // When the bot drew X for game 1, it has to make the opening move —
+    // without this the client renders an empty board with currentTurn=X
+    // and waits for a play that's the bot's responsibility. Mirrors the
+    // dispatch in rematchRankedTableInPlace for games 2+.
+    if (!humanIsFirstMover) {
+      const handler = await import('../realtime/socketHandler.js')
+      handler.dispatchBotMove?.(result.table, null).catch((err) =>
+        logger.warn({ err, tableId: result.table?.id }, 'Failed to dispatch bot opening move on ranked game 1')
+      )
+    }
+
     // A2.7 — broadcast `match.started` on the table's state channel so any
     // subscriber (player + spectators in a future surface) can render the
     // "Best of 2 · Game 1" indicator without a separate fetch.
