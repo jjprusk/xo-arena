@@ -28,6 +28,25 @@ export const REGISTERED_GAME_IDS = new Set([
 export const DEFAULT_GAME_ID = GAME_IDS.TIC_TAC_TOE
 
 /**
+ * Games whose *tournament* matches move ELO at the match level (single
+ * `updateBothElosAfterMatch` call per series). Ranked play always moves ELO;
+ * tournaments are opt-in because solved games (e.g. TTT) produce coinflip
+ * BO3 game-3 outcomes that inject noise into the ladder.
+ *
+ * Canonical declaration lives on each game's `meta.tournamentMovesElo` flag
+ * in `packages/game-<slug>/src/meta.js`. This set mirrors those declarations
+ * for the backend runtime (backend doesn't import game packages).
+ *
+ * As of A3a: empty — TTT opts out. Connect Four will join when Phase B ships.
+ */
+export const TOURNAMENT_ELO_GAME_IDS = new Set([])
+
+/** Does the given game's tournament matches move ELO? */
+export function tournamentMovesElo(gameId) {
+  return TOURNAMENT_ELO_GAME_IDS.has(gameId)
+}
+
+/**
  * Legacy / alias slugs accepted at API boundaries and normalized to canonical.
  *
  * 'xo' was the canonical slug pre-A1.5b. Kept as an alias so legacy URLs,

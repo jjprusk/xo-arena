@@ -4,7 +4,7 @@
  *
  * Training runs as a background setImmediate loop, yielding every
  * BATCH_SIZE episodes so the event loop stays responsive. Progress is
- * broadcast over SSE on the `ml:session:{id}:` channel prefix; clients
+ * broadcast over SSE on the `training:{id}:` channel prefix; clients
  * subscribe via useEventStream.
  */
 
@@ -26,6 +26,7 @@ import { appendToStream } from '../lib/eventStream.js'
 import { completeStep as completeJourneyStep } from './journeyService.js'
 import { grantDiscoveryReward } from './discoveryRewardsService.js'
 import { GAME_IDS } from '../constants/games.js'
+import { resolvePreset } from '../config/trainingPresets.js'
 
 // ─── In-memory caches ───────────────────────────────────────────────────────
 
@@ -712,9 +713,25 @@ export async function importModel(data) {
 
 // ─── Training ────────────────────────────────────────────────────────────────
 
-export async function startTraining(modelId, { mode, iterations, config = {} }) {
+export async function startTraining(modelId, { mode, iterations, config = {}, preset = null }) {
   const model = await getModel(modelId)
   if (!model) throw new Error('Model not found')
+
+  // A3a.4 — preset overrides iterations and seeds expectedDurationMs.
+  let expectedDurationMs = null
+  if (preset) {
+    const resolved = resolvePreset({
+      gameId:    model.gameId,
+      algorithm: model.algorithm,
+      preset,
+    })
+    if (!resolved) {
+      throw new Error(`Unknown preset '${preset}' for ${model.algorithm} on ${model.gameId}`)
+    }
+    iterations        = resolved.iterations
+    expectedDurationMs = resolved.expectedDurationMs
+  }
+
   if (iterations < 1 || iterations > 100_000) throw new Error('iterations must be 1–100,000')
 
   // Enforce admin-configurable limits
@@ -746,7 +763,7 @@ export async function startTraining(modelId, { mode, iterations, config = {} }) 
   if (model.status === 'TRAINING') {
     // Queue the session instead of throwing 409
     const session = await db.trainingSession.create({
-      data: { modelId, mode, iterations, status: 'PENDING', config },
+      data: { modelId, mode, iterations, status: 'PENDING', config, preset, expectedDurationMs },
     })
     trainingQueue.push({ modelId, sessionId: session.id, opts: { mode, iterations, config } })
     logger.info({ modelId, sessionId: session.id }, 'Training queued')
@@ -754,7 +771,7 @@ export async function startTraining(modelId, { mode, iterations, config = {} }) 
   }
 
   const session = await db.trainingSession.create({
-    data: { modelId, mode, iterations, status: 'RUNNING', config },
+    data: { modelId, mode, iterations, status: 'RUNNING', config, preset, expectedDurationMs },
   })
   await db.botSkill.update({ where: { id: modelId }, data: { status: 'TRAINING' } })
 
@@ -807,9 +824,25 @@ export async function cancelSession(sessionId) {
  * Returns the session + current model weights so the frontend can initialise the engine.
  * The frontend calls finishTrainingFromFrontend() when done.
  */
-export async function startFrontendSession(modelId, { mode, iterations, config = {} }) {
+export async function startFrontendSession(modelId, { mode, iterations, config = {}, preset = null }) {
   const model = await getModel(modelId)
   if (!model) throw new Error('Model not found')
+
+  // A3a.4 — preset overrides iterations and seeds expectedDurationMs.
+  let expectedDurationMs = null
+  if (preset) {
+    const resolved = resolvePreset({
+      gameId:    model.gameId,
+      algorithm: model.algorithm,
+      preset,
+    })
+    if (!resolved) {
+      throw new Error(`Unknown preset '${preset}' for ${model.algorithm} on ${model.gameId}`)
+    }
+    iterations        = resolved.iterations
+    expectedDurationMs = resolved.expectedDurationMs
+  }
+
   if (iterations < 1 || iterations > 100_000) throw new Error('iterations must be 1–100,000')
 
   const [maxEpisodes, maxConcurrent] = await Promise.all([
@@ -837,7 +870,12 @@ export async function startFrontendSession(modelId, { mode, iterations, config =
   if (model.status === 'TRAINING') throw new Error('Model is already training')
 
   const session = await db.trainingSession.create({
-    data: { modelId, mode, iterations, status: 'RUNNING', config: { ...config, frontend: true } },
+    data: {
+      modelId, mode, iterations,
+      status: 'RUNNING',
+      config: { ...config, frontend: true },
+      preset, expectedDurationMs,
+    },
   })
   await db.botSkill.update({ where: { id: modelId }, data: { status: 'TRAINING' } })
   logger.info({ modelId, sessionId: session.id }, 'Frontend training session started')
@@ -1407,7 +1445,7 @@ async function _runTraining(model, session, { mode, iterations, config }) {
             curriculumLevel++
             difficulty = CURRICULUM_LEVELS[curriculumLevel]
             outcomeWindow.length = 0  // reset window
-            _emit(`ml:session:${sessionId}`, 'ml:curriculum_advance', {
+            _emit(`training:${sessionId}`, 'training:curriculum_advance', {
               sessionId, level: curriculumLevel, difficulty, episode: i + 1,
             })
             logger.info({ sessionId, difficulty }, 'Curriculum advanced')
@@ -1430,7 +1468,7 @@ async function _runTraining(model, session, { mode, iterations, config }) {
             await db.trainingEpisode.createMany({ data: episodeBatch })
             episodeBatch.length = 0
           }
-          _emit(`ml:session:${sessionId}`, 'ml:early_stop', { sessionId, episode: i + 1, bestWinRate })
+          _emit(`training:${sessionId}`, 'training:early_stop', { sessionId, episode: i + 1, bestWinRate })
           logger.info({ sessionId, episode: i + 1, bestWinRate }, 'Early stopping triggered')
           await _finishSession(sessionId, modelId, engine, actualEpisodes, 'COMPLETED', { wins, losses, draws, totalQDelta }, { earlyStop: true, stoppedAt: i + 1 })
           return
@@ -1453,7 +1491,7 @@ async function _runTraining(model, session, { mode, iterations, config }) {
       // Progress broadcast + event-loop yield
       if ((i + 1) % PROGRESS_INTERVAL === 0 || i === iterations - 1) {
         const done = i + 1
-        _emit(`ml:session:${sessionId}`, 'ml:progress', {
+        _emit(`training:${sessionId}`, 'training:progress', {
           sessionId, episode: done, totalEpisodes: iterations,
           winRate:  done > 0 ? wins  / done : 0,
           lossRate: done > 0 ? losses / done : 0,
@@ -1472,7 +1510,7 @@ async function _runTraining(model, session, { mode, iterations, config }) {
     logger.error({ err, sessionId, modelId }, 'Training failed')
     await db.botSkill.update({ where: { id: modelId }, data: { status: 'IDLE' } })
     await db.trainingSession.update({ where: { id: sessionId }, data: { status: 'FAILED', completedAt: new Date() } })
-    _emit(`ml:session:${sessionId}`, 'ml:error', { sessionId, error: err.message })
+    _emit(`training:${sessionId}`, 'training:error', { sessionId, error: err.message })
     _processNextInQueue()
   }
 }
@@ -1515,7 +1553,7 @@ async function _finishSession(sessionId, modelId, engine, iterations, status, { 
 
   if (status === 'COMPLETED') await repointBotPrimarySkill(modelId)
 
-  _emit(`ml:session:${sessionId}`, status === 'COMPLETED' ? 'ml:complete' : 'ml:cancelled', { sessionId, summary })
+  _emit(`training:${sessionId}`, status === 'COMPLETED' ? 'training:complete' : 'training:cancelled', { sessionId, summary })
   logger.info({ sessionId, modelId, status, ...summary }, 'Training finished')
 
   // Start next queued session if any
@@ -1780,9 +1818,9 @@ export async function ensembleMove(modelIds, method, weights, board, mark) {
 
 function _emit(scope, event, data) {
   // SSE channel name is `<scope>:<topic>` so a client can subscribe to a
-  // single prefix (e.g. `ml:session:abc:`) and receive every event for
+  // single prefix (e.g. `training:abc:`) and receive every event for
   // that scope. Strip the leading `ml:` from the event name to avoid the
-  // doubled-up `ml:session:abc:ml:progress` form.
+  // doubled-up `training:abc:training:progress` form.
   const topic = event.startsWith('ml:') ? event.slice(3) : event
   appendToStream(`${scope}:${topic}`, data, { userId: '*' }).catch(() => {})
 }

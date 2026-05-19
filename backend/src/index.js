@@ -13,6 +13,7 @@ import { startHelpRateLimitSweep } from './middleware/helpRateLimit.js'
 import { startResearchPublishRateLimitSweep } from './middleware/researchPublishRateLimit.js'
 import { startResearchLogExportCron } from './jobs/researchLogExport.js'
 import { prewarmCache } from './startup/prewarmCache.js'
+import { resumeOrphanedSessions } from './services/mlService.js'
 import aiRouter from './routes/ai.js'
 import logsRouter from './routes/logs.js'
 import usersRouter from './routes/users.js'
@@ -202,6 +203,13 @@ startTableGc(null)
 // window. Awaited so server.listen() (and thus Fly.io's healthcheck) only
 // flips to ready after the cache is warm.
 await prewarmCache()
+
+// A3a.9 — pick up any training sessions left RUNNING by a crashed worker.
+// Fire-and-forget: we never want a slow resume scan to block the listen()
+// call. Each session is recovered or marked FAILED independently.
+resumeOrphanedSessions().catch((err) =>
+  logger.error({ err }, 'orphaned training resume failed')
+)
 
 server.listen(PORT, () => {
   logger.info(`XO Arena backend running on port ${PORT}`)

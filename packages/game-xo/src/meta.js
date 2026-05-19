@@ -18,6 +18,9 @@ export const meta = {
   supportsBots:     true,
   supportsTraining: true,
   supportsPuzzles:  true,
+  // TTT is solved — BO3 game-3 tiebreaker is a coinflip, not a skill signal.
+  // Tournaments stay off the rating ladder; ranked BO2 still moves ELO.
+  tournamentMovesElo: false,
   builtInBots: [
     {
       id:         'minimax-novice',

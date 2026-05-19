@@ -461,8 +461,8 @@ router.post('/:id/train-quick', requireAuth, async (req, res, next) => {
  * from `train-quick` with a genuine ~5s training run:
  *
  *   1. Creates (or reuses) a Q-Learning BotSkill bound to this bot.
- *   2. Calls mlService.startTraining — emits ml:progress / ml:complete on
- *      SSE channel `ml:session:<sessionId>:`. The browser subscribes and
+ *   2. Calls mlService.startTraining — emits training:progress / training:complete on
+ *      SSE channel `training:<sessionId>:`. The browser subscribes and
  *      renders a live win-rate curve.
  *   3. Returns { sessionId, skillId, channelPrefix } so the client knows
  *      which session to listen for.
@@ -512,7 +512,7 @@ router.post('/:id/train-guided', requireAuth, async (req, res, next) => {
       return res.json({
         sessionId:     existingRunning.id,
         skillId:       skill.id,
-        channelPrefix: `ml:session:${existingRunning.id}:`,
+        channelPrefix: `training:${existingRunning.id}:`,
         reused:        true,
       })
     }
@@ -533,7 +533,7 @@ router.post('/:id/train-guided', requireAuth, async (req, res, next) => {
     res.json({
       sessionId:     session.id,
       skillId:       skill.id,
-      channelPrefix: `ml:session:${session.id}:`,
+      channelPrefix: `training:${session.id}:`,
       reused:        false,
     })
   } catch (err) {
@@ -546,7 +546,7 @@ router.post('/:id/train-guided', requireAuth, async (req, res, next) => {
  *
  * Body: { sessionId, skillId }
  *
- * Called by the client once the SSE `ml:complete` event arrives (i.e., the
+ * Called by the client once the SSE `training:complete` event arrives (i.e., the
  * user has actually watched their bot finish training). We:
  *
  *   1. Verify the session belongs to a skill bound to this bot and finished

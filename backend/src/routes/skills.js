@@ -214,26 +214,30 @@ router.post('/models/:id/train', requireAuth, async (req, res, next) => {
       return res.status(409).json({ error: `Cannot train while ${tournamentBot.displayName} is in a tournament`, code: 'BOT_IN_TOURNAMENT' })
     }
 
-    const { mode, iterations, config, frontend } = req.body
+    const { mode, iterations, config, frontend, preset } = req.body
     const validModes = ['SELF_PLAY', 'VS_MINIMAX', 'VS_HUMAN']
     if (!validModes.includes(mode)) {
       return res.status(400).json({ error: `mode must be one of: ${validModes.join(', ')}` })
     }
-    if (!iterations || iterations < 1 || iterations > 100_000) {
-      return res.status(400).json({ error: 'iterations must be 1–100,000' })
+    // A3a.4 — `preset` overrides `iterations`. When omitted we still enforce
+    // the iterations 1–100,000 bound; with a preset the resolver picks an
+    // in-range value (or throws "Unknown preset" caught below).
+    if (!preset && (!iterations || iterations < 1 || iterations > 100_000)) {
+      return res.status(400).json({ error: 'iterations must be 1–100,000 (or pass a preset)' })
     }
 
     if (frontend) {
       // Frontend-driven training: create session + return current weights so browser can run the loop
-      const result = await svc.startFrontendSession(req.params.id, { mode, iterations, config })
+      const result = await svc.startFrontendSession(req.params.id, { mode, iterations, config, preset })
       return res.status(201).json(result)
     }
 
-    const session = await svc.startTraining(req.params.id, { mode, iterations, config })
+    const session = await svc.startTraining(req.params.id, { mode, iterations, config, preset })
     res.status(201).json({ session })
   } catch (err) {
     if (err.message === 'Model is already training') return res.status(409).json({ error: err.message })
     if (err.message?.startsWith('Training limit:')) return res.status(429).json({ error: err.message })
+    if (err.message?.startsWith("Unknown preset"))  return res.status(400).json({ error: err.message })
     next(err)
   }
 })
@@ -309,6 +313,39 @@ router.post('/sessions/:id/cancel', requireAuth, async (req, res, next) => {
     await svc.cancelSession(req.params.id)
     res.status(204).end()
   } catch (err) { next(err) }
+})
+
+// A3a.10 — pause / resume a training session. Owner-only (admins can act
+// on any). Pause flips the session to PENDING + pausedAt; resume restarts
+// the loop from the latest checkpoint.
+router.post('/sessions/:id/pause', requireAuth, async (req, res, next) => {
+  try {
+    const session = await svc.getSession(req.params.id)
+    if (!session) return res.status(404).json({ error: 'Session not found' })
+    if (!await assertModelOwner(req, res, session.modelId)) return
+    const s = await svc.pauseSession(req.params.id)
+    res.json({ session: s })
+  } catch (err) {
+    if (err.message === 'Session not found')             return res.status(404).json({ error: err.message })
+    if (err.message?.startsWith('Session is in status')) return res.status(409).json({ error: err.message })
+    if (err.message === 'Session is already paused')     return res.status(409).json({ error: err.message })
+    next(err)
+  }
+})
+
+router.post('/sessions/:id/resume', requireAuth, async (req, res, next) => {
+  try {
+    const session = await svc.getSession(req.params.id)
+    if (!session) return res.status(404).json({ error: 'Session not found' })
+    if (!await assertModelOwner(req, res, session.modelId)) return
+    const s = await svc.resumeSession(req.params.id)
+    res.json({ session: s })
+  } catch (err) {
+    if (err.message === 'Session not found')                  return res.status(404).json({ error: err.message })
+    if (err.message === 'Session is not paused')              return res.status(409).json({ error: err.message })
+    if (err.message?.startsWith('Cannot resume:'))            return res.status(409).json({ error: err.message })
+    next(err)
+  }
 })
 
 // ─── Export / Import ──────────────────────────────────────────────────────────

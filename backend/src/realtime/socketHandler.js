@@ -35,6 +35,7 @@ import { advanceMatchAfterGame } from '../services/rankedMatchOrchestrator.js'
 import { rematchRankedTableInPlace } from '../services/tableFlowService.js'
 import { completeStep as completeJourneyStep } from '../services/journeyService.js'
 import { deletePendingPvpMatch } from '../lib/tournamentBridge.js'
+import { tournamentMovesElo } from '../constants/games.js'
 import {
   removeAllWatchersForTable,
   getPresence as getTablePresence,
@@ -439,67 +440,135 @@ export async function recordPvpGame(table, _io) {
   }
 
   if (isTournamentRoom) {
-    const xWins = ps.scores?.X ?? 0
-    const oWins = ps.scores?.O ?? 0
-    const gamesPlayed = ps.round ?? 1
-    const drawGames = gamesPlayed - xWins - oWins
+    // A3a.1.5 — series totals must be participant-keyed, not mark-keyed.
+    // Tournament series swap X/O game-to-game via `assignColors`, so
+    // `ps.scores.X` / `ps.scores.O` (mark-aggregated) don't map to either
+    // player. Aggregate from Game rows — `Game.winnerId` is a userId set
+    // by `createGame` above, so we can tally host/guest directly.
+    let hostWins = 0, guestWins = 0, draws = 0
+    let gamesPlayed = ps.round ?? 1
+    try {
+      const games = await db.game.findMany({
+        where:  { tournamentMatchId: table.tournamentMatchId },
+        select: { winnerId: true },
+      })
+      gamesPlayed = games.length || gamesPlayed
+      for (const g of games) {
+        if (g.winnerId === hostDomainId) hostWins++
+        else if (g.winnerId === guestDomainId) guestWins++
+        else draws++
+      }
+    } catch (err) {
+      logger.warn({ err, tournamentMatchId: table.tournamentMatchId },
+        'Tournament Game aggregation failed; falling back to mark-keyed totals')
+      const xWins = ps.scores?.X ?? 0
+      const oWins = ps.scores?.O ?? 0
+      hostWins = marks[hostBaId] === 'X' ? xWins : oWins
+      guestWins = marks[hostBaId] === 'X' ? oWins : xWins
+      draws = gamesPlayed - hostWins - guestWins
+    }
+
+    // Map host/guest → TournamentMatch.participant1/participant2 slots so
+    // we can persist p1Wins/p2Wins in the right orientation. The tournament
+    // service expects participant-keyed totals.
+    let participant1Id = null, participant2Id = null
+    let hostIsP1 = true
+    try {
+      const tmRow = await db.tournamentMatch.findUnique({
+        where:  { id: table.tournamentMatchId },
+        select: { participant1Id: true, participant2Id: true },
+      })
+      participant1Id = tmRow?.participant1Id ?? null
+      participant2Id = tmRow?.participant2Id ?? null
+      if (participant1Id && hostDomainId) {
+        const p1 = await db.tournamentParticipant.findUnique({
+          where:  { id: participant1Id },
+          select: { userId: true },
+        })
+        hostIsP1 = p1?.userId === hostDomainId
+      }
+    } catch (err) {
+      logger.warn({ err, tournamentMatchId: table.tournamentMatchId },
+        'Could not resolve participant slots; defaulting hostIsP1=true')
+    }
+    const p1Wins = hostIsP1 ? hostWins  : guestWins
+    const p2Wins = hostIsP1 ? guestWins : hostWins
+
     const bestOfN = table.bestOfN ?? 1
     const required = Math.ceil(bestOfN / 2)
     // Majority reached OR max games played (prevents infinite draws — TTT
     // optimal play draws every game). At max with neither at `required`,
-    // the side with more wins takes the series; tied wins → X (host).
-    const majorityReached = xWins >= required || oWins >= required
+    // the side with more wins takes the series; tied wins → host (preserves
+    // the pre-A3a.1.5 "tied → X" fallback when seat1 was always X).
+    const majorityReached = hostWins >= required || guestWins >= required
     const maxGamesReached = gamesPlayed >= bestOfN
     const seriesDone = majorityReached || maxGamesReached
     logger.info({
       tableId: table.id, tournamentMatchId: table.tournamentMatchId,
-      bestOfN, xWins, oWins, required, gamesPlayed,
+      bestOfN, hostWins, guestWins, draws, required, gamesPlayed,
       majorityReached, maxGamesReached, seriesDone,
     }, 'tournament series check')
 
     if (seriesDone) {
-      const seriesWinnerMark = xWins >= oWins ? 'X' : 'O'
-      const seriesWinnerBaId = userIdForMark(marks, seriesWinnerMark)
+      // Participant-keyed series winner. Ties default to host (matches the
+      // pre-A3a.1.5 "X (host) wins ties" behaviour now that we no longer
+      // assume X=host across the whole series).
+      const hostWonSeries = hostWins >= guestWins
+      const seriesWinnerBaId = hostWonSeries ? hostBaId : guestBaId
+      const winnerParticipantId = hostWonSeries
+        ? (hostIsP1 ? participant1Id : participant2Id)
+        : (hostIsP1 ? participant2Id : participant1Id)
 
-      let winnerParticipantId = null
-      try {
-        const winnerUser = seriesWinnerBaId
-          ? await db.user.findUnique({ where: { betterAuthId: seriesWinnerBaId }, select: { id: true } })
-          : null
-        const participant = winnerUser
-          ? await db.tournamentParticipant.findFirst({
-              where: { tournamentId: table.tournamentId, userId: winnerUser.id },
-              select: { id: true },
-            })
-          : null
-        winnerParticipantId = participant?.id ?? null
-      } catch (err) {
-        logger.warn({ err, tournamentMatchId: table.tournamentMatchId }, 'Could not look up winner participant ID')
-      }
-
-      const completed = await completeTournamentMatch(table.tournamentMatchId, winnerParticipantId, xWins, oWins, drawGames)
+      const completed = await completeTournamentMatch(
+        table.tournamentMatchId, winnerParticipantId, p1Wins, p2Wins, draws,
+      )
       if (completed) await deletePendingPvpMatch(table.tournamentMatchId)
+
+      // A3a — opt-in match-level ELO for tournament BO3 series.
+      // The game's SDK meta declares whether tournament play moves rating
+      // (mirrored into `TOURNAMENT_ELO_GAME_IDS`). Solved games like TTT
+      // opt out so the game-3 random-color tiebreaker doesn't inject
+      // coinflip outcomes into the ladder. Same `updateBothElosAfterMatch`
+      // path ranked HvB uses — one rating row per side per series.
+      if (
+        tournamentMovesElo(table.gameId) &&
+        hostDomainId &&
+        guestDomainId &&
+        !table.isHvb
+      ) {
+        updateBothElosAfterMatch({
+          player1Id: hostDomainId,
+          player2Id: guestDomainId,
+          p1Wins:    hostWins,
+          p2Wins:    guestWins,
+          drawGames: draws,
+          isP2Bot:   false,
+        }).catch((err) =>
+          logger.warn({ err, tournamentMatchId: table.tournamentMatchId },
+            'Tournament match-level ELO update failed')
+        )
+      }
 
       const seriesPayload = {
         tournamentId: table.tournamentId,
         matchId: table.tournamentMatchId,
-        p1Wins: xWins,
-        p2Wins: oWins,
+        p1Wins,
+        p2Wins,
         seriesWinnerUserId: seriesWinnerBaId,
       }
       appendToStream(`tournament:${table.tournamentId}:series:complete`, seriesPayload).catch(() => {})
     } else {
-      // Mid-series — persist the score so the bracket updates live.
+      // Mid-series — persist participant-keyed totals so brackets update live.
       db.tournamentMatch.update({
         where: { id: table.tournamentMatchId },
-        data: { p1Wins: xWins, p2Wins: oWins, drawGames, status: 'IN_PROGRESS' },
+        data:  { p1Wins, p2Wins, drawGames: draws, status: 'IN_PROGRESS' },
       }).catch(err => logger.warn({ err, tournamentMatchId: table.tournamentMatchId }, 'Failed to update mid-series score'))
 
       const scorePayload = {
         tournamentId: table.tournamentId,
         matchId: table.tournamentMatchId,
-        p1Wins: xWins,
-        p2Wins: oWins,
+        p1Wins,
+        p2Wins,
       }
       appendToStream('tournament:match:score', scorePayload).catch(() => {})
     }
