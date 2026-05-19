@@ -709,6 +709,8 @@ export async function createGame({
   roomName = null,
   tournamentId = null,
   tournamentMatchId = null,
+  matchId = null,
+  matchSequence = null,
   moveStream = null,
   isSpar = false,
 }) {
@@ -728,6 +730,8 @@ export async function createGame({
       roomName,
       tournamentId,
       tournamentMatchId,
+      matchId,
+      matchSequence,
       isTournament: !!(tournamentId),
       isSpar,
       moveStream: moveStream ?? undefined,

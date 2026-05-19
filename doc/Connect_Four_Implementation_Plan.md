@@ -17,7 +17,7 @@
 | Sprint | Status | Items | Notes |
 |---|---|---|---|
 | **Phase A — Architectural alignment (TTT only)** | | | |
-| A1 — SDK + game-as-prefix routing + slug rename | in progress | 9/10 | Legacy `xo` alias kept active via `LEGACY_SLUG_MAP`; 301 redirects + map removal moved to C6. A1.11 (regression sweep) pending. |
+| A1 — SDK + game-as-prefix routing + slug rename | shipped | 10/10 | Legacy `xo` alias kept active via `LEGACY_SLUG_MAP`; 301 redirects + map removal moved to C6. Regression sweep + staging smoke green on v1.4.0-alpha-5.11. |
 | A2 — Match-based play + match-level ELO | not started | 0/11 | Historical rows frozen at cutover; new matches use the new formula. |
 | A3a — Training data + UX rework (in-process) | not started | 0/13 | TrainingSession + TrainingMetric schema, presets, gating, multi-curve eval, checkpoints. |
 | A3b — Training worker process cutover | not started | 0/9 | New `xo-training` Fly app, Redis queue, pub/sub streaming. |
@@ -35,7 +35,7 @@
 | C4 — Accessibility + mobile polish | not started | 0/3 | Keyboard nav, screen-reader labels, gesture conflicts. |
 | C5 — Observability sweep | not started | 0/2 | C4 dashboards + alert thresholds. |
 | C6 — Legacy slug cleanup | blocked on B exit | 0/3 | Drop `LEGACY_SLUG_MAP`, add 301 redirects from `/xo*`, scrub residual `xo` literals. |
-| **Total** | | **9/113** | |
+| **Total** | | **10/113** | |
 
 Update this table as sprints land. Each `- [ ]` flipped to `- [x]` in the body should be reflected in the `Items` column.
 
@@ -80,7 +80,7 @@ This is enforced in the phase structure below: **Phase A is TTT-only**, **Phase 
 - [x] Backend cache keys: rename `bots:gameId:xo` → `bots:gameId:tic-tac-toe`. Flush on deploy.
 - [x] Landing: update `BotFilterBar.GAMES`, route definitions, deep-link parsers, picker UI.
 - [x] Update all docs in `/doc/Help_Corpus/` that reference the slug `xo` (search-and-replace pass).
-- [ ] Tests: regression suite passes; e2e journey + smoke pass on staging.
+- [x] Tests: regression suite passes; e2e journey + smoke pass on staging.
 
 > **Moved to C6** — 301 redirects from `/xo*` paths and `LEGACY_SLUG_MAP` removal. Doing them here would shorten the deprecation window to days; doing them in C6 (after Phase B ships) gives external callers — cached client bundles, bookmarks, anyone polling our API — multiple release cycles to migrate.
 

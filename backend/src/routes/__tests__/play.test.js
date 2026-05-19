@@ -19,7 +19,7 @@ vi.mock('../../middleware/auth.js', () => ({
 }))
 
 vi.mock('../../lib/db.js', () => ({
-  default: { user: { findUnique: vi.fn() } },
+  default: { user: { findUnique: vi.fn(), findFirst: vi.fn() } },
 }))
 
 const flow = vi.hoisted(() => ({ createHvbTable: vi.fn() }))
@@ -28,6 +28,9 @@ vi.mock('../../services/tableFlowService.js', () => flow)
 const userSvc = vi.hoisted(() => ({ listBots: vi.fn() }))
 vi.mock('../../services/userService.js', () => userSvc)
 
+const orch = vi.hoisted(() => ({ startRankedMatch: vi.fn() }))
+vi.mock('../../services/rankedMatchOrchestrator.js', () => orch)
+
 vi.mock('../../realtime/flyReplay.js', () => ({
   mintSessionId: vi.fn(() => 'mint_abc'),
 }))
@@ -35,6 +38,9 @@ vi.mock('../../realtime/flyReplay.js', () => ({
 vi.mock('../../logger.js', () => ({
   default: { warn: vi.fn(), error: vi.fn(), info: vi.fn() },
 }))
+
+const evt = vi.hoisted(() => ({ appendToStream: vi.fn().mockResolvedValue(undefined) }))
+vi.mock('../../lib/eventStream.js', () => evt)
 
 import db from '../../lib/db.js'
 import * as sseSessions from '../../realtime/sseSessions.js'
@@ -286,5 +292,168 @@ describe('POST /api/v1/play/bot', () => {
     expect(b.body.tableId).toBe('t_two')
     expect(sseSessions.tablesFor('mint_one')).toContain('t_one')
     expect(sseSessions.tablesFor('mint_two')).toContain('t_two')
+  })
+})
+
+describe('POST /api/v1/play/ranked-bot', () => {
+  // The mocked requireAuth always sets userId='ba_user_1'. The DB lookup
+  // resolves that to a domain user row.
+  const me = { id: 'user_1', betterAuthId: 'ba_user_1', displayName: 'Alice' }
+  const botRow = {
+    id:           'bot_rusty',
+    betterAuthId: null,
+    displayName:  'Rusty',
+    botModelId:   'builtin:minimax:0',
+    botModelType: 'minimax',
+  }
+
+  it('mints a Match, threads it into createHvbTable, and returns spawn metadata for game 1', async () => {
+    db.user.findUnique
+      .mockResolvedValueOnce(me)        // caller lookup (where betterAuthId)
+      .mockResolvedValueOnce(botRow)    // bot row id-fallback after findFirst miss
+    db.user.findFirst.mockResolvedValueOnce(null)  // no row keyed by betterAuthId for the bot id
+    userSvc.listBots.mockResolvedValueOnce([{ ...botRow, playableGameIds: ['tic-tac-toe'], botOwnerId: null }])
+    orch.startRankedMatch.mockResolvedValueOnce({
+      match: { id: 'm_1', format: 'RANKED_BO2' },
+      spawn: { matchId: 'm_1', sequence: 1, firstMoverId: 'user_1', secondMoverId: 'bot_rusty', p1IsFirstMover: true, gameId: 'tic-tac-toe', format: 'RANKED_BO2' },
+    })
+    flow.createHvbTable.mockResolvedValueOnce({
+      ok:          true,
+      table:       { id: 'tbl_r1', botUserId: 'bot_rusty' },
+      slug:        'rank-rusty',
+      label:       'Alice vs Rusty',
+      mark:        'X',
+      board:       Array(9).fill(null),
+      currentTurn: 'X',
+    })
+
+    const res = await request(makeApp())
+      .post('/api/v1/play/ranked-bot')
+      .send({ gameId: 'tic-tac-toe' })
+
+    expect(res.status).toBe(200)
+    expect(res.body).toMatchObject({
+      sseSessionId: 'mint_abc',
+      tableId:      'tbl_r1',
+      slug:         'rank-rusty',
+      mark:         'X',
+      match: {
+        id:                'm_1',
+        format:            'RANKED_BO2',
+        sequence:          1,
+        p1IsFirstMover:    true,
+        humanIsFirstMover: true,
+      },
+      bot: { id: 'bot_rusty', displayName: 'Rusty', botModelId: 'builtin:minimax:0' },
+    })
+
+    expect(orch.startRankedMatch).toHaveBeenCalledWith({
+      gameId:    'tic-tac-toe',
+      player1Id: 'user_1',
+      player2Id: 'bot_rusty',
+    })
+    expect(flow.createHvbTable).toHaveBeenCalledWith(expect.objectContaining({
+      gameId:      'tic-tac-toe',
+      seatId:      'ba_user_1',
+      rankedMatch: { id: 'm_1', humanIsFirstMover: true },
+    }))
+    expect(sseSessions.tablesFor('mint_abc')).toContain('tbl_r1')
+    // A2.7 — match.started event posted on the table's state channel.
+    expect(evt.appendToStream).toHaveBeenCalledWith(
+      'table:tbl_r1:state',
+      expect.objectContaining({
+        kind:           'match.started',
+        matchId:        'm_1',
+        format:         'RANKED_BO2',
+        sequence:       1,
+        firstMoverId:   'user_1',
+        p1IsFirstMover: true,
+        gameId:         'tic-tac-toe',
+      }),
+      expect.objectContaining({ userId: '*' }),
+    )
+  })
+
+  it('hands the bot first-mover flag through when the seed picks the bot', async () => {
+    db.user.findUnique
+      .mockResolvedValueOnce(me)
+      .mockResolvedValueOnce(botRow)
+    userSvc.listBots.mockResolvedValueOnce([{ ...botRow, playableGameIds: ['tic-tac-toe'], botOwnerId: null }])
+    orch.startRankedMatch.mockResolvedValueOnce({
+      match: { id: 'm_2', format: 'RANKED_BO2' },
+      spawn: { firstMoverId: 'bot_rusty', secondMoverId: 'user_1', p1IsFirstMover: false, sequence: 1, matchId: 'm_2', gameId: 'tic-tac-toe', format: 'RANKED_BO2' },
+    })
+    flow.createHvbTable.mockResolvedValueOnce({
+      ok:    true,
+      table: { id: 'tbl_r2' },
+      slug:  's',
+      label: 'l',
+      mark:  'O', // human is O when bot starts
+      board: Array(9).fill(null),
+      currentTurn: 'X',
+    })
+
+    const res = await request(makeApp())
+      .post('/api/v1/play/ranked-bot')
+      .send({ gameId: 'tic-tac-toe' })
+
+    expect(res.status).toBe(200)
+    expect(res.body.mark).toBe('O')
+    expect(res.body.match.humanIsFirstMover).toBe(false)
+    expect(flow.createHvbTable).toHaveBeenCalledWith(expect.objectContaining({
+      rankedMatch: { id: 'm_2', humanIsFirstMover: false },
+    }))
+  })
+
+  it('404s when the caller has no domain user row', async () => {
+    db.user.findUnique.mockResolvedValueOnce(null)
+    const res = await request(makeApp())
+      .post('/api/v1/play/ranked-bot')
+      .send({ gameId: 'tic-tac-toe' })
+    expect(res.status).toBe(404)
+    expect(res.body.code).toBe('USER_NOT_FOUND')
+    expect(orch.startRankedMatch).not.toHaveBeenCalled()
+  })
+
+  it('404s when no community bot is available for the game', async () => {
+    db.user.findUnique.mockResolvedValueOnce(me)
+    userSvc.listBots.mockResolvedValueOnce([])
+    const res = await request(makeApp())
+      .post('/api/v1/play/ranked-bot')
+      .send({ gameId: 'tic-tac-toe' })
+    expect(res.status).toBe(404)
+    expect(res.body.code).toBe('BOT_NOT_FOUND')
+    expect(orch.startRankedMatch).not.toHaveBeenCalled()
+  })
+
+  it('400s when gameId is explicitly blank', async () => {
+    const res = await request(makeApp())
+      .post('/api/v1/play/ranked-bot')
+      .send({ gameId: '' })
+    expect(res.status).toBe(400)
+    expect(res.body.code).toBe('BAD_REQUEST')
+    expect(orch.startRankedMatch).not.toHaveBeenCalled()
+  })
+
+  it('disposes the SSE session if createHvbTable rejects after the match is minted', async () => {
+    db.user.findUnique
+      .mockResolvedValueOnce(me)
+      .mockResolvedValueOnce(botRow)
+    db.user.findFirst.mockResolvedValueOnce(null)
+    userSvc.listBots.mockResolvedValueOnce([{ ...botRow, playableGameIds: ['tic-tac-toe'], botOwnerId: null }])
+    orch.startRankedMatch.mockResolvedValueOnce({
+      match: { id: 'm_3', format: 'RANKED_BO2' },
+      spawn: { firstMoverId: 'user_1', secondMoverId: 'bot_rusty', p1IsFirstMover: true, sequence: 1, matchId: 'm_3', gameId: 'tic-tac-toe', format: 'RANKED_BO2' },
+    })
+    flow.createHvbTable.mockResolvedValueOnce({
+      ok: false, code: 'NO_SKILL', message: 'Bot has no skill for game "tic-tac-toe"',
+    })
+
+    const res = await request(makeApp())
+      .post('/api/v1/play/ranked-bot')
+      .send({ gameId: 'tic-tac-toe' })
+
+    expect(res.status).toBe(400)
+    expect(sseSessions.get('mint_abc')).toBeNull()
   })
 })

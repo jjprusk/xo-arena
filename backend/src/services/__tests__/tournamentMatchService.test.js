@@ -161,6 +161,57 @@ describe('tournamentMatchService.joinMatchTable', () => {
       .rejects.toMatchObject({ code: 'NOT_READY' })
   })
 
+  // A2.5 — game-1 color is seeded from TournamentMatch.id, not from
+  // click order. Pinned seeds ('m1' → p1 starts; 'm2' → p2 starts) keep
+  // the parity locked across refactors.
+  it('A2.5: participant1 gets O when the seed gives game 1 to participant2', async () => {
+    mockGetPending.mockReturnValueOnce({
+      tournamentId: 't1',
+      participant1UserId: 'ba_alice',
+      participant2UserId: 'ba_bob',
+      bestOfN: 3,
+      slug: null,
+    })
+    mockCreateTable.mockResolvedValueOnce({ id: 'tbl_x', slug: 'auto' })
+
+    // matchId 'm2' has sha256 bit-0 == 1 → player2 (ba_bob) starts.
+    const res = await joinMatchTable({ user: me, matchId: 'm2' })
+
+    expect(res.action).toBe('created')
+    expect(res.mark).toBe('O')
+    const { data } = mockCreateTable.mock.calls[0][0]
+    expect(data.previewState.marks).toEqual({ ba_alice: 'O' })
+  })
+
+  it('A2.5: second-participant join takes the opposite of host\'s seeded mark', async () => {
+    mockGetPending.mockReturnValueOnce({
+      tournamentId: 't1',
+      participant1UserId: 'ba_alice',
+      participant2UserId: 'ba_bob',
+      bestOfN: 3,
+      slug: 'abc',
+    })
+    db.table.findFirst.mockResolvedValueOnce({
+      id: 'tbl_x',
+      slug: 'abc',
+      seats: [
+        { userId: 'ba_alice', status: 'occupied', displayName: 'Alice' },
+        { userId: null, status: 'empty' },
+      ],
+      previewState: { marks: { ba_alice: 'O' } },
+    })
+    db.table.update.mockResolvedValueOnce({ id: 'tbl_x', slug: 'abc' })
+    db.user.findUnique.mockResolvedValueOnce({ id: 'user_alice' })
+    db.gameElo.findUnique.mockResolvedValue(null)
+
+    // Bob (the joiner) — for seed 'm2', player2 is firstMover, so Bob gets X.
+    const bob = { id: 'user_bob', betterAuthId: 'ba_bob', displayName: 'Bob' }
+    const res = await joinMatchTable({ user: bob, matchId: 'm2' })
+
+    expect(res.mark).toBe('X')
+    expect(res.previewState.marks).toEqual({ ba_alice: 'O', ba_bob: 'X' })
+  })
+
   it('handles missing ELO rows by leaving rating null', async () => {
     mockGetPending.mockReturnValueOnce({
       tournamentId: 't1',

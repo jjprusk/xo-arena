@@ -21,7 +21,7 @@ vi.mock('../skillService.js', () => ({
   getSystemConfig: vi.fn().mockResolvedValue(5),
 }))
 
-const { updatePlayerEloAfterPvAI, updateBothElosAfterPvBot, updateBothElosAfterBotVsBot, updatePlayersEloAfterPvP } =
+const { updatePlayerEloAfterPvAI, updateBothElosAfterPvBot, updateBothElosAfterBotVsBot, updatePlayersEloAfterPvP, updateBothElosAfterMatch } =
   await import('../eloService.js')
 const db = (await import('../../lib/db.js')).default
 
@@ -223,5 +223,130 @@ describe('options.offLadder — skip ELO update', () => {
     const r2 = await updateBothElosAfterPvBot('usr_1', 'bot_1', 'PLAYER1_WIN', { offLadder: false })
     expect(r2.skipped).toBeUndefined()
     expect(r2.human.delta).toBeGreaterThan(0)
+  })
+})
+
+describe('updateBothElosAfterMatch (A2.6 — match-score ELO)', () => {
+  const mockBotData = { botGamesPlayed: 0, botProvisional: true }
+
+  it('skips entirely when offLadder is true', async () => {
+    const r = await updateBothElosAfterMatch(
+      { player1Id: 'p1', player2Id: 'p2', p1Wins: 2, p2Wins: 0 },
+      { offLadder: true },
+    )
+    expect(r.skipped).toBe(true)
+    expect(db.gameElo.upsert).not.toHaveBeenCalled()
+  })
+
+  it('safe no-op when the match has zero games played', async () => {
+    const r = await updateBothElosAfterMatch({
+      player1Id: 'p1', player2Id: 'p2', p1Wins: 0, p2Wins: 0, drawGames: 0,
+    })
+    expect(r.skipped).toBe(true)
+    expect(db.gameElo.upsert).not.toHaveBeenCalled()
+  })
+
+  it('2-0 sweep: full credit to the winner (delta similar to a single big win)', async () => {
+    db.gameElo.findUnique.mockResolvedValue({ rating: 1200 })
+    db.user.findUnique.mockResolvedValue(mockBotData)
+
+    const r = await updateBothElosAfterMatch({
+      player1Id: 'p1', player2Id: 'p2', p1Wins: 2, p2Wins: 0, isP2Bot: true,
+    })
+    // For equal ratings, expectedScore = 0.5, actual = 1.0, K=32 → delta = +16.
+    expect(r.player1.delta).toBeCloseTo(16, 0)
+    expect(r.player2.delta).toBeCloseTo(-16, 0)
+  })
+
+  it('1-1 draw: zero net rating movement at equal ratings', async () => {
+    db.gameElo.findUnique.mockResolvedValue({ rating: 1200 })
+    db.user.findUnique.mockResolvedValue(mockBotData)
+
+    const r = await updateBothElosAfterMatch({
+      player1Id: 'p1', player2Id: 'p2', p1Wins: 1, p2Wins: 1, isP2Bot: true,
+    })
+    // actual = 0.5, expected = 0.5 → delta = 0.
+    expect(r.player1.delta).toBeCloseTo(0, 1)
+    expect(r.player2.delta).toBeCloseTo(0, 1)
+  })
+
+  it('1-0 with one drawn game (1.5-0.5): partial credit to winner', async () => {
+    db.gameElo.findUnique.mockResolvedValue({ rating: 1200 })
+    db.user.findUnique.mockResolvedValue(mockBotData)
+
+    const r = await updateBothElosAfterMatch({
+      player1Id: 'p1', player2Id: 'p2', p1Wins: 1, p2Wins: 0, drawGames: 1, isP2Bot: true,
+    })
+    // p1Score = (1 + 0.5*1)/2 = 0.75, expected = 0.5, K=32 → delta = +8.
+    expect(r.player1.delta).toBeCloseTo(8, 0)
+    expect(r.player2.delta).toBeCloseTo(-8, 0)
+  })
+
+  it('writes one UserEloHistory row per side (not per game)', async () => {
+    db.gameElo.findUnique.mockResolvedValue({ rating: 1200 })
+    db.user.findUnique.mockResolvedValue(mockBotData)
+
+    await updateBothElosAfterMatch({
+      player1Id: 'p1', player2Id: 'p2', p1Wins: 2, p2Wins: 0, isP2Bot: true,
+    })
+    expect(db.userEloHistory.create).toHaveBeenCalledTimes(2)
+    const outcomes = db.userEloHistory.create.mock.calls.map((c) => c[0].data.outcome)
+    expect(outcomes).toEqual(expect.arrayContaining(['win', 'loss']))
+  })
+
+  it('bumps the bot games-played counter when isP2Bot is true', async () => {
+    db.gameElo.findUnique.mockResolvedValue({ rating: 1200 })
+    db.user.findUnique.mockResolvedValue(mockBotData)
+
+    await updateBothElosAfterMatch({
+      player1Id: 'p1', player2Id: 'p2', p1Wins: 2, p2Wins: 0, isP2Bot: true,
+    })
+    expect(db.user.update).toHaveBeenCalledWith(expect.objectContaining({
+      where: { id: 'p2' },
+      data:  expect.objectContaining({ botGamesPlayed: 1 }),
+    }))
+  })
+
+  it('does NOT bump bot stats when isP2Bot is false (PvP match)', async () => {
+    db.gameElo.findUnique.mockResolvedValue({ rating: 1200 })
+    await updateBothElosAfterMatch({
+      player1Id: 'p1', player2Id: 'p2', p1Wins: 2, p2Wins: 0, isP2Bot: false,
+    })
+    expect(db.user.update).not.toHaveBeenCalled()
+  })
+
+  it('does not throw on db error — returns undefined', async () => {
+    db.gameElo.findUnique.mockRejectedValue(new Error('db down'))
+    const r = await updateBothElosAfterMatch({
+      player1Id: 'p1', player2Id: 'p2', p1Wins: 2, p2Wins: 0, isP2Bot: true,
+    })
+    expect(r).toBeUndefined()
+  })
+
+  it('outcome labels are "draw" only when fractional score equals 0.5', async () => {
+    db.gameElo.findUnique.mockResolvedValue({ rating: 1200 })
+    db.user.findUnique.mockResolvedValue(mockBotData)
+
+    // 1-1 → both 0.5 → both 'draw'
+    await updateBothElosAfterMatch({
+      player1Id: 'p1', player2Id: 'p2', p1Wins: 1, p2Wins: 1, isP2Bot: true,
+    })
+    const outcomes = db.userEloHistory.create.mock.calls.map((c) => c[0].data.outcome)
+    expect(outcomes).toEqual(['draw', 'draw'])
+  })
+
+  it('threads gameId through into the GameElo upsert keys', async () => {
+    db.gameElo.findUnique.mockResolvedValue({ rating: 1200 })
+    db.user.findUnique.mockResolvedValue(mockBotData)
+
+    await updateBothElosAfterMatch(
+      { player1Id: 'p1', player2Id: 'p2', p1Wins: 2, p2Wins: 0, isP2Bot: true },
+      { gameId: 'connect-four' },
+    )
+    const upsertArgs = db.gameElo.upsert.mock.calls.map((c) => c[0].where.userId_gameId)
+    expect(upsertArgs).toEqual([
+      { userId: 'p1', gameId: 'connect-four' },
+      { userId: 'p2', gameId: 'connect-four' },
+    ])
   })
 })

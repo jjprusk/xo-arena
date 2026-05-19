@@ -273,6 +273,119 @@ export async function updateBothElosAfterBotVsBot(bot1Id, bot2Id, outcome, optio
  * offLadder since there's no AI persona involved, but the flag is honored
  * for symmetry — e.g. casual / unrated rooms.)
  */
+/**
+ * Update ELO after a *match* — best-of-N ranked / tournament play. The
+ * per-game ELO update is replaced by a single match-level update using
+ * the fractional match score (sum of per-game 1/0.5/0 scores ÷ games
+ * played). One `UserEloHistory` row per side is written for the match,
+ * not per game; casual single-game play continues to use the existing
+ * per-game updaters.
+ *
+ * For PvBot matches the bot's stats (games-played + provisional flag)
+ * also tick, mirroring `updateBothElosAfterPvBot`.
+ *
+ * @param {object} args
+ * @param {string}  args.player1Id       Domain User.id
+ * @param {string}  args.player2Id       Domain User.id (bot or human)
+ * @param {number}  args.p1Wins          Games player1 won in the match
+ * @param {number}  args.p2Wins          Games player2 won in the match
+ * @param {number}  [args.drawGames]     Drawn games in the match (default 0)
+ * @param {boolean} args.isP2Bot         Whether player2 is a bot (drives stats bump)
+ * @param {object}  [options]            { gameId, offLadder } per module docstring
+ * @returns {Promise<{ player1: { newElo, delta }, player2: { newElo, delta }, skipped? }>}
+ */
+export async function updateBothElosAfterMatch({
+  player1Id, player2Id, p1Wins, p2Wins, drawGames = 0, isP2Bot = false,
+}, options = {}) {
+  const { gameId, offLadder } = normalizeOptions(options)
+  if (offLadder) {
+    return {
+      player1: { newElo: null, delta: 0 },
+      player2: { newElo: null, delta: 0 },
+      skipped: true,
+    }
+  }
+  const gamesPlayed = p1Wins + p2Wins + drawGames
+  if (gamesPlayed === 0) {
+    // Match with no games — nothing to score on. Safe no-op.
+    return {
+      player1: { newElo: null, delta: 0 },
+      player2: { newElo: null, delta: 0 },
+      skipped: true,
+    }
+  }
+  try {
+    const [p1Elo, p2Elo] = await Promise.all([
+      getUserElo(player1Id, gameId),
+      getUserElo(player2Id, gameId),
+    ])
+
+    // Match score = sum of per-game scores / games played, where each
+    // game contributes 1.0 (win), 0.5 (draw), or 0.0 (loss). A 2-0 sweep
+    // gives the winning side 1.0; a 1-1 draw gives 0.5/0.5; a 1.5-0.5
+    // (one win + one draw) gives 0.75/0.25.
+    const p1Score = (p1Wins + 0.5 * drawGames) / gamesPlayed
+    const p2Score = 1 - p1Score
+
+    const p1NewElo = computeNewElo(p1Elo, p2Elo, p1Score)
+    const p2NewElo = computeNewElo(p2Elo, p1Elo, p2Score)
+
+    const labelFor = (s) => s > 0.5 ? 'win' : s < 0.5 ? 'loss' : 'draw'
+    const p1Outcome = labelFor(p1Score)
+    const p2Outcome = labelFor(p2Score)
+
+    const tx = [
+      upsertGameElo(player1Id, gameId, p1NewElo),
+      upsertGameElo(player2Id, gameId, p2NewElo),
+      db.userEloHistory.create({
+        data: {
+          userId: player1Id,
+          eloRating: p1NewElo,
+          delta: p1NewElo - p1Elo,
+          opponentType: isP2Bot ? 'bot' : 'human',
+          outcome: p1Outcome,
+        },
+      }),
+      db.userEloHistory.create({
+        data: {
+          userId: player2Id,
+          eloRating: p2NewElo,
+          delta: p2NewElo - p2Elo,
+          opponentType: isP2Bot ? 'human' : 'human',
+          outcome: p2Outcome,
+        },
+      }),
+    ]
+
+    // Bot-side bookkeeping (games-played + provisional flag) — mirror
+    // updateBothElosAfterPvBot. We do this even though the bot's "match"
+    // was multiple games; the bot's games-played counter is intended as
+    // a confidence signal for its rating, and one match = one confidence
+    // bump in the match model.
+    if (isP2Bot) {
+      const [botData, threshold] = await Promise.all([
+        db.user.findUnique({ where: { id: player2Id }, select: { botGamesPlayed: true, botProvisional: true } }),
+        getSystemConfig('bots.provisionalGames', DEFAULT_PROVISIONAL_THRESHOLD),
+      ])
+      const newGamesPlayed = (botData?.botGamesPlayed ?? 0) + 1
+      const nowProvisional = botData?.botProvisional && newGamesPlayed < threshold
+      tx.push(db.user.update({
+        where: { id: player2Id },
+        data:  { botGamesPlayed: newGamesPlayed, botProvisional: nowProvisional },
+      }))
+    }
+
+    await db.$transaction(tx)
+
+    return {
+      player1: { newElo: p1NewElo, delta: p1NewElo - p1Elo },
+      player2: { newElo: p2NewElo, delta: p2NewElo - p2Elo },
+    }
+  } catch (err) {
+    console.error('[eloService] updateBothElosAfterMatch error:', err.message)
+  }
+}
+
 export async function updatePlayersEloAfterPvP(player1Id, player2Id, outcome, options = {}) {
   const { gameId, offLadder } = normalizeOptions(options)
   if (offLadder) {
