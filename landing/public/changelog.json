@@ -1,5 +1,10 @@
 [
   {
+    "version": "1.4.0-alpha-5.11",
+    "date": "2026-05-18",
+    "description": "Perf \u2014 cache prewarm at backend boot + rolling-median regression detector (fewer false-positive flags)"
+  },
+  {
     "version": "1.4.0-alpha-5.10",
     "date": "2026-05-18",
     "description": "A1 architectural alignment \u2014 slug rename xo \u2192 tic-tac-toe, SDK + /games/<slug> routing, eloService multi-game, landing flips, SSE+auth fixes, A1.9 deferred to C6"
