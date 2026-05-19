@@ -116,6 +116,19 @@ export const api = {
     // → seat mismatch → 403 NOT_A_PLAYER.
     startBot: ({ gameId = 'tic-tac-toe', botUserId } = {}, token) =>
       api.post('/play/bot', { gameId, ...(botUserId ? { botUserId } : {}) }, token),
+
+    /**
+     * Ranked best-of-2 vs a community bot (A2.4). Mints the Match row,
+     * pre-allocates the SSE session, and spawns game 1's HvB table with
+     * the first-mover-aware mark assignment. Auth required.
+     *
+     * Response shape (200):
+     *   { sseSessionId, match: { id, format, sequence, p1IsFirstMover,
+     *     humanIsFirstMover }, tableId, slug, label, mark, board,
+     *     currentTurn, bot: {...} }
+     */
+    startRankedBot: ({ gameId = 'tic-tac-toe', botUserId } = {}, token) =>
+      api.post('/play/ranked-bot', { gameId, ...(botUserId ? { botUserId } : {}) }, token),
   },
 
   research: {

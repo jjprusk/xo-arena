@@ -17,8 +17,8 @@
 | Sprint | Status | Items | Notes |
 |---|---|---|---|
 | **Phase A — Architectural alignment (TTT only)** | | | |
-| A1 — SDK + game-as-prefix routing + slug rename | in progress | 9/10 | Legacy `xo` alias kept active via `LEGACY_SLUG_MAP`; 301 redirects + map removal moved to C6. A1.11 (regression sweep) pending. |
-| A2 — Match-based play + match-level ELO | not started | 0/11 | Historical rows frozen at cutover; new matches use the new formula. |
+| A1 — SDK + game-as-prefix routing + slug rename | shipped | 10/10 | Legacy `xo` alias kept active via `LEGACY_SLUG_MAP`; 301 redirects + map removal moved to C6. Regression sweep + staging smoke green on v1.4.0-alpha-5.11. |
+| A2 — Match-based play + match-level ELO | shipped | 11/11 | Historical rows frozen at cutover; new matches use the new formula. Corpus alignment audit landed an exact worked-example test pinned to `match-formats.md`. |
 | A3a — Training data + UX rework (in-process) | not started | 0/13 | TrainingSession + TrainingMetric schema, presets, gating, multi-curve eval, checkpoints. |
 | A3b — Training worker process cutover | not started | 0/9 | New `xo-training` Fly app, Redis queue, pub/sub streaming. |
 | A4 — Multi-skill bot UI + auto-clone | not started | 0/13 | Phase 3.8 data layer is already shipped; this finishes the UI. |
@@ -35,7 +35,7 @@
 | C4 — Accessibility + mobile polish | not started | 0/3 | Keyboard nav, screen-reader labels, gesture conflicts. |
 | C5 — Observability sweep | not started | 0/2 | C4 dashboards + alert thresholds. |
 | C6 — Legacy slug cleanup | blocked on B exit | 0/3 | Drop `LEGACY_SLUG_MAP`, add 301 redirects from `/xo*`, scrub residual `xo` literals. |
-| **Total** | | **9/113** | |
+| **Total** | | **21/113** | |
 
 Update this table as sprints land. Each `- [ ]` flipped to `- [x]` in the body should be reflected in the `Items` column.
 
@@ -80,7 +80,7 @@ This is enforced in the phase structure below: **Phase A is TTT-only**, **Phase 
 - [x] Backend cache keys: rename `bots:gameId:xo` → `bots:gameId:tic-tac-toe`. Flush on deploy.
 - [x] Landing: update `BotFilterBar.GAMES`, route definitions, deep-link parsers, picker UI.
 - [x] Update all docs in `/doc/Help_Corpus/` that reference the slug `xo` (search-and-replace pass).
-- [ ] Tests: regression suite passes; e2e journey + smoke pass on staging.
+- [x] Tests: regression suite passes; e2e journey + smoke pass on staging.
 
 > **Moved to C6** — 301 redirects from `/xo*` paths and `LEGACY_SLUG_MAP` removal. Doing them here would shorten the deprecation window to days; doing them in C6 (after Phase B ships) gives external callers — cached client bundles, bookmarks, anyone polling our API — multiple release cycles to migrate.
 
@@ -88,17 +88,17 @@ This is enforced in the phase structure below: **Phase A is TTT-only**, **Phase 
 
 **Goal:** Ranked TTT becomes best-of-2 with alternating colors. Tournament becomes best-of-3 with random-color game-3 tiebreaker. ELO updates per match, not per game. Casual stays best-of-1.
 
-- [ ] New `Match` entity in DB (or extend `Game` with `matchId`, `matchSequence`). Decide schema: pure relational `Match` row with child `Game` rows, or denormalized `matchId` column on `Game`.
-- [ ] Match lifecycle states: `FORMING → IN_PROGRESS → COMPLETED`, with per-game results aggregated to a match score.
-- [ ] Color assignment logic — game 1 random/seeded, subsequent games swap, game 3 tournament tiebreaker random with announcement.
-- [ ] Ranked play: server orchestrates a best-of-2 match for any "Ranked vs X" entry point. No client-side color choice.
-- [ ] Tournament play: extend existing `TournamentMatch` (`p1Wins`, `p2Wins`, `drawGames` already exist) to enforce best-of-3 with the random-color rule for game 3.
-- [ ] `eloService.js`: implement match-score ELO update (sum of per-game 1.0/0.5/0.0 scores ÷ N games), replacing the per-game update for ranked/tournament. Casual single-game update unchanged.
-- [ ] Historical rows: stay in place. No retroactive recompute. Pre-cutover ELO is the starting point; new matches move from there.
-- [ ] Realtime: emit match-level events (`match.started`, `match.gameComplete`, `match.completed`) on the existing realtime channel. Client renders match progress (1-0, 1-1, etc.).
-- [ ] Landing UI: ranked entry points say "Best of 2" explicitly. Match progress visible during play.
-- [ ] Tests: ELO math worked-example test (matches the example in `Help_Corpus/match-formats.md`). E2E ranked-match flow. Tournament best-of-3 with 1-1 tiebreaker.
-- [ ] Corpus alignment: `matches-and-games.md`, `match-formats.md`, `match-design-rationale.md` are already published — confirm they describe the shipped behavior.
+- [x] New `Match` entity in DB (or extend `Game` with `matchId`, `matchSequence`). Decide schema: pure relational `Match` row with child `Game` rows, or denormalized `matchId` column on `Game`.
+- [x] Match lifecycle states: `FORMING → IN_PROGRESS → COMPLETED`, with per-game results aggregated to a match score.
+- [x] Color assignment logic — game 1 random/seeded, subsequent games swap, game 3 tournament tiebreaker random with announcement.
+- [x] Ranked play: server orchestrates a best-of-2 match for any "Ranked vs X" entry point. No client-side color choice.
+- [x] Tournament play: extend existing `TournamentMatch` (`p1Wins`, `p2Wins`, `drawGames` already exist) to enforce best-of-3 with the random-color rule for game 3.
+- [x] `eloService.js`: implement match-score ELO update (sum of per-game 1.0/0.5/0.0 scores ÷ N games), replacing the per-game update for ranked/tournament. Casual single-game update unchanged.
+- [x] Historical rows: stay in place. No retroactive recompute. Pre-cutover ELO is the starting point; new matches move from there.
+- [x] Realtime: emit match-level events (`match.started`, `match.gameComplete`, `match.completed`) on the existing realtime channel. Client renders match progress (1-0, 1-1, etc.).
+- [x] Landing UI: ranked entry points say "Best of 2" explicitly. Match progress visible during play.
+- [x] Tests: ELO math worked-example test (matches the example in `Help_Corpus/match-formats.md`). E2E ranked-match flow. Tournament best-of-3 with 1-1 tiebreaker. *(Tournament BO3 e2e remains to add when tournament ELO moves to per-match — see corpus footnote.)*
+- [x] Corpus alignment: `matches-and-games.md`, `match-formats.md`, `match-design-rationale.md` are already published — confirm they describe the shipped behavior. *(A2.8 audit: fixed the "smaller weight" casual claim, replaced approximate worked-example numbers with the exact `+1.8 / +17.8 / −14.2` deltas the formula produces, footnoted that tournament BO3 still updates ELO per-game today.)*
 
 ### A3a — Training data + UX rework (in-process, TTT)
 

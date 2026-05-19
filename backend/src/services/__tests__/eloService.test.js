@@ -21,7 +21,7 @@ vi.mock('../skillService.js', () => ({
   getSystemConfig: vi.fn().mockResolvedValue(5),
 }))
 
-const { updatePlayerEloAfterPvAI, updateBothElosAfterPvBot, updateBothElosAfterBotVsBot, updatePlayersEloAfterPvP } =
+const { updatePlayerEloAfterPvAI, updateBothElosAfterPvBot, updateBothElosAfterBotVsBot, updatePlayersEloAfterPvP, updateBothElosAfterMatch } =
   await import('../eloService.js')
 const db = (await import('../../lib/db.js')).default
 
@@ -223,5 +223,236 @@ describe('options.offLadder — skip ELO update', () => {
     const r2 = await updateBothElosAfterPvBot('usr_1', 'bot_1', 'PLAYER1_WIN', { offLadder: false })
     expect(r2.skipped).toBeUndefined()
     expect(r2.human.delta).toBeGreaterThan(0)
+  })
+})
+
+describe('updateBothElosAfterMatch (A2.6 — match-score ELO)', () => {
+  const mockBotData = { botGamesPlayed: 0, botProvisional: true }
+
+  it('skips entirely when offLadder is true', async () => {
+    const r = await updateBothElosAfterMatch(
+      { player1Id: 'p1', player2Id: 'p2', p1Wins: 2, p2Wins: 0 },
+      { offLadder: true },
+    )
+    expect(r.skipped).toBe(true)
+    expect(db.gameElo.upsert).not.toHaveBeenCalled()
+  })
+
+  it('safe no-op when the match has zero games played', async () => {
+    const r = await updateBothElosAfterMatch({
+      player1Id: 'p1', player2Id: 'p2', p1Wins: 0, p2Wins: 0, drawGames: 0,
+    })
+    expect(r.skipped).toBe(true)
+    expect(db.gameElo.upsert).not.toHaveBeenCalled()
+  })
+
+  it('2-0 sweep: full credit to the winner (delta similar to a single big win)', async () => {
+    db.gameElo.findUnique.mockResolvedValue({ rating: 1200 })
+    db.user.findUnique.mockResolvedValue(mockBotData)
+
+    const r = await updateBothElosAfterMatch({
+      player1Id: 'p1', player2Id: 'p2', p1Wins: 2, p2Wins: 0, isP2Bot: true,
+    })
+    // For equal ratings, expectedScore = 0.5, actual = 1.0, K=32 → delta = +16.
+    expect(r.player1.delta).toBeCloseTo(16, 0)
+    expect(r.player2.delta).toBeCloseTo(-16, 0)
+  })
+
+  it('1-1 draw: zero net rating movement at equal ratings', async () => {
+    db.gameElo.findUnique.mockResolvedValue({ rating: 1200 })
+    db.user.findUnique.mockResolvedValue(mockBotData)
+
+    const r = await updateBothElosAfterMatch({
+      player1Id: 'p1', player2Id: 'p2', p1Wins: 1, p2Wins: 1, isP2Bot: true,
+    })
+    // actual = 0.5, expected = 0.5 → delta = 0.
+    expect(r.player1.delta).toBeCloseTo(0, 1)
+    expect(r.player2.delta).toBeCloseTo(0, 1)
+  })
+
+  it('1-0 with one drawn game (1.5-0.5): partial credit to winner', async () => {
+    db.gameElo.findUnique.mockResolvedValue({ rating: 1200 })
+    db.user.findUnique.mockResolvedValue(mockBotData)
+
+    const r = await updateBothElosAfterMatch({
+      player1Id: 'p1', player2Id: 'p2', p1Wins: 1, p2Wins: 0, drawGames: 1, isP2Bot: true,
+    })
+    // p1Score = (1 + 0.5*1)/2 = 0.75, expected = 0.5, K=32 → delta = +8.
+    expect(r.player1.delta).toBeCloseTo(8, 0)
+    expect(r.player2.delta).toBeCloseTo(-8, 0)
+  })
+
+  it('writes one UserEloHistory row per side (not per game)', async () => {
+    db.gameElo.findUnique.mockResolvedValue({ rating: 1200 })
+    db.user.findUnique.mockResolvedValue(mockBotData)
+
+    await updateBothElosAfterMatch({
+      player1Id: 'p1', player2Id: 'p2', p1Wins: 2, p2Wins: 0, isP2Bot: true,
+    })
+    expect(db.userEloHistory.create).toHaveBeenCalledTimes(2)
+    const outcomes = db.userEloHistory.create.mock.calls.map((c) => c[0].data.outcome)
+    expect(outcomes).toEqual(expect.arrayContaining(['win', 'loss']))
+  })
+
+  it('bumps the bot games-played counter when isP2Bot is true', async () => {
+    db.gameElo.findUnique.mockResolvedValue({ rating: 1200 })
+    db.user.findUnique.mockResolvedValue(mockBotData)
+
+    await updateBothElosAfterMatch({
+      player1Id: 'p1', player2Id: 'p2', p1Wins: 2, p2Wins: 0, isP2Bot: true,
+    })
+    expect(db.user.update).toHaveBeenCalledWith(expect.objectContaining({
+      where: { id: 'p2' },
+      data:  expect.objectContaining({ botGamesPlayed: 1 }),
+    }))
+  })
+
+  it('does NOT bump bot stats when isP2Bot is false (PvP match)', async () => {
+    db.gameElo.findUnique.mockResolvedValue({ rating: 1200 })
+    await updateBothElosAfterMatch({
+      player1Id: 'p1', player2Id: 'p2', p1Wins: 2, p2Wins: 0, isP2Bot: false,
+    })
+    expect(db.user.update).not.toHaveBeenCalled()
+  })
+
+  it('does not throw on db error — returns undefined', async () => {
+    db.gameElo.findUnique.mockRejectedValue(new Error('db down'))
+    const r = await updateBothElosAfterMatch({
+      player1Id: 'p1', player2Id: 'p2', p1Wins: 2, p2Wins: 0, isP2Bot: true,
+    })
+    expect(r).toBeUndefined()
+  })
+
+  it('outcome labels are "draw" only when fractional score equals 0.5', async () => {
+    db.gameElo.findUnique.mockResolvedValue({ rating: 1200 })
+    db.user.findUnique.mockResolvedValue(mockBotData)
+
+    // 1-1 → both 0.5 → both 'draw'
+    await updateBothElosAfterMatch({
+      player1Id: 'p1', player2Id: 'p2', p1Wins: 1, p2Wins: 1, isP2Bot: true,
+    })
+    const outcomes = db.userEloHistory.create.mock.calls.map((c) => c[0].data.outcome)
+    expect(outcomes).toEqual(['draw', 'draw'])
+  })
+
+  it('threads gameId through into the GameElo upsert keys', async () => {
+    db.gameElo.findUnique.mockResolvedValue({ rating: 1200 })
+    db.user.findUnique.mockResolvedValue(mockBotData)
+
+    await updateBothElosAfterMatch(
+      { player1Id: 'p1', player2Id: 'p2', p1Wins: 2, p2Wins: 0, isP2Bot: true },
+      { gameId: 'connect-four' },
+    )
+    const upsertArgs = db.gameElo.upsert.mock.calls.map((c) => c[0].where.userId_gameId)
+    expect(upsertArgs).toEqual([
+      { userId: 'p1', gameId: 'connect-four' },
+      { userId: 'p2', gameId: 'connect-four' },
+    ])
+  })
+})
+
+// ─────────────────────────────────────────────────────────────────────────────
+// A2.8 — Corpus alignment: pinned worked example from
+// doc/Help_Corpus/match-formats.md § "Worked example: ranked best-of-2".
+//
+// These tests are the formal contract between the help corpus and the
+// shipped ELO formula. If the formula, K-factor, rounding rule, or
+// rating-store seed values change, the corpus must change with them and
+// these numbers must be updated to match. The scenario (p1=1200,
+// p2=1240) is the example users actually read.
+// ─────────────────────────────────────────────────────────────────────────────
+describe('updateBothElosAfterMatch — corpus worked example (match-formats.md)', () => {
+  // The corpus reads "(provisional players seed at 1200)". The bot's
+  // games-played counter is incidental to the rating numbers; we keep the
+  // same shape as the rest of this suite.
+  const mockBotData = { botGamesPlayed: 0, botProvisional: true }
+
+  function mockRatings({ p1, p2 }) {
+    db.gameElo.findUnique.mockImplementation(({ where }) => {
+      const uid = where?.userId_gameId?.userId
+      if (uid === 'p1') return Promise.resolve({ rating: p1 })
+      if (uid === 'p2') return Promise.resolve({ rating: p2 })
+      return Promise.resolve(null)
+    })
+    db.user.findUnique.mockResolvedValue(mockBotData)
+  }
+
+  // The rating store keeps one decimal place via `Math.round(* 10) / 10`,
+  // but the per-side delta is computed via subtraction after rounding,
+  // which surfaces float residue (1185.8 - 1200 === -14.200000000000045).
+  // The user-facing numbers (newElo) are exact; deltas are pinned with
+  // toBeCloseTo at the same one-decimal precision the docs claim.
+  function assertPostMatch(side, { newElo, delta }) {
+    expect(side.newElo).toBe(newElo)
+    expect(side.delta).toBeCloseTo(delta, 1)
+  }
+
+  it('1-1 split: p1 (1200) gains +1.8, p2 (1240) loses 1.8 → 1201.8 vs 1238.2', async () => {
+    mockRatings({ p1: 1200, p2: 1240 })
+    const r = await updateBothElosAfterMatch({
+      player1Id: 'p1', player2Id: 'p2',
+      p1Wins: 1, p2Wins: 1, drawGames: 0,
+      isP2Bot: true,
+    })
+    assertPostMatch(r.player1, { newElo: 1201.8, delta:  1.8 })
+    assertPostMatch(r.player2, { newElo: 1238.2, delta: -1.8 })
+  })
+
+  it('2-0 sweep by p1 (1200) vs p2 (1240): +17.8 / -17.8 → 1217.8 vs 1222.2', async () => {
+    // The corpus only reports the winner's side ("+17.8 to 1217.8"); the
+    // loser's mirror is asserted here to keep the symmetry contract explicit.
+    mockRatings({ p1: 1200, p2: 1240 })
+    const r = await updateBothElosAfterMatch({
+      player1Id: 'p1', player2Id: 'p2',
+      p1Wins: 2, p2Wins: 0, drawGames: 0,
+      isP2Bot: true,
+    })
+    assertPostMatch(r.player1, { newElo: 1217.8, delta:  17.8 })
+    assertPostMatch(r.player2, { newElo: 1222.2, delta: -17.8 })
+  })
+
+  it('0-2 sweep by p2: p1 (1200) loses 14.2 → 1185.8; p2 (1240) gains 14.2 → 1254.2', async () => {
+    mockRatings({ p1: 1200, p2: 1240 })
+    const r = await updateBothElosAfterMatch({
+      player1Id: 'p1', player2Id: 'p2',
+      p1Wins: 0, p2Wins: 2, drawGames: 0,
+      isP2Bot: true,
+    })
+    assertPostMatch(r.player1, { newElo: 1185.8, delta: -14.2 })
+    assertPostMatch(r.player2, { newElo: 1254.2, delta:  14.2 })
+  })
+
+  it('K-factor is 32 across all three corpus scenarios (symmetric deltas, no asymmetry)', async () => {
+    // For two players at 1200 vs 1240 with K=32, the absolute delta on
+    // every outcome equals K * |actual - expected|. The three corpus
+    // outcomes are 0.0, 0.5, 1.0 against an expected of ~0.4428, giving
+    // absolute deltas of 14.168, 1.832, 17.832 — rounded to 14.2, 1.8,
+    // 17.8. The symmetry check (p1.delta === -p2.delta) is the formal
+    // statement that K is the same for both sides.
+    mockRatings({ p1: 1200, p2: 1240 })
+    for (const [p1Wins, p2Wins] of [[2, 0], [1, 1], [0, 2]]) {
+      db.gameElo.upsert.mockClear()
+      db.userEloHistory.create.mockClear()
+      const r = await updateBothElosAfterMatch({
+        player1Id: 'p1', player2Id: 'p2', p1Wins, p2Wins, drawGames: 0, isP2Bot: true,
+      })
+      expect(r.player1.delta).toBe(-r.player2.delta)
+    }
+  })
+
+  it('rating store keeps one-decimal precision (Math.round(* 10) / 10)', async () => {
+    // The unrounded 1-1 delta is 1.83198... which the corpus reports as
+    // "+1.8". This test pins the rounding rule by asserting the trailing
+    // digit shape: every value comes back as a multiple of 0.1.
+    mockRatings({ p1: 1200, p2: 1240 })
+    const r = await updateBothElosAfterMatch({
+      player1Id: 'p1', player2Id: 'p2',
+      p1Wins: 1, p2Wins: 1, drawGames: 0,
+      isP2Bot: true,
+    })
+    expect(Math.round(r.player1.newElo * 10) % 1).toBe(0)
+    expect(Math.round(r.player2.newElo * 10) % 1).toBe(0)
+    expect(Number.isInteger(r.player1.newElo * 10)).toBe(true)
+    expect(Number.isInteger(r.player2.newElo * 10)).toBe(true)
   })
 })

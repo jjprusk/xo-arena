@@ -30,7 +30,9 @@ import { getMoveForModel } from '../services/skillService.js'
 import { minimaxMove, getWinner, isBoardFull, WIN_LINES } from '@xo-arena/ai'
 import { createGame } from '../services/userService.js'
 import { recordGameCompletion } from '../services/creditService.js'
-import { updatePlayersEloAfterPvP } from '../services/eloService.js'
+import { updatePlayersEloAfterPvP, updateBothElosAfterMatch } from '../services/eloService.js'
+import { advanceMatchAfterGame } from '../services/rankedMatchOrchestrator.js'
+import { rematchRankedTableInPlace } from '../services/tableFlowService.js'
 import { completeStep as completeJourneyStep } from '../services/journeyService.js'
 import { deletePendingPvpMatch } from '../lib/tournamentBridge.js'
 import {
@@ -338,6 +340,13 @@ export async function recordPvpGame(table, _io) {
     else if (winnerBaId === guestBaId) winnerId = guestDomainId
   }
 
+  // Ranked match? (A2.4) — both Game rows and the Match row are stamped
+  // with matchId/matchSequence, and the per-game lifecycle runs here.
+  // matchSequence is taken from previewState.round (1-indexed, populated
+  // by rematchRankedTableInPlace between games).
+  const rankedMatchId = table.matchId ?? null
+  const rankedMatchSequence = rankedMatchId ? (ps.round ?? 1) : null
+
   if (hostDomainId) {
     await createGame({
       player1Id: hostDomainId,
@@ -351,12 +360,78 @@ export async function recordPvpGame(table, _io) {
       roomName: null,
       tournamentId: table.tournamentId ?? null,
       tournamentMatchId: table.tournamentMatchId ?? null,
+      matchId: rankedMatchId,
+      matchSequence: rankedMatchSequence,
       moveStream: ps.moves?.length ? ps.moves : null,
     })
   }
 
   // Journey step 1 (Hook: Play a PvAI game) — only for human-vs-bot games.
   if (hostDomainId && table.isHvb) completeJourneyStep(hostDomainId, 1).catch(() => {})
+
+  // ── Ranked match advancement (A2.4 / A2.6 / A2.7) ──────────────────────
+  // A non-null Table.matchId means this is game N of a ranked BO2. Roll
+  // the lifecycle forward: record per-game W/D/L, swap the table for
+  // game N+1 (rematch-in-place), or finalize the match + fire the
+  // match-level ELO update. All side-effects are fire-and-forget so a
+  // failure on the orchestration side never blocks the move-completion
+  // notification to the player.
+  if (rankedMatchId && hostDomainId) {
+    try {
+      const adv = await advanceMatchAfterGame({ matchId: rankedMatchId, winnerId })
+
+      appendToStream(
+        `table:${table.id}:state`,
+        {
+          kind:         'match.gameComplete',
+          matchId:      adv.match.id,
+          sequence:     rankedMatchSequence,
+          gameWinnerId: winnerId,
+          p1Wins:       adv.match.p1Wins,
+          p2Wins:       adv.match.p2Wins,
+          drawGames:    adv.match.drawGames,
+          complete:     adv.complete,
+          nextSequence: adv.nextSpawn?.sequence ?? null,
+        },
+        { userId: '*' },
+      ).catch(() => {})
+
+      if (!adv.complete && adv.nextSpawn) {
+        await rematchRankedTableInPlace({ matchId: rankedMatchId, nextSpawn: adv.nextSpawn })
+      }
+
+      if (adv.complete) {
+        appendToStream(
+          `table:${table.id}:state`,
+          {
+            kind:      'match.completed',
+            matchId:   adv.match.id,
+            winnerId:  adv.match.winnerId,
+            p1Wins:    adv.match.p1Wins,
+            p2Wins:    adv.match.p2Wins,
+            drawGames: adv.match.drawGames,
+            status:    adv.match.status,
+          },
+          { userId: '*' },
+        ).catch(() => {})
+
+        if (guestDomainId) {
+          updateBothElosAfterMatch({
+            player1Id: hostDomainId,
+            player2Id: guestDomainId,
+            p1Wins:    adv.match.p1Wins,
+            p2Wins:    adv.match.p2Wins,
+            drawGames: adv.match.drawGames,
+            isP2Bot:   !!table.isHvb,
+          }).catch(() => {})
+        }
+      }
+    } catch (err) {
+      logger.warn({ err, matchId: rankedMatchId }, 'Ranked match advancement failed')
+    }
+    // Ranked path owns ELO; skip the casual PvP ELO call below.
+    return
+  }
 
   // ELO update (skip for tournament and HvB).
   if (!isTournamentRoom && !table.isHvb && hostDomainId && guestDomainId) {

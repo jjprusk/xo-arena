@@ -10,6 +10,8 @@ import { useGuideStore } from '../store/guideStore.js'
 import { deriveCurrentPhase } from '../components/guide/JourneyCard.jsx'
 import SignInModal from '../components/ui/SignInModal.jsx'
 import IdleWarnOverlay from '../components/play/IdleWarnOverlay.jsx'
+import MatchProgressBanner from '../components/play/MatchProgressBanner.jsx'
+import MatchCompletePanel from '../components/play/MatchCompletePanel.jsx'
 import { api } from '../lib/api.js'
 import { getToken } from '../lib/getToken.js'
 
@@ -60,7 +62,7 @@ export function GameView({ joinSlug, tournamentMatchId, tournamentId, authSessio
 
   const [gameState, setGameState] = useState({ currentTurn: null, winner: null, isDraw: false })
 
-  const { session, sdk, phase, abandoned, kicked, seriesResult, opponentLeft } = useGameSDK({
+  const { session, sdk, phase, abandoned, kicked, seriesResult, opponentLeft, matchState } = useGameSDK({
     gameId:           'tic-tac-toe',
     joinSlug,
     tournamentMatchId,
@@ -241,6 +243,10 @@ export function GameView({ joinSlug, tournamentMatchId, tournamentId, authSessio
         >
           {(phase === 'playing' || phase === 'finished') && (
             <>
+              <MatchProgressBanner
+                matchState={matchState}
+                myMark={session?.settings?.myMark ?? null}
+              />
               <XOGame session={session} sdk={sdk} />
               {/* perf-v2 marker — flips when the user can actually see + use
                   the board (post-create synthetic start event for HvB, or the
@@ -252,6 +258,12 @@ export function GameView({ joinSlug, tournamentMatchId, tournamentId, authSessio
             </>
           )}
         </PlatformShell>
+
+        <MatchCompletePanel
+          matchState={matchState}
+          currentUserId={currentUser?.id ?? null}
+          leaveHref={leaveHref}
+        />
 
         {/* "Still there?" overlay — surfaces when the server fires an idle
             warn on user:<id>:idle, gives the player a chance to pong
@@ -317,7 +329,7 @@ export function GameView({ joinSlug, tournamentMatchId, tournamentId, authSessio
 export default function PlayPage() {
   perfMark('PlayPage:render')
   const [searchParams]         = useSearchParams()
-  const { data: authSession }  = useOptimisticSession()
+  const { data: authSession, isPending: authPending } = useOptimisticSession()
   const navigate               = useNavigate()
 
   const joinSlug          = searchParams.get('join')
@@ -349,8 +361,15 @@ export default function PlayPage() {
   // bot resolution + SSE session pre-allocation + HvB table create. The
   // response carries the opening board so GameView can render immediately —
   // no SSE bootstrap on the perf-ready critical path. See Future_Ideas item 3.
+  //
+  // The `ranked-bot` action piggybacks on the same playBundle flow but
+  // points at `/play/ranked-bot` (A2.4). The response carries a `match`
+  // field with sequence + first-mover metadata; the server is the source
+  // of truth on color, and game 2 is a rematch-in-place on the same table.
   useEffect(() => {
-    if (action !== 'vs-community-bot' || joinSlug) return
+    const isRanked = action === 'ranked-bot'
+    const isCasual = action === 'vs-community-bot'
+    if (!(isCasual || isRanked) || joinSlug) return
     let cancelled = false
     perfMark('PlayPage:playBundle-start')
     // StrictMode in dev mounts → unmounts → remounts every effect, which
@@ -358,14 +377,15 @@ export default function PlayPage() {
     // The shared in-flight promise dedups them — second mount picks up the
     // first mount's result. Cleared on resolve/reject so a user navigating
     // back to /play later gets a fresh table.
-    // Pass the bearer token when one is available. Guests get null and
-    // the server seats them as `guest:<sseSession>`; signed-in users
-    // need the token so the table is seated against their betterAuthId
-    // — otherwise every subsequent rt POST (which always sends Bearer)
-    // resolves to a different seatId and 403s with NOT_A_PLAYER.
+    // Pass the bearer token when one is available. Casual guests get null
+    // and the server seats them as `guest:<sseSession>`; ranked play
+    // requires auth and the token is required (the server 404s without
+    // a domain user row).
     sharedPlayBotRequest ??= getToken()
       .catch(() => null)
-      .then(token => api.play.startBot({ gameId: 'tic-tac-toe' }, token))
+      .then(token => isRanked
+        ? api.play.startRankedBot({ gameId: 'tic-tac-toe' }, token)
+        : api.play.startBot({ gameId: 'tic-tac-toe' }, token))
       .finally(() => { sharedPlayBotRequest = null })
     sharedPlayBotRequest
       .then(res => {
@@ -404,6 +424,13 @@ export default function PlayPage() {
     return () => { cancelled = true }
   }, [action]) // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Ranked play requires auth — the server 404s anon callers. Wait for
+  // session resolution before deciding (a stale-cache user can hydrate a
+  // moment later); only redirect once we know the caller is unauthenticated.
+  if (action === 'ranked-bot' && !authPending && !authSession?.user?.id) {
+    return <Navigate to="/" replace />
+  }
+
   // No join slug, no recognised action, and no direct bot params → home
   if (!joinSlug && !action && !botUserId) return <Navigate to="/" replace />
 
@@ -418,10 +445,11 @@ export default function PlayPage() {
   if (action === 'watch-demo') return <Spinner />
 
   // Waiting for community bot to be resolved
-  if (action === 'vs-community-bot' && !joinSlug && !botConfig) return <Spinner />
+  if ((action === 'vs-community-bot' || action === 'ranked-bot') && !joinSlug && !botConfig) return <Spinner />
 
   // Resolve final botConfig: community-bot fetch result or direct URL params
-  const resolvedBotConfig = action === 'vs-community-bot'
+  const isPlayBundleAction = action === 'vs-community-bot' || action === 'ranked-bot'
+  const resolvedBotConfig = isPlayBundleAction
     ? botConfig
     : botUserId
       ? { botUserId }
@@ -435,7 +463,7 @@ export default function PlayPage() {
       tournamentId={tournamentId}
       authSession={authSession}
       botConfig={resolvedBotConfig}
-      playBundle={action === 'vs-community-bot' ? playBundle : null}
+      playBundle={isPlayBundleAction ? playBundle : null}
       spectate={spectate}
     />
   )

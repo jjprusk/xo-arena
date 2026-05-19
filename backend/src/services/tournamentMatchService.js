@@ -26,6 +26,7 @@ import {
 } from '../lib/tournamentBridge.js'
 import { createTableTracked } from '../lib/createTableTracked.js'
 import { GAME_IDS } from '../constants/games.js'
+import { assignColors } from './matchColors.js'
 
 export class TournamentMatchError extends Error {
   constructor(code, message) {
@@ -84,10 +85,25 @@ export async function joinMatchTable({ user, matchId }) {
 
   const baId = user.betterAuthId
 
+  // A2.5 — game-1 color is determined deterministically from the
+  // TournamentMatch.id as seed. The first player to click "Play Match"
+  // creates the table, but their mark is fixed by their participant role
+  // (participant1 vs participant2), not by click order. Subsequent games
+  // alternate (handled in `rematchGame`'s tournament branch); game 3 of a
+  // best-of-3 uses a random tiebreaker derived from the same seed.
+  const colors = assignColors({
+    seed:      matchId,
+    player1Id: participant1UserId,
+    player2Id: participant2UserId,
+    sequence:  1,
+  })
+  const myMark = colors.firstMoverId === baId ? 'X' : 'O'
+
   if (!pending.slug) {
-    // First player — create the table.
+    // First player — create the table. Marks are pre-baked for whichever
+    // seat is `baId` here; the other seat fills in when the opponent joins.
     const slug = nanoid(8)
-    const marks = { [baId]: 'X' }
+    const marks = { [baId]: myMark }
     const table = await createTableTracked({
       data: {
         gameId: GAME_IDS.TIC_TAC_TOE,
@@ -112,7 +128,7 @@ export async function joinMatchTable({ user, matchId }) {
     return {
       action: 'created',
       slug,
-      mark: 'X',
+      mark: myMark,
       tournamentId,
       matchId,
       bestOfN: bestOfN ?? 1,
@@ -120,14 +136,15 @@ export async function joinMatchTable({ user, matchId }) {
     }
   }
 
-  // Second player — flip the FORMING table to ACTIVE.
+  // Second player — flip the FORMING table to ACTIVE. The host already
+  // has their seeded mark; the joiner takes the opposite.
   const slug = pending.slug
   const table = await db.table.findFirst({ where: { slug, status: 'FORMING' } })
   if (!table) throw new TournamentMatchError('NOT_READY', 'Match not ready yet — please try again')
 
   const ps = { ...table.previewState }
   const marks = { ...(ps.marks || {}) }
-  marks[baId] = 'O'
+  marks[baId] = myMark
   ps.marks = marks
 
   const newSeats = [
@@ -179,7 +196,7 @@ export async function joinMatchTable({ user, matchId }) {
   return {
     action: 'joined',
     slug,
-    mark: 'O',
+    mark: myMark,
     tournamentId,
     matchId,
     bestOfN: bestOfN ?? 1,
