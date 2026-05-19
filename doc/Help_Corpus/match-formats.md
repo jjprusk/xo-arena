@@ -35,9 +35,10 @@ get one game. The system picks your color, you play, the game ends,
 your stats update.
 
 Casual play exists for snack-play — the goal is *fastest fun match*,
-not statistical signal. ELO updates happen but with a smaller weight
-than ranked matches (per-game variance is higher, so the system
-discounts the result).
+not statistical signal. The ELO update uses the same per-game scoring
+as a ranked game (1.0 / 0.5 / 0.0) and the same K-factor, but
+because there's only one game, the result is naturally noisier than
+the two-game average a ranked match produces.
 
 Casual matches **do** count toward:
 - Your total game count.
@@ -164,6 +165,13 @@ ELO updates happen after a match completes, not after each game in
 the match. The formula uses standard ELO but with the *match score*
 (normalized 0–1) as the actual-result input.
 
+> Tournament best-of-3 matches currently update ELO at the per-game
+> level rather than the per-match level — they still alternate colors
+> game-to-game (so the *gameplay* is fair), but the rating math runs
+> twice in a 2-0 sweep and up to three times in a 1-1-into-game-3
+> match. We track the per-match move as a follow-up; ranked play
+> already uses the per-match formula described below.
+
 ### Worked example: ranked best-of-2
 
 Suppose you're rated 1200 and you play a ranked match against an
@@ -171,21 +179,28 @@ opponent rated 1240. You play two games and split 1-1 (one win for
 you, one for them).
 
 - **Match score**: (1.0 + 0.0) / 2 = **0.5**
-- **Expected score** (from ELO formula): roughly 0.44 for the lower-
-  rated player
-- **You scored higher than expected** (0.5 > 0.44), so your ELO
-  *increases slightly*. The opponent's ELO *decreases* by the same
-  amount.
+- **Expected score** (from ELO formula): **0.4428** for you, **0.5572**
+  for the higher-rated opponent.
+- **You scored higher than expected** (0.5 > 0.4428), so your ELO
+  *increases* by **+1.8** (to **1201.8**). The opponent's ELO *decreases*
+  by the same **1.8** (to **1238.2**). Ratings are stored to one decimal
+  place; the deltas are symmetric because the K-factor is shared.
 
 If you'd swept 2-0:
 - **Match score**: 1.0 (much higher than expected)
-- **ELO gain**: substantial — winning both games against a slightly
-  higher-rated opponent is a strong signal.
+- **ELO gain**: +**17.8** (to **1217.8**) — winning both games against a
+  slightly higher-rated opponent is a strong signal.
 
 If you'd been swept 0-2:
 - **Match score**: 0.0 (lower than expected)
-- **ELO loss**: noticeable, since you were favored to score 0.44 and
-  scored 0.
+- **ELO loss**: −**14.2** (to **1185.8**), since you were favored to
+  score 0.4428 and scored 0.
+
+The exact formula is `newELO = ELO + K · (actual − expected)` with
+**K = 32** for all match outcomes; `actual` is the normalized match
+score above, `expected` is the standard ELO logistic against your
+opponent's rating. Numbers here use TTT defaults (provisional players
+seed at 1200).
 
 ### Why the per-match approach feels fairer
 
@@ -204,9 +219,9 @@ but each match counts for more.
 ## Bots and matches
 
 Both built-in bots (Easy, Medium, Hard) and user bots / community
-bots follow the same match formats. When you pick "Ranked vs Hard,"
-you get a best-of-2; when you challenge a friend's bot in a
-tournament, you get a best-of-3.
+bots follow the same match formats. A ranked match against any bot
+is best-of-2; a tournament match is best-of-3, regardless of which
+bot is sitting in the opposing seat.
 
 The Master tier is connect-four-only and uses its own Best-of-2
 format described above.
