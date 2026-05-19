@@ -140,7 +140,7 @@ describe('POST /api/v1/bots/:id/train-guided', () => {
     expect(res.body).toEqual({
       sessionId:     'sess_99',
       skillId:       'sk_new',
-      channelPrefix: 'ml:session:sess_99:',
+      channelPrefix: 'training:sess_99:',
       reused:        false,
     })
     expect(mlSvc.createModel).toHaveBeenCalledWith(expect.objectContaining({
@@ -178,7 +178,7 @@ describe('POST /api/v1/bots/:id/train-guided', () => {
     expect(res.body).toEqual({
       sessionId:     'sess_inflight',
       skillId:       'sk_old',
-      channelPrefix: 'ml:session:sess_inflight:',
+      channelPrefix: 'training:sess_inflight:',
       reused:        true,
     })
     expect(mlSvc.startTraining).not.toHaveBeenCalled()

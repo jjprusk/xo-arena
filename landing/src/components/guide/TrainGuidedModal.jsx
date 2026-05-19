@@ -6,10 +6,10 @@
  * ~5-second Q-Learning self-play run streamed live to the browser:
  *
  *   1. POST /bots/:id/train-guided → { sessionId, skillId, channelPrefix }
- *   2. Subscribe to ml:session:<sessionId>:{progress, complete, error}
- *   3. As ml:progress events arrive, append to a points array and animate
+ *   2. Subscribe to training:<sessionId>:{progress, complete, error}
+ *   3. As training:progress events arrive, append to a points array and animate
  *      a sparkline of win-rate over episodes. Phase label flips with ε.
- *   4. On ml:complete: show celebration with final stats, POST finalize,
+ *   4. On training:complete: show celebration with final stats, POST finalize,
  *      call onComplete (which credits journey step 4 + reopens the guide).
  *
  * The point of this component is *not* the tier bump — it's the visualisation

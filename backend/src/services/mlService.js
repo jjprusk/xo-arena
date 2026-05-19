@@ -5,8 +5,8 @@
  * Training runs as a background setImmediate loop, yielding every
  * BATCH_SIZE episodes so the event loop stays responsive. Progress
  * is fanned out over both transports: legacy Socket.io to the
- * `ml:session:{id}` room, and the SSE+POST stream on the matching
- * channel prefix `ml:session:{id}:`. Phase 4 of the realtime migration
+ * `training:{id}` room, and the SSE+POST stream on the matching
+ * channel prefix `training:{id}:`. Phase 4 of the realtime migration
  * (doc/Realtime_Migration_Plan.md) lets clients pick their transport
  * via the `realtime.ml.via` flag.
  */
@@ -1362,7 +1362,7 @@ async function _runTraining(model, session, { mode, iterations, config }) {
             curriculumLevel++
             difficulty = CURRICULUM_LEVELS[curriculumLevel]
             outcomeWindow.length = 0  // reset window
-            _emit(`ml:session:${sessionId}`, 'ml:curriculum_advance', {
+            _emit(`training:${sessionId}`, 'training:curriculum_advance', {
               sessionId, level: curriculumLevel, difficulty, episode: i + 1,
             })
             logger.info({ sessionId, difficulty }, 'Curriculum advanced')
@@ -1385,7 +1385,7 @@ async function _runTraining(model, session, { mode, iterations, config }) {
             await db.trainingEpisode.createMany({ data: episodeBatch })
             episodeBatch.length = 0
           }
-          _emit(`ml:session:${sessionId}`, 'ml:early_stop', { sessionId, episode: i + 1, bestWinRate })
+          _emit(`training:${sessionId}`, 'training:early_stop', { sessionId, episode: i + 1, bestWinRate })
           logger.info({ sessionId, episode: i + 1, bestWinRate }, 'Early stopping triggered')
           await _finishSession(sessionId, modelId, engine, actualEpisodes, 'COMPLETED', { wins, losses, draws, totalQDelta }, { earlyStop: true, stoppedAt: i + 1 })
           return
@@ -1408,7 +1408,7 @@ async function _runTraining(model, session, { mode, iterations, config }) {
       // Progress broadcast + event-loop yield
       if ((i + 1) % PROGRESS_INTERVAL === 0 || i === iterations - 1) {
         const done = i + 1
-        _emit(`ml:session:${sessionId}`, 'ml:progress', {
+        _emit(`training:${sessionId}`, 'training:progress', {
           sessionId, episode: done, totalEpisodes: iterations,
           winRate:  done > 0 ? wins  / done : 0,
           lossRate: done > 0 ? losses / done : 0,
@@ -1427,7 +1427,7 @@ async function _runTraining(model, session, { mode, iterations, config }) {
     logger.error({ err, sessionId, modelId }, 'Training failed')
     await db.botSkill.update({ where: { id: modelId }, data: { status: 'IDLE' } })
     await db.trainingSession.update({ where: { id: sessionId }, data: { status: 'FAILED', completedAt: new Date() } })
-    _emit(`ml:session:${sessionId}`, 'ml:error', { sessionId, error: err.message })
+    _emit(`training:${sessionId}`, 'training:error', { sessionId, error: err.message })
     _processNextInQueue()
   }
 }
@@ -1470,7 +1470,7 @@ async function _finishSession(sessionId, modelId, engine, iterations, status, { 
 
   if (status === 'COMPLETED') await repointBotPrimarySkill(modelId)
 
-  _emit(`ml:session:${sessionId}`, status === 'COMPLETED' ? 'ml:complete' : 'ml:cancelled', { sessionId, summary })
+  _emit(`training:${sessionId}`, status === 'COMPLETED' ? 'training:complete' : 'training:cancelled', { sessionId, summary })
   logger.info({ sessionId, modelId, status, ...summary }, 'Training finished')
 
   // Start next queued session if any
@@ -1723,14 +1723,14 @@ export async function ensembleMove(modelIds, method, weights, board, mark) {
 /**
  * Dual-emit a training event over both transports.
  *
- * `scope` is the legacy Socket.io room name (e.g. `ml:session:abc`); `topic`
- * is the per-event suffix (e.g. `ml:progress`). For SSE we publish on
+ * `scope` is the legacy Socket.io room name (e.g. `training:abc`); `topic`
+ * is the per-event suffix (e.g. `training:progress`). For SSE we publish on
  * `<scope>:<event-suffix>` so a client can subscribe to a single prefix
- * (`ml:session:abc:`) and receive every event for that session.
+ * (`training:abc:`) and receive every event for that session.
  */
 function _emit(scope, event, data) {
   // SSE channel name = `<scope>:<topic>` so a client can subscribe to a
-  // single prefix (e.g. `ml:session:abc:`) and receive every event for
+  // single prefix (e.g. `training:abc:`) and receive every event for
   // that scope. Strip the leading `ml:` from the event name.
   const topic = event.startsWith('ml:') ? event.slice(3) : event
   appendToStream(`${scope}:${topic}`, data, { userId: '*' }).catch(() => {})

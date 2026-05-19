@@ -369,6 +369,16 @@ export interface GameMeta {
    * Empty array if supportsBots is false.
    */
   builtInBots: BotPersona[]
+
+  /**
+   * Whether tournament matches in this game move player ELO.
+   * Ranked play always moves ELO (match-level); tournaments are opt-in
+   * because games with frequent forced draws or coinflip tiebreakers
+   * (e.g. solved Tic-Tac-Toe) would inject noise into the ladder.
+   * Defaults to false — the platform skips the per-match ELO update on
+   * tournament series completion unless the game opts in.
+   */
+  tournamentMovesElo?: boolean
 }
 
 // ---------------------------------------------------------------------------

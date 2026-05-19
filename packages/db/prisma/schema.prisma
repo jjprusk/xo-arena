@@ -72,6 +72,7 @@ model User {
   templateSeedBotConfigs TournamentTemplateSeedBot[]
   researchNotes          TrainingSessionNote[]
   researchEntries        ResearchLogEntry[]
+  approvedTrainingSessions TrainingSession[]  @relation("ApprovedTrainingSessions")
   helpDocsOwned          HelpDoc[]                 @relation("HelpDocOwner")
 
   @@map("users")
@@ -294,12 +295,80 @@ model TrainingSession {
   summary     Json?
   startedAt   DateTime          @default(now())
   completedAt DateTime?
+  /// A3a — preset label: 'quick' / 'standard' / 'deep'. Null for
+  /// manually-configured / legacy sessions.
+  preset      String?
+  /// A3a — estimated runtime computed at session creation (used for the
+  /// admin-approval ETA gate and for surfacing time-to-finish in the UI).
+  expectedDurationMs   Int?
+  /// A3a — admin-approval flow for sessions whose `expectedDurationMs`
+  /// exceeds the threshold (4hr today). 'NEEDED' until an admin acts;
+  /// 'APPROVED' or 'DENIED' on decision. Null means no approval required.
+  approvalStatus       String?
+  approvalRequestedAt  DateTime?
+  approvedAt           DateTime?
+  approvedById         String?
+  approvedBy           User?     @relation("ApprovedTrainingSessions", fields: [approvedById], references: [id])
+  /// A3a — Resume button. Set when the user pauses; cleared on resume.
+  pausedAt    DateTime?
+  /// A3a — episodeNum of the latest persisted checkpoint. The worker reads
+  /// this on startup to know where to resume from. Null until the first
+  /// checkpoint commits.
+  checkpointEpisode    Int?
   episodes    TrainingEpisode[]
   notes       TrainingSessionNote[]
+  checkpoints TrainingCheckpoint[]
+  metrics     TrainingMetric[]
   model       BotSkill          @relation(fields: [modelId], references: [id], onDelete: Cascade)
 
   @@index([modelId])
+  @@index([approvalStatus])
   @@map("training_sessions")
+}
+
+/// A3a — checkpoint-based recovery. Persisted every N episodes during a
+/// training run; on worker crash, the next worker reads the latest
+/// checkpoint for the session and resumes from there. `weights` carries
+/// the algorithm-specific weight blob (Q-table for Q-learning, network
+/// state for DQN, AlphaZero policy/value, etc.) at that point.
+model TrainingCheckpoint {
+  id         String          @id @default(cuid())
+  sessionId  String
+  episodeNum Int
+  weights    Json
+  /// Algorithm-specific runtime state needed to resume (epsilon, replay
+  /// buffer pointer, MCTS tree fingerprint, etc.). Distinct from
+  /// `weights` so the network blob doesn't bloat with bookkeeping.
+  runtimeState Json?
+  createdAt  DateTime        @default(now())
+  session    TrainingSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@unique([sessionId, episodeNum])
+  @@index([sessionId])
+  @@map("training_checkpoints")
+}
+
+/// A3a — time-series eval points for the stacked W/D/L curves. One row per
+/// eval call per opponent curve. `opponentLabel` is a free-form string
+/// ('primary' for the algorithm-appropriate primary opponent, 'easy' /
+/// 'medium' / 'master' for the side curves). The frontend renders one
+/// stacked area per label.
+model TrainingMetric {
+  id            String          @id @default(cuid())
+  sessionId     String
+  episodeNum    Int
+  opponentLabel String
+  wins          Int             @default(0)
+  draws         Int             @default(0)
+  losses        Int             @default(0)
+  /// Optional: when the eval split first-mover vs second-mover (Master
+  /// curve, AlphaZero phase B). Null for unsplit curves.
+  asFirstMover  Boolean?
+  createdAt     DateTime        @default(now())
+  session       TrainingSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@index([sessionId, opponentLabel, episodeNum])
+  @@map("training_metrics")
 }
 
 model TrainingEpisode {

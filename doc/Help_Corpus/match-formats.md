@@ -165,12 +165,15 @@ ELO updates happen after a match completes, not after each game in
 the match. The formula uses standard ELO but with the *match score*
 (normalized 0–1) as the actual-result input.
 
-> Tournament best-of-3 matches currently update ELO at the per-game
-> level rather than the per-match level — they still alternate colors
-> game-to-game (so the *gameplay* is fair), but the rating math runs
-> twice in a 2-0 sweep and up to three times in a 1-1-into-game-3
-> match. We track the per-match move as a follow-up; ranked play
-> already uses the per-match formula described below.
+> Whether a *tournament* match moves your ELO depends on the game.
+> Ranked matches always move ELO; tournament matches are opt-in
+> per-game, declared on the game package's SDK metadata. Solved games
+> opt out because the best-of-3 game-3 random-color tiebreaker is a
+> coinflip on a drawn series — that's bracket-decisive (someone has
+> to advance) but not a clean skill signal to feed into the rating
+> ladder. Tic-Tac-Toe is opted out today; Connect 4 will opt in when
+> it ships, because BO3 1-1-into-game-3 in Connect 4 is decided by
+> real play, not random colors. Casual play never moves ELO.
 
 ### Worked example: ranked best-of-2
 
