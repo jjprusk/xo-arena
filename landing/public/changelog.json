@@ -1,5 +1,10 @@
 [
   {
+    "version": "1.4.0-alpha-5.13",
+    "date": "2026-05-19",
+    "description": "A3a backend — tournament match-level ELO opt-in (TTT off, C4 on at launch) + series-winner attribution fix; TrainingSession schema audit + TrainingCheckpoint/TrainingMetric tables; ml:session → training channel rename; Quick/Standard/Deep presets per (game, algorithm); 4hr ETA admin-approval gate + endpoints; per-user concurrency cap; multi-curve eval (~20 games/eval, primary+easy+medium); checkpoint-based crash recovery; pause/resume backend; corpus docs"
+  },
+  {
     "version": "1.4.0-alpha-5.12",
     "date": "2026-05-19",
     "description": "A2 — ranked best-of-2 matches with match-level ELO, BO2 UI (banner + completion panel), tournament BO3 color rotation + game-3 tiebreaker, corpus alignment + pinned worked-example test"
