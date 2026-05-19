@@ -315,6 +315,39 @@ router.post('/sessions/:id/cancel', requireAuth, async (req, res, next) => {
   } catch (err) { next(err) }
 })
 
+// A3a.10 — pause / resume a training session. Owner-only (admins can act
+// on any). Pause flips the session to PENDING + pausedAt; resume restarts
+// the loop from the latest checkpoint.
+router.post('/sessions/:id/pause', requireAuth, async (req, res, next) => {
+  try {
+    const session = await svc.getSession(req.params.id)
+    if (!session) return res.status(404).json({ error: 'Session not found' })
+    if (!await assertModelOwner(req, res, session.modelId)) return
+    const s = await svc.pauseSession(req.params.id)
+    res.json({ session: s })
+  } catch (err) {
+    if (err.message === 'Session not found')             return res.status(404).json({ error: err.message })
+    if (err.message?.startsWith('Session is in status')) return res.status(409).json({ error: err.message })
+    if (err.message === 'Session is already paused')     return res.status(409).json({ error: err.message })
+    next(err)
+  }
+})
+
+router.post('/sessions/:id/resume', requireAuth, async (req, res, next) => {
+  try {
+    const session = await svc.getSession(req.params.id)
+    if (!session) return res.status(404).json({ error: 'Session not found' })
+    if (!await assertModelOwner(req, res, session.modelId)) return
+    const s = await svc.resumeSession(req.params.id)
+    res.json({ session: s })
+  } catch (err) {
+    if (err.message === 'Session not found')                  return res.status(404).json({ error: err.message })
+    if (err.message === 'Session is not paused')              return res.status(409).json({ error: err.message })
+    if (err.message?.startsWith('Cannot resume:'))            return res.status(409).json({ error: err.message })
+    next(err)
+  }
+})
+
 // ─── Export / Import ──────────────────────────────────────────────────────────
 
 router.get('/models/:id/export', async (req, res, next) => {

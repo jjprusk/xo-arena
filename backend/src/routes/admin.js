@@ -10,6 +10,11 @@ import { unregisterTable, getSocketAdapterState } from '../realtime/socketHandle
 import logger from '../logger.js'
 import { getSnapshots, getLatestSnapshot, getAlerts, getTableCreateErrors, getGcStats, getTableReleased } from '../lib/resourceCounters.js'
 import { deleteModel, getSystemConfig, setSystemConfig } from '../services/skillService.js'
+import {
+  approveSession,
+  denySession,
+  listPendingApprovals,
+} from '../services/mlService.js'
 import { GAME_IDS } from '../constants/games.js'
 import { hasRole } from '../utils/roles.js'
 import {
@@ -1677,6 +1682,62 @@ router.delete('/tables/:id', async (req, res, next) => {
     res.json({ ok: true })
   } catch (err) {
     logger.error({ err }, 'Admin force-stop table failed')
+    next(err)
+  }
+})
+
+// ─── A3a.5 — training approval queue ──────────────────────────────────────
+
+/**
+ * GET /api/v1/admin/training/pending
+ * List training sessions awaiting admin approval (ETA >= threshold).
+ */
+router.get('/training/pending', async (_req, res, next) => {
+  try {
+    const sessions = await listPendingApprovals()
+    res.json({ sessions })
+  } catch (err) {
+    next(err)
+  }
+})
+
+/**
+ * POST /api/v1/admin/training/:id/approve
+ * Approve a pending session and start the training loop.
+ */
+router.post('/training/:id/approve', async (req, res, next) => {
+  try {
+    const adminUser = await db.user.findUnique({
+      where:  { betterAuthId: req.auth.userId },
+      select: { id: true },
+    })
+    const session = await approveSession(req.params.id, adminUser?.id ?? null)
+    res.json({ session })
+  } catch (err) {
+    if (err.message === 'Session not found')         return res.status(404).json({ error: err.message })
+    if (err.message?.startsWith('Session not awaiting approval')) return res.status(409).json({ error: err.message })
+    if (err.message?.startsWith('Session is in status'))          return res.status(409).json({ error: err.message })
+    next(err)
+  }
+})
+
+/**
+ * POST /api/v1/admin/training/:id/deny
+ * Deny a pending session; marks it CANCELLED terminally.
+ * Optional body: { reason: string }
+ */
+router.post('/training/:id/deny', async (req, res, next) => {
+  try {
+    const reason = typeof req.body?.reason === 'string' ? req.body.reason : null
+    const adminUser = await db.user.findUnique({
+      where:  { betterAuthId: req.auth.userId },
+      select: { id: true },
+    })
+    const session = await denySession(req.params.id, adminUser?.id ?? null, reason)
+    res.json({ session })
+  } catch (err) {
+    if (err.message === 'Session not found')         return res.status(404).json({ error: err.message })
+    if (err.message?.startsWith('Session not awaiting approval')) return res.status(409).json({ error: err.message })
     next(err)
   }
 })
