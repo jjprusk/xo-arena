@@ -19,7 +19,7 @@
 | **Phase A — Architectural alignment (TTT only)** | | | |
 | A1 — SDK + game-as-prefix routing + slug rename | shipped | 10/10 | Legacy `xo` alias kept active via `LEGACY_SLUG_MAP`; 301 redirects + map removal moved to C6. Regression sweep + staging smoke green on v1.4.0-alpha-5.11. |
 | A2 — Match-based play + match-level ELO | shipped | 11/11 | Historical rows frozen at cutover; new matches use the new formula. Corpus alignment audit landed an exact worked-example test pinned to `match-formats.md`. |
-| A3a — Training data + UX rework (in-process) | not started | 0/13 | TrainingSession + TrainingMetric schema, presets, gating, multi-curve eval, checkpoints. |
+| A3a — Training data + UX rework (in-process) | not started | 0/14 | TrainingSession + TrainingMetric schema, presets, gating, multi-curve eval, checkpoints. Includes the A2 carry-over (tournament BO3 per-match ELO). |
 | A3b — Training worker process cutover | not started | 0/9 | New `xo-training` Fly app, Redis queue, pub/sub streaming. |
 | A4 — Multi-skill bot UI + auto-clone | not started | 0/13 | Phase 3.8 data layer is already shipped; this finishes the UI. |
 | **Phase B — Connect 4 build** | | | |
@@ -35,7 +35,7 @@
 | C4 — Accessibility + mobile polish | not started | 0/3 | Keyboard nav, screen-reader labels, gesture conflicts. |
 | C5 — Observability sweep | not started | 0/2 | C4 dashboards + alert thresholds. |
 | C6 — Legacy slug cleanup | blocked on B exit | 0/3 | Drop `LEGACY_SLUG_MAP`, add 301 redirects from `/xo*`, scrub residual `xo` literals. |
-| **Total** | | **21/113** | |
+| **Total** | | **21/114** | |
 
 Update this table as sprints land. Each `- [ ]` flipped to `- [x]` in the body should be reflected in the `Items` column.
 
@@ -104,6 +104,7 @@ This is enforced in the phase structure below: **Phase A is TTT-only**, **Phase 
 
 **Goal:** Reshape the training API into the form Connect 4 will need, without yet moving training out of the backend process. TTT validates everything.
 
+- [ ] **A2 carry-over: tournament BO3 per-match ELO.** Today `socketHandler.recordPvpGame` only invokes `updateBothElosAfterMatch` for tables that carry a `matchId` (ranked HvB). Tournament tables carry `tournamentMatchId` and still hit `updatePlayersEloAfterPvP` per game — gameplay alternates colors correctly (so the *games* are fair), but the rating math runs 2–3 times per match instead of once. Plumb tournament match completion through the match-level updater so a tournament BO3 produces a single ELO history row per side, matching the corpus claim in `match-formats.md`. Includes: e2e for the 1-1-into-game-3 path, footnote-removal in `match-formats.md`, regression against the V1 acceptance script's tournament flow.
 - [ ] New tables: `TrainingSession` (or extend existing — current `TrainingSession` is close; audit gaps) and `TrainingMetric` (time-series rows for W/D/L curve points + checkpoints).
 - [ ] Channel rename: realtime training updates move from `ml:session:{id}` to `training:<sessionId>`.
 - [ ] Preset model: Quick / Standard / Deep presets per (algorithm, game) with explicit episode count, expected duration, and ETA estimate computed up front.
