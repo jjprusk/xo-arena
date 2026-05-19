@@ -26,6 +26,7 @@ import { appendToStream } from '../lib/eventStream.js'
 import { completeStep as completeJourneyStep } from './journeyService.js'
 import { grantDiscoveryReward } from './discoveryRewardsService.js'
 import { GAME_IDS } from '../constants/games.js'
+import { resolvePreset } from '../config/trainingPresets.js'
 
 // ─── In-memory caches ───────────────────────────────────────────────────────
 
@@ -712,9 +713,25 @@ export async function importModel(data) {
 
 // ─── Training ────────────────────────────────────────────────────────────────
 
-export async function startTraining(modelId, { mode, iterations, config = {} }) {
+export async function startTraining(modelId, { mode, iterations, config = {}, preset = null }) {
   const model = await getModel(modelId)
   if (!model) throw new Error('Model not found')
+
+  // A3a.4 — preset overrides iterations and seeds expectedDurationMs.
+  let expectedDurationMs = null
+  if (preset) {
+    const resolved = resolvePreset({
+      gameId:    model.gameId,
+      algorithm: model.algorithm,
+      preset,
+    })
+    if (!resolved) {
+      throw new Error(`Unknown preset '${preset}' for ${model.algorithm} on ${model.gameId}`)
+    }
+    iterations        = resolved.iterations
+    expectedDurationMs = resolved.expectedDurationMs
+  }
+
   if (iterations < 1 || iterations > 100_000) throw new Error('iterations must be 1–100,000')
 
   // Enforce admin-configurable limits
@@ -746,7 +763,7 @@ export async function startTraining(modelId, { mode, iterations, config = {} }) 
   if (model.status === 'TRAINING') {
     // Queue the session instead of throwing 409
     const session = await db.trainingSession.create({
-      data: { modelId, mode, iterations, status: 'PENDING', config },
+      data: { modelId, mode, iterations, status: 'PENDING', config, preset, expectedDurationMs },
     })
     trainingQueue.push({ modelId, sessionId: session.id, opts: { mode, iterations, config } })
     logger.info({ modelId, sessionId: session.id }, 'Training queued')
@@ -754,7 +771,7 @@ export async function startTraining(modelId, { mode, iterations, config = {} }) 
   }
 
   const session = await db.trainingSession.create({
-    data: { modelId, mode, iterations, status: 'RUNNING', config },
+    data: { modelId, mode, iterations, status: 'RUNNING', config, preset, expectedDurationMs },
   })
   await db.botSkill.update({ where: { id: modelId }, data: { status: 'TRAINING' } })
 
@@ -807,9 +824,25 @@ export async function cancelSession(sessionId) {
  * Returns the session + current model weights so the frontend can initialise the engine.
  * The frontend calls finishTrainingFromFrontend() when done.
  */
-export async function startFrontendSession(modelId, { mode, iterations, config = {} }) {
+export async function startFrontendSession(modelId, { mode, iterations, config = {}, preset = null }) {
   const model = await getModel(modelId)
   if (!model) throw new Error('Model not found')
+
+  // A3a.4 — preset overrides iterations and seeds expectedDurationMs.
+  let expectedDurationMs = null
+  if (preset) {
+    const resolved = resolvePreset({
+      gameId:    model.gameId,
+      algorithm: model.algorithm,
+      preset,
+    })
+    if (!resolved) {
+      throw new Error(`Unknown preset '${preset}' for ${model.algorithm} on ${model.gameId}`)
+    }
+    iterations        = resolved.iterations
+    expectedDurationMs = resolved.expectedDurationMs
+  }
+
   if (iterations < 1 || iterations > 100_000) throw new Error('iterations must be 1–100,000')
 
   const [maxEpisodes, maxConcurrent] = await Promise.all([
@@ -837,7 +870,12 @@ export async function startFrontendSession(modelId, { mode, iterations, config =
   if (model.status === 'TRAINING') throw new Error('Model is already training')
 
   const session = await db.trainingSession.create({
-    data: { modelId, mode, iterations, status: 'RUNNING', config: { ...config, frontend: true } },
+    data: {
+      modelId, mode, iterations,
+      status: 'RUNNING',
+      config: { ...config, frontend: true },
+      preset, expectedDurationMs,
+    },
   })
   await db.botSkill.update({ where: { id: modelId }, data: { status: 'TRAINING' } })
   logger.info({ modelId, sessionId: session.id }, 'Frontend training session started')
