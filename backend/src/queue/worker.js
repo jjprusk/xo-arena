@@ -19,6 +19,7 @@ import { TRAINING_QUEUE_NAME } from './trainingQueue.js'
 import { handlePing } from './jobs/ping.js'
 import { handleTrainingStart } from './jobs/trainingStart.js'
 import { initSignalBus } from '../lib/signalBus.js'
+import { readWorkerOptions } from './workerOptions.js'
 
 const HANDLERS = {
   'ping':           handlePing,
@@ -45,11 +46,18 @@ async function main() {
   // process. The same module's in-memory Sets are read by `_runTraining`.
   await initSignalBus({ mode: 'redis' })
 
+  // A3b.3 — concurrency + queue rate limit are SystemConfig-driven so an
+  // admin can tune throughput without a redeploy. See workerOptions.js
+  // for keys and defaults.
+  const opts = await readWorkerOptions()
+  logger.info(
+    { concurrency: opts.concurrency, jobsPerSecond: opts.limiter.max },
+    'training worker options resolved'
+  )
   const worker = new Worker(TRAINING_QUEUE_NAME, dispatch, {
     connection,
-    // Single-job-at-a-time per worker for the spike. Concurrency tuning
-    // lands in A3b.3 alongside the per-user cap enforcement.
-    concurrency: 1,
+    concurrency: opts.concurrency,
+    limiter:     opts.limiter,
   })
 
   worker.on('ready',     ()    => logger.info({ queue: TRAINING_QUEUE_NAME }, 'training worker ready'))

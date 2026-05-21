@@ -31,29 +31,32 @@ vi.mock('@xo-arena/ai', () => ({
 }))
 
 const {
-  mockSessionCreate, mockSessionFindMany, mockSessionFindUnique,
+  mockSessionCreate, mockSessionFindMany, mockSessionFindUnique, mockSessionCount,
   mockBotSkillUpdate, mockBotSkillFindUnique, mockBotSkillCount,
   mockSystemConfigFindUnique, mockCheckpointFindFirst,
+  mockUserFindUnique,
   mockEnqueueTrainingStart,
 } = vi.hoisted(() => ({
   mockSessionCreate:           vi.fn(),
   mockSessionFindMany:         vi.fn(),
   mockSessionFindUnique:       vi.fn(),
+  mockSessionCount:            vi.fn().mockResolvedValue(0),
   mockBotSkillUpdate:          vi.fn().mockResolvedValue({}),
   mockBotSkillFindUnique:      vi.fn(),
   mockBotSkillCount:           vi.fn().mockResolvedValue(0),
   mockSystemConfigFindUnique:  vi.fn(),
   mockCheckpointFindFirst:     vi.fn(),
+  mockUserFindUnique:          vi.fn(),
   mockEnqueueTrainingStart:    vi.fn().mockResolvedValue({ id: 'job_1', name: 'training:start' }),
 }))
 
 vi.mock('../../lib/db.js', () => ({
   default: {
-    trainingSession:    { create: mockSessionCreate, findMany: mockSessionFindMany, findUnique: mockSessionFindUnique, update: vi.fn(), count: vi.fn() },
+    trainingSession:    { create: mockSessionCreate, findMany: mockSessionFindMany, findUnique: mockSessionFindUnique, update: vi.fn(), count: mockSessionCount },
     botSkill:           { update: mockBotSkillUpdate, findUnique: mockBotSkillFindUnique, count: mockBotSkillCount },
     trainingCheckpoint: { findFirst: mockCheckpointFindFirst },
     systemConfig:       { findUnique: mockSystemConfigFindUnique, upsert: vi.fn() },
-    user:               { findUnique: vi.fn() },
+    user:               { findUnique: mockUserFindUnique },
     mLCheckpoint:       { create: vi.fn() },
     trainingEpisode:    { createMany: vi.fn() },
     trainingMetric:     { createMany: vi.fn() },
@@ -122,6 +125,39 @@ describe('startTraining — dispatch routing (A3b.2b)', () => {
     const createArgs = mockSessionCreate.mock.calls[0][0].data
     expect(createArgs.config.dispatch).toBe('worker')
     expect(session.id).toBe('sess_new')
+  })
+})
+
+describe('startTraining — per-user cap fires for both dispatch paths (A3b.3)', () => {
+  async function assertCapTrips({ useWorker }) {
+    // Owner with no admin role, default cap (1), already 1 active session.
+    mockBotSkillFindUnique.mockResolvedValue({
+      id: 'model-cap',
+      algorithm: 'qlearning', gameId: 'tic-tac-toe', status: 'IDLE',
+      config: {}, weights: {}, totalEpisodes: 0, maxEpisodes: 100_000,
+      createdBy: 'baid-owner',
+    })
+    mockUserFindUnique.mockResolvedValue({ id: 'u1', userRoles: [] })
+    mockSessionCount.mockResolvedValue(1)
+    if (useWorker) systemConfigReturns('ml.useWorker', true)
+    else           mockSystemConfigFindUnique.mockResolvedValue(null)
+
+    await expect(
+      startTraining('model-cap', { mode: 'SELF_PLAY', iterations: 100, config: {} })
+    ).rejects.toThrow(/Training limit/)
+
+    // Neither dispatch happened — the throw came before the create.
+    expect(mockSessionCreate).not.toHaveBeenCalled()
+    expect(mockEnqueueTrainingStart).not.toHaveBeenCalled()
+    expect(setImmediateSpy).not.toHaveBeenCalled()
+  }
+
+  it('flag-off (in-process): cap trip throws before setImmediate', async () => {
+    await assertCapTrips({ useWorker: false })
+  })
+
+  it('flag-on (worker): cap trip throws before enqueue', async () => {
+    await assertCapTrips({ useWorker: true })
   })
 })
 
