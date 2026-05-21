@@ -1,0 +1,100 @@
+{
+  "timestamp": "2026-05-21T12:01:25.380Z",
+  "env": "staging",
+  "bases": {
+    "landing": "https://xo-landing-staging.fly.dev",
+    "backend": "https://xo-backend-staging.fly.dev",
+    "tournament": "https://xo-tournament-staging.fly.dev"
+  },
+  "requests": 200,
+  "concurrency": 5,
+  "warmup": 50,
+  "authedIncluded": false,
+  "results": [
+    {
+      "name": "GET /api/version",
+      "url": "https://xo-backend-staging.fly.dev/api/version",
+      "base": "backend",
+      "authed": false,
+      "authFlow": false,
+      "method": "GET",
+      "requests": 200,
+      "stats": {
+        "p50": 30,
+        "p95": 116,
+        "p99": 125,
+        "ok": 200,
+        "err": 0
+      },
+      "errors": []
+    },
+    {
+      "name": "GET /api/v1/bots?gameId=xo",
+      "url": "https://xo-backend-staging.fly.dev/api/v1/bots?gameId=xo",
+      "base": "backend",
+      "authed": false,
+      "authFlow": false,
+      "method": "GET",
+      "requests": 200,
+      "stats": {
+        "p50": 32,
+        "p95": 109,
+        "p99": 120,
+        "ok": 200,
+        "err": 0
+      },
+      "errors": []
+    },
+    {
+      "name": "GET /api/v1/leaderboard?game=xo",
+      "url": "https://xo-backend-staging.fly.dev/api/v1/leaderboard?game=xo",
+      "base": "backend",
+      "authed": false,
+      "authFlow": false,
+      "method": "GET",
+      "requests": 200,
+      "stats": {
+        "p50": 29,
+        "p95": 118,
+        "p99": 146,
+        "ok": 200,
+        "err": 0
+      },
+      "errors": []
+    },
+    {
+      "name": "GET /api/auth/get-session",
+      "url": "https://xo-backend-staging.fly.dev/api/auth/get-session",
+      "base": "backend",
+      "authed": false,
+      "authFlow": false,
+      "method": "GET",
+      "requests": 200,
+      "stats": {
+        "p50": 35,
+        "p95": 123,
+        "p99": 140,
+        "ok": 200,
+        "err": 0
+      },
+      "errors": []
+    },
+    {
+      "name": "GET /api/tournaments",
+      "url": "https://xo-tournament-staging.fly.dev/api/tournaments",
+      "base": "tournament",
+      "authed": false,
+      "authFlow": false,
+      "method": "GET",
+      "requests": 200,
+      "stats": {
+        "p50": 57,
+        "p95": 146,
+        "p99": 209,
+        "ok": 200,
+        "err": 0
+      },
+      "errors": []
+    }
+  ]
+}

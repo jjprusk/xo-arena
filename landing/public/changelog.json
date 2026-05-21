@@ -1,5 +1,10 @@
 [
   {
+    "version": "1.4.0-alpha-5.15",
+    "date": "2026-05-21",
+    "description": "QA — HTTP-only crash-recovery harness: um training-recovery start --slot N + GET /qa/training-recovery/status so the test runs against any env without DB creds; 3-session parallel recovery test passes locally end-to-end"
+  },
+  {
     "version": "1.4.0-alpha-5.14",
     "date": "2026-05-21",
     "description": "QA — um training-recovery harness for A3a.9 crash recovery (start --count N + verify --session); QA_SECRET-gated admin endpoint runs training in the long-lived backend process; per-episode _qaDelayMs hook so the crash window stays open long enough to actually restart; 10 unit tests + runbook"
