@@ -18,6 +18,7 @@ import logger from '../logger.js'
 import { TRAINING_QUEUE_NAME } from './trainingQueue.js'
 import { handlePing } from './jobs/ping.js'
 import { handleTrainingStart } from './jobs/trainingStart.js'
+import { initSignalBus } from '../lib/signalBus.js'
 
 const HANDLERS = {
   'ping':           handlePing,
@@ -38,6 +39,11 @@ async function main() {
   }
   const connection = new IORedis(url, { maxRetriesPerRequest: null })
   connection.on('error', err => logger.error({ err }, 'training worker Redis error'))
+
+  // A3b.2b — the worker is always a signalBus subscriber so backend-side
+  // pauseSession/cancelSession reach the training loop running in this
+  // process. The same module's in-memory Sets are read by `_runTraining`.
+  await initSignalBus({ mode: 'redis' })
 
   const worker = new Worker(TRAINING_QUEUE_NAME, dispatch, {
     connection,

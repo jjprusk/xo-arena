@@ -222,6 +222,43 @@ router.post('/qa/training-worker/ping', async (req, res, next) => {
   }
 })
 
+// ─── A3b.2b — QA pause/cancel via signalBus ──────────────────────────────────
+//
+// Lets the harness issue pause/cancel against a session running on the
+// worker without needing an admin session token. Both calls go through
+// the long-running backend process so the signalBus publisher is the
+// initialized-once-at-boot instance (a one-shot CLI subprocess would
+// publish from an uninitialized signalBus and silently no-op).
+router.post('/qa/training-worker/pause', async (req, res, next) => {
+  try {
+    const qaSecret = process.env.QA_SECRET
+    if (!qaSecret || req.headers['x-qa-secret'] !== qaSecret) return next('route')
+    const { sessionId } = req.body || {}
+    if (!sessionId) return res.status(400).json({ error: 'sessionId required' })
+    const { pauseSession } = await import('../services/mlService.js')
+    await pauseSession(sessionId)
+    res.json({ sessionId, action: 'pause-requested' })
+  } catch (err) {
+    logger.error({ err }, 'qa/training-worker/pause failed')
+    next(err)
+  }
+})
+
+router.post('/qa/training-worker/cancel', async (req, res, next) => {
+  try {
+    const qaSecret = process.env.QA_SECRET
+    if (!qaSecret || req.headers['x-qa-secret'] !== qaSecret) return next('route')
+    const { sessionId } = req.body || {}
+    if (!sessionId) return res.status(400).json({ error: 'sessionId required' })
+    const { cancelSession } = await import('../services/mlService.js')
+    await cancelSession(sessionId)
+    res.json({ sessionId, action: 'cancel-requested' })
+  } catch (err) {
+    logger.error({ err }, 'qa/training-worker/cancel failed')
+    next(err)
+  }
+})
+
 // ─── A3b.2a — shadow-mode training:start ─────────────────────────────────────
 //
 // Mints a TrainingSession on the qa-recovery-seed skill (same fixture

@@ -13,7 +13,8 @@ import { startHelpRateLimitSweep } from './middleware/helpRateLimit.js'
 import { startResearchPublishRateLimitSweep } from './middleware/researchPublishRateLimit.js'
 import { startResearchLogExportCron } from './jobs/researchLogExport.js'
 import { prewarmCache } from './startup/prewarmCache.js'
-import { resumeOrphanedSessions } from './services/mlService.js'
+import { resumeOrphanedSessions, getSystemConfig as getMlSystemConfig } from './services/mlService.js'
+import { initSignalBus } from './lib/signalBus.js'
 import aiRouter from './routes/ai.js'
 import logsRouter from './routes/logs.js'
 import usersRouter from './routes/users.js'
@@ -203,6 +204,15 @@ startTableGc(null)
 // window. Awaited so server.listen() (and thus Fly.io's healthcheck) only
 // flips to ready after the cache is warm.
 await prewarmCache()
+
+// A3b.2b — boot the pause/cancel signal bus. Mode mirrors `ml.useWorker`:
+// when the worker path is on, signals must cross processes so pause/cancel
+// reach the xo-training worker; otherwise the bus stays in-memory and is
+// indistinguishable from the old bare-Set behavior.
+{
+  const useWorker = await getMlSystemConfig('ml.useWorker', false)
+  await initSignalBus({ mode: useWorker ? 'redis' : 'memory' })
+}
 
 // A3a.9 — pick up any training sessions left RUNNING by a crashed worker.
 // Fire-and-forget: we never want a slow resume scan to block the listen()
