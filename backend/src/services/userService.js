@@ -623,8 +623,21 @@ export async function listBots({ ownerId, includeInactive = false, includeSkills
   //   - skills (optional, when includeSkills=true) — full BotSkill rows
   //     keyed by botId, with per-skill ELO joined in.
   // Cost stays O(1) in DB roundtrips regardless of bot count.
+  // Owner betterAuthId lookup is also O(1): one extra query for the
+  // distinct ownerIds across the result set so the "My bots" filter on
+  // the directory (which sees `session.user.id` = betterAuthId, not the
+  // domain user id) can compare apples to apples.
   let skillsByBot   = new Map()
   let playableByBot = new Map()
+  let ownerBaIdByOwner = new Map()
+  const ownerIds = [...new Set(bots.map(b => b.botOwnerId).filter(Boolean))]
+  if (ownerIds.length > 0) {
+    const owners = await db.user.findMany({
+      where:  { id: { in: ownerIds } },
+      select: { id: true, betterAuthId: true },
+    })
+    ownerBaIdByOwner = new Map(owners.map(o => [o.id, o.betterAuthId ?? null]))
+  }
   if (bots.length > 0) {
     const botIds = bots.map(b => b.id)
     const allSkills = await db.botSkill.findMany({
@@ -662,6 +675,7 @@ export async function listBots({ ownerId, includeInactive = false, includeSkills
     ...b,
     eloRating: b.gameElo?.[0]?.rating ?? 1200,
     gameElo: undefined,
+    ownerBetterAuthId: b.botOwnerId ? (ownerBaIdByOwner.get(b.botOwnerId) ?? null) : null,
     playableGameIds: playableByBot.get(b.id) ?? [],
     ...(includeSkills ? { skills: skillsByBot.get(b.id) ?? [] } : {}),
   }))

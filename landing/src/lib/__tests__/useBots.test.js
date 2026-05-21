@@ -20,12 +20,15 @@ beforeEach(() => {
   localStorage.clear()
 })
 
+// Each owned bot carries both `botOwnerId` (domain User.id) and
+// `ownerBetterAuthId` (better-auth user id). The "mine" filter compares
+// against the latter so it matches `session.user.id` from /api/session.
 const BOTS = [
-  { id: 'b_a', displayName: 'Sterling One',  botOwnerId: 'u1', botProvisional: false, gameElo: [{ rating: 1500 }], botGamesPlayed: 50 },
-  { id: 'b_b', displayName: 'sterling two',  botOwnerId: 'u1', botProvisional: false, gameElo: [{ rating: 1700 }], botGamesPlayed: 30 },
-  { id: 'b_c', displayName: 'Rookie Bot',    botOwnerId: 'u2', botProvisional: true,  gameElo: [{ rating: 1200 }], botGamesPlayed: 4  },
-  { id: 'b_d', displayName: 'Built-in Easy', botOwnerId: null, botProvisional: false, gameElo: [{ rating: 1000 }], botGamesPlayed: 100 },
-  { id: 'b_e', displayName: 'No-rating Bot', botOwnerId: 'u3', botProvisional: false, gameElo: [],                  botGamesPlayed: 0  },
+  { id: 'b_a', displayName: 'Sterling One',  botOwnerId: 'u1', ownerBetterAuthId: 'ba1', botProvisional: false, gameElo: [{ rating: 1500 }], botGamesPlayed: 50 },
+  { id: 'b_b', displayName: 'sterling two',  botOwnerId: 'u1', ownerBetterAuthId: 'ba1', botProvisional: false, gameElo: [{ rating: 1700 }], botGamesPlayed: 30 },
+  { id: 'b_c', displayName: 'Rookie Bot',    botOwnerId: 'u2', ownerBetterAuthId: 'ba2', botProvisional: true,  gameElo: [{ rating: 1200 }], botGamesPlayed: 4  },
+  { id: 'b_d', displayName: 'Built-in Easy', botOwnerId: null, ownerBetterAuthId: null,  botProvisional: false, gameElo: [{ rating: 1000 }], botGamesPlayed: 100 },
+  { id: 'b_e', displayName: 'No-rating Bot', botOwnerId: 'u3', ownerBetterAuthId: 'ba3', botProvisional: false, gameElo: [],                  botGamesPlayed: 0  },
 ]
 
 describe('_applyFiltersForTest', () => {
@@ -33,9 +36,19 @@ describe('_applyFiltersForTest', () => {
     expect(_applyFiltersForTest(BOTS, {}, null)).toHaveLength(BOTS.length)
   })
 
-  it('owner: "mine" returns only bots owned by currentUserId', () => {
-    const out = _applyFiltersForTest(BOTS, { owner: 'mine' }, 'u1')
+  it('owner: "mine" matches on ownerBetterAuthId, not the domain botOwnerId', () => {
+    // currentUserId here is the better-auth id (`ba1`). Comparing against
+    // the domain id `u1` would also have matched the legacy code path but
+    // wouldn't have matched the actual session.user.id shape in prod.
+    const out = _applyFiltersForTest(BOTS, { owner: 'mine' }, 'ba1')
     expect(out.map(b => b.id)).toEqual(['b_a', 'b_b'])
+  })
+
+  it('owner: "mine" does NOT match when caller passes the domain User.id', () => {
+    // Regression guard: the bug we fixed was a domain-id-vs-BA-id mismatch
+    // that silently returned [] for every signed-in user. If this assertion
+    // ever fails, someone has re-introduced the old behaviour.
+    expect(_applyFiltersForTest(BOTS, { owner: 'mine' }, 'u1')).toEqual([])
   })
 
   it('owner: "mine" returns [] for guests (currentUserId null)', () => {
@@ -48,7 +61,9 @@ describe('_applyFiltersForTest', () => {
   })
 
   it('ownerId overrides owner and returns exact-owner matches', () => {
-    const out = _applyFiltersForTest(BOTS, { ownerId: 'u2', owner: 'mine' }, 'u1')
+    // `ownerId` is still keyed by the domain User.id (used by the bot
+    // profile + admin paths where the caller has the domain id in hand).
+    const out = _applyFiltersForTest(BOTS, { ownerId: 'u2', owner: 'mine' }, 'ba1')
     expect(out.map(b => b.id)).toEqual(['b_c'])
   })
 
@@ -71,7 +86,7 @@ describe('_applyFiltersForTest', () => {
     const out = _applyFiltersForTest(
       BOTS,
       { owner: 'mine', search: 'two', eloMin: 1500 },
-      'u1',
+      'ba1',
     )
     expect(out.map(b => b.id)).toEqual(['b_b'])
   })
@@ -87,7 +102,7 @@ describe('useBots — hook integration', () => {
     api.bots.list.mockResolvedValueOnce({ bots: BOTS })
 
     const { result } = renderHook(() =>
-      useBots({ owner: 'community' }, 'u1'),
+      useBots({ owner: 'community' }, 'ba1'),
     )
 
     await waitFor(() => expect(result.current.isLoading).toBe(false))

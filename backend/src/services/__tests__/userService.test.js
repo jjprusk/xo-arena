@@ -442,6 +442,44 @@ describe('listBots — includeSkills', () => {
     expect(b2.skills[0].elo.rating).toBe(1200)
   })
 
+  it('enriches each bot with ownerBetterAuthId via one batched owner lookup', async () => {
+    // Why this matters: the directory's "My bots" filter sees
+    // `session.user.id` which is the better-auth user id — *not* the
+    // domain User.id stored in `botOwnerId`. Without this enrichment
+    // the client-side filter compares mismatched id spaces and returns
+    // an empty list for every signed-in owner.
+    db.user.findMany
+      .mockResolvedValueOnce([
+        { id: 'b1', displayName: 'A', botOwnerId: 'usr_1', botModelType: 'ml', gameElo: [{ rating: 1300 }] },
+        { id: 'b2', displayName: 'B', botOwnerId: 'usr_2', botModelType: 'ml', gameElo: [] },
+        { id: 'b3', displayName: 'Community', botOwnerId: null, botModelType: 'ml', gameElo: [{ rating: 1100 }] },
+      ])
+      // Owner lookup batch — one row per distinct ownerId.
+      .mockResolvedValueOnce([
+        { id: 'usr_1', betterAuthId: 'ba_alice' },
+        { id: 'usr_2', betterAuthId: 'ba_bob'   },
+      ])
+
+    const result = await listBots()
+
+    expect(db.user.findMany).toHaveBeenCalledTimes(2) // bots + owners, no N+1
+    expect(result[0].ownerBetterAuthId).toBe('ba_alice')
+    expect(result[1].ownerBetterAuthId).toBe('ba_bob')
+    expect(result[2].ownerBetterAuthId).toBeNull()    // community bot
+  })
+
+  it('skips the owner lookup entirely when every bot is community-owned', async () => {
+    db.user.findMany.mockResolvedValueOnce([
+      { id: 'b1', displayName: 'Built-in', botOwnerId: null, botModelType: 'ml', gameElo: [] },
+    ])
+
+    const result = await listBots()
+
+    // Only the bots query — no second findMany call for owners.
+    expect(db.user.findMany).toHaveBeenCalledTimes(1)
+    expect(result[0].ownerBetterAuthId).toBeNull()
+  })
+
   it('includeSkills with a skill-less bot returns skills: []', async () => {
     db.user.findMany.mockResolvedValue([
       { id: 'b1', displayName: 'Skillless', botModelType: null, gameElo: [] },
