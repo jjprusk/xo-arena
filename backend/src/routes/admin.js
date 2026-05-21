@@ -196,6 +196,32 @@ router.get('/qa/training-recovery/status', async (req, res, next) => {
   }
 })
 
+// ─── A3b.1 spike — training worker round-trip ────────────────────────────────
+//
+// Round-trip smoke test for the new BullMQ queue → xo-training worker
+// path. Gated by QA_SECRET so it can be called from outside the admin
+// session (mirrors the training-recovery harness pattern). Returns
+// { jobId, queueWaitingCount } immediately; the actual `pong` log line
+// shows up in the worker process. A future PR (A3b.2b) will replace this
+// with the real `training:start` enqueue.
+router.post('/qa/training-worker/ping', async (req, res, next) => {
+  try {
+    const qaSecret = process.env.QA_SECRET
+    const headerSecret = req.headers['x-qa-secret']
+    if (!qaSecret || headerSecret !== qaSecret) return next('route')
+
+    const { message = 'hello from backend' } = req.body || {}
+    const { enqueuePing, getTrainingQueue } = await import('../queue/trainingQueue.js')
+    const job   = await enqueuePing(message)
+    const queue = getTrainingQueue()
+    const waiting = await queue.getWaitingCount()
+    res.json({ jobId: job.id, jobName: job.name, message, queueWaitingCount: waiting })
+  } catch (err) {
+    logger.error({ err }, 'qa/training-worker/ping failed')
+    next(err)
+  }
+})
+
 router.use(requireAuth, requireAdmin)
 
 // ─── Resource health ─────────────────────────────────────────────────────────

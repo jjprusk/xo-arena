@@ -113,6 +113,35 @@ services:
     depends_on:
       - backend
 
+  training-worker:
+    # A3b.1 spike — BullMQ worker that consumes jobs from the `training`
+    # queue. Shares the backend image (same code, different entrypoint)
+    # so future PRs (A3b.2a/2b) can move the real training loop into
+    # this process without a second build pipeline. In prod this is the
+    # new xo-training-* Fly app; same image, same CMD as below.
+    build:
+      context: .
+      dockerfile: backend/Dockerfile.dev
+    restart: unless-stopped
+    command: ["node", "--experimental-transform-types", "src/queue/worker.js"]
+    env_file:
+      - ./backend/.env
+    environment:
+      NODE_ENV: development
+      DATABASE_URL: postgresql://xo:xo@postgres:5432/xo_arena
+      REDIS_URL: redis://redis:6379
+      XO_PROCESS: training-worker
+    volumes:
+      - ./backend:/app/backend
+      - ./packages/ai:/app/packages/ai
+      - ./packages/db:/app/packages/db
+      - /app/node_modules
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
   tournament:
     build:
       context: .

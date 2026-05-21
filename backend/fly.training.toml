@@ -1,0 +1,34 @@
+## Fly.io config for the xo-training-* apps (staging + prod).
+##
+## A3b — Training worker process cutover. Shares the backend container
+## image; the only difference is the entrypoint, which we override via
+## `processes` instead of building a second image. Set the app name at
+## deploy time:
+##
+##   fly deploy --config backend/fly.training.toml --app xo-training-staging
+##   fly deploy --config backend/fly.training.toml --app xo-training-prod
+##
+## Secrets to set per-app before the first deploy (mirror backend):
+##
+##   fly secrets set -a xo-training-staging \
+##     DATABASE_URL=...  REDIS_URL=... INTERNAL_SECRET=...
+##
+## No `http_service` block — the worker is internal-only and consumes
+## jobs from Redis. Health is observed via BullMQ events + logs (A3b.5
+## wires per-worker metrics + queue-depth alerts).
+
+primary_region = "iad"
+
+[build]
+  dockerfile = "Dockerfile"
+
+[processes]
+  worker = "node --experimental-transform-types src/queue/worker.js"
+
+[[vm]]
+  # Workers are CPU-bound when the real training loop lands (A3b.2b).
+  # Spike sizing is conservative; bump when DQN/AlphaZero land.
+  memory = "1gb"
+  cpu_kind = "shared"
+  cpus = 2
+  processes = ["worker"]
