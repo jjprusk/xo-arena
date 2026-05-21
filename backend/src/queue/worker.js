@@ -21,6 +21,7 @@ import { handleTrainingStart } from './jobs/trainingStart.js'
 import { initSignalBus, requestPause } from '../lib/signalBus.js'
 import { readWorkerOptions } from './workerOptions.js'
 import { getActiveSessions } from './activeSessions.js'
+import { startWorkerResourceSampler } from './workerResourceSampler.js'
 
 const HANDLERS = {
   'ping':           handlePing,
@@ -61,6 +62,16 @@ async function main() {
     limiter:     opts.limiter,
   })
 
+  // A3b.5 — sample this process's CPU/RAM into Redis so the backend
+  // admin /health/training endpoint can see it. A second IORedis client
+  // is used (BullMQ's `connection` is reserved for its own commands).
+  const samplerRedis = new IORedis(url, { maxRetriesPerRequest: null })
+  samplerRedis.on('error', err => logger.error({ err }, 'training worker sampler Redis error'))
+  const stopSampler = startWorkerResourceSampler({
+    redis: samplerRedis,
+    getActiveCount: () => getActiveSessions().length,
+  })
+
   worker.on('ready',     ()    => logger.info({ queue: TRAINING_QUEUE_NAME }, 'training worker ready'))
   worker.on('completed', (job) => logger.info({ jobId: job.id, name: job.name }, 'training job completed'))
   worker.on('failed',    (job, err) => logger.error({ jobId: job?.id, name: job?.name, err }, 'training job failed'))
@@ -91,6 +102,8 @@ async function main() {
       }
     }
     try { await worker.close() } catch (err) { logger.error({ err }, 'worker close failed') }
+    try { await stopSampler() } catch (err) { logger.error({ err }, 'worker sampler stop failed') }
+    try { samplerRedis.disconnect() } catch {}
     try { connection.disconnect() } catch {}
     process.exit(0)
   }

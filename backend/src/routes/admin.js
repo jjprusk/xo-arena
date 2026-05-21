@@ -431,6 +431,32 @@ router.get('/health/tables', (req, res) => {
   })
 })
 
+/**
+ * GET /api/v1/admin/health/training
+ *
+ * A3b.5 — training-worker observability surface. Returns the latest
+ * snapshot captured by the trainingHealthMonitor (queue depth + each
+ * worker's CPU/RAM sample + alert state). On a fresh process where the
+ * monitor hasn't ticked yet, returns `{ latest: null }` so the dashboard
+ * can render "warming up" rather than 500.
+ *
+ * Lives under the admin router → gated by requireAuth + requireAdmin.
+ */
+router.get('/health/training', async (_req, res, next) => {
+  try {
+    const { getTrainingHealthSnapshot, getTrainingHealthAlerts } =
+      await import('../queue/trainingHealthMonitor.js')
+    res.json({
+      latest: getTrainingHealthSnapshot(),
+      alerts: getTrainingHealthAlerts(),
+      uptime: Math.round(process.uptime()),
+    })
+  } catch (err) {
+    logger.error({ err }, 'admin/health/training failed')
+    next(err)
+  }
+})
+
 // ─── Real-User Web Vitals (RUM) ──────────────────────────────────────────────
 
 const PERF_WINDOW_MS = {
