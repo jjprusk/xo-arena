@@ -1,6 +1,6 @@
 {
   "name": "@xo-arena/backend",
-  "version": "1.4.0-alpha-5.15",
+  "version": "1.4.0-alpha-5.16",
   "private": true,
   "type": "module",
   "scripts": {
@@ -25,6 +25,7 @@
     "@xo-arena/ai": "file:../packages/ai",
     "@xo-arena/db": "file:../packages/db",
     "better-auth": "^1.5.5",
+    "bullmq": "^5.76.11",
     "commander": "^13.0.0",
     "cors": "^2.8.5",
     "dotenv": "^16.4.7",

@@ -31,6 +31,14 @@ import { appendToStream } from '../lib/eventStream.js'
 import { resolvePreset } from '../config/trainingPresets.js'
 import { hasRole } from '../utils/roles.js'
 import { runEvalBatch, recordEvalMetrics, DEFAULT_EVAL_BUDGET } from '../lib/evalCurves.js'
+import {
+  requestPause as _busRequestPause,
+  requestCancel as _busRequestCancel,
+  isPaused as _busIsPaused,
+  isCancelled as _busIsCancelled,
+  clearPause as _busClearPause,
+  clearCancel as _busClearCancel,
+} from '../lib/signalBus.js'
 
 /**
  * A3a.6 — count this user's currently-active training sessions and compare
@@ -107,13 +115,9 @@ export { LRUMap }
 /** modelId → engine instance (loaded on first move, invalidated after training) */
 const engineCache = new LRUMap(20)
 
-/** sessionId → true  (signals background loop to stop) */
-const cancelledSessions = new Set()
-// A3a.10 — sessions the user has asked to pause. The training loop reads
-// this on every tick, force-writes a checkpoint at the current episode,
-// flips the session to PENDING + pausedAt, and exits cleanly. Resume is
-// symmetric (clear the entry, restart the loop from the latest checkpoint).
-const pausedSessions = new Set()
+// A3b.2b — pause/cancel signals route through signalBus.js so they cross
+// process boundaries when the worker path is on. The local Sets that
+// used to live here are now an in-memory backend inside signalBus.
 
 // ─── Training queue ──────────────────────────────────────────────────────────
 /** Queue of pending training requests: [{ modelId, sessionId, opts }, ...] */
@@ -813,13 +817,32 @@ export async function startTraining(modelId, { mode, iterations, config = {}, pr
     return session
   }
 
+  // A3b.2b — dispatch routing. With `ml.useWorker` true, mint the session
+  // tagged with `dispatch:'worker'` and enqueue a `training:start` job
+  // instead of running the loop in-process. The flag is read fresh every
+  // call so a SystemConfig flip is the kill switch — no deploy required
+  // to roll back. Default off keeps existing setImmediate behavior intact.
+  const useWorker = await getSystemConfig('ml.useWorker', false)
+  const dispatch  = useWorker ? 'worker' : 'in-process'
+
   const session = await db.trainingSession.create({
-    data: { modelId, mode, iterations, status: 'RUNNING', config, preset, expectedDurationMs },
+    data: {
+      modelId, mode, iterations,
+      status: 'RUNNING',
+      config: { ...config, dispatch },
+      preset,
+      expectedDurationMs,
+    },
   })
   await db.botSkill.update({ where: { id: modelId }, data: { status: 'TRAINING' } })
 
-  // Fire-and-forget background loop
-  setImmediate(() => _runTraining(model, session, { mode, iterations, config }))
+  if (useWorker) {
+    const { enqueueTrainingStart } = await import('../queue/trainingQueue.js')
+    await enqueueTrainingStart(session.id)
+    logger.info({ modelId, sessionId: session.id }, 'training session dispatched to worker')
+  } else {
+    setImmediate(() => _runTraining(model, session, { mode, iterations, config: session.config }))
+  }
   return session
 }
 
@@ -950,10 +973,17 @@ async function _processNextInQueue() {
 export async function resumeOrphanedSessions() {
   // Skip sessions the user explicitly paused — pausedAt set means they
   // *want* it stopped; the orphan resumer must not undo that.
-  const orphans = await db.trainingSession.findMany({
+  // A3b.2b — also skip sessions dispatched to the xo-training worker:
+  // their recovery is owned by BullMQ's stalled-job + heartbeat mechanism,
+  // not the backend boot scan. If both fired they'd race for the model
+  // lock and one would land on a half-applied checkpoint. We can't filter
+  // `config.dispatch` in the Prisma query (JSON field on SQLite test
+  // backends), so we filter in JS post-fetch.
+  const orphansRaw = await db.trainingSession.findMany({
     where:   { status: 'RUNNING', pausedAt: null },
     include: { model: true },
   })
+  const orphans = orphansRaw.filter(s => (s.config?.dispatch ?? 'in-process') !== 'worker')
   if (orphans.length === 0) return []
 
   logger.info({ count: orphans.length }, 'resuming orphaned training sessions')
@@ -1008,6 +1038,48 @@ export async function resumeOrphanedSessions() {
 }
 
 /**
+ * A3b.2a — run an existing TrainingSession from a queue job.
+ *
+ * The worker handler (`backend/src/queue/jobs/trainingStart.js`) calls
+ * this with a sessionId after picking the job off the BullMQ queue. We
+ * resolve the session + model + latest checkpoint (so a re-enqueued job
+ * resumes from where the previous attempt left off, matching the
+ * setImmediate path's crash-recovery behavior).
+ *
+ * The caller is expected to have already created the TrainingSession
+ * row (status RUNNING) and flipped the BotSkill to TRAINING — this
+ * function just executes the loop. That mirrors what startTraining()
+ * does today before the setImmediate; A3b.2b lifts the create+enqueue
+ * pair into startTraining itself behind a SystemConfig flag.
+ */
+export async function _runTrainingForQueueJob(sessionId) {
+  const session = await db.trainingSession.findUnique({
+    where:   { id: sessionId },
+    include: { model: true },
+  })
+  if (!session) throw new Error(`Session not found: ${sessionId}`)
+  if (!session.model) throw new Error(`Model not found for session: ${sessionId}`)
+
+  const checkpoint = await db.trainingCheckpoint.findFirst({
+    where:   { sessionId },
+    orderBy: { episodeNum: 'desc' },
+  })
+
+  await _runTraining(session.model, session, {
+    mode:         session.mode,
+    iterations:   session.iterations,
+    config:       session.config,
+    startEpisode: checkpoint?.episodeNum ?? 0,
+    resumedEngineState: checkpoint ? {
+      weights: checkpoint.weights,
+      epsilon: checkpoint.runtimeState?.epsilon ?? null,
+    } : null,
+  })
+
+  return { completed: true, resumedFrom: checkpoint?.episodeNum ?? 0 }
+}
+
+/**
  * A3a.10 — request a graceful pause. Adds the session to the pausedSessions
  * signal Set; the training loop's next tick force-writes a checkpoint and
  * transitions the row to PENDING + pausedAt. Returns immediately — the loop
@@ -1019,7 +1091,7 @@ export async function pauseSession(sessionId) {
   if (!s) throw new Error('Session not found')
   if (s.status !== 'RUNNING') throw new Error(`Session is in status ${s.status}, expected RUNNING`)
   if (s.pausedAt)             throw new Error('Session is already paused')
-  pausedSessions.add(sessionId)
+  _busRequestPause(sessionId)
   return s
 }
 
@@ -1045,7 +1117,7 @@ export async function resumeSession(sessionId) {
 
   // Clear the pause + signal Set; flip the session row to RUNNING so the
   // owner-view shows the right state immediately.
-  pausedSessions.delete(sessionId)
+  _busClearPause(sessionId)
   await db.trainingSession.update({
     where: { id: sessionId },
     data:  { pausedAt: null, status: 'RUNNING' },
@@ -1085,7 +1157,7 @@ export async function resumeSession(sessionId) {
 }
 
 export async function cancelSession(sessionId) {
-  cancelledSessions.add(sessionId)
+  _busRequestCancel(sessionId)
   // DB update happens inside the loop when it detects cancellation;
   // if session already completed, update it here as fallback
   const s = await db.trainingSession.findUnique({ where: { id: sessionId } })
@@ -1689,8 +1761,8 @@ async function _runTraining(model, session, { mode, iterations, config, startEpi
     }
     for (let i = startEpisode; i < iterations; i++) {
       // Cooperative cancellation check
-      if (cancelledSessions.has(sessionId)) {
-        cancelledSessions.delete(sessionId)
+      if (_busIsCancelled(sessionId)) {
+        _busClearCancel(sessionId)
         await _finishSession(sessionId, modelId, engine, actualEpisodes, 'CANCELLED', { wins, losses, draws, totalQDelta })
         return
       }
@@ -1700,8 +1772,8 @@ async function _runTraining(model, session, { mode, iterations, config, startEpi
       // pending episode batch, transition the session to PENDING + pausedAt,
       // and unlock the model. Exits the loop without _finishSession so the
       // session stays terminal-free; resumeSession() restarts it later.
-      if (pausedSessions.has(sessionId)) {
-        pausedSessions.delete(sessionId)
+      if (_busIsPaused(sessionId)) {
+        _busClearPause(sessionId)
         const episodeNum = i
         try {
           if (episodeBatch.length > 0) {

@@ -76,7 +76,7 @@ router.post('/gc/run', async (req, res, next) => {
 const QA_SEED_USERNAME = 'qa-recovery-seed'
 const QA_SEED_SKILL_NAME = 'QA Recovery Skill'
 
-async function _qaEnsureSeedSkill(slot) {
+async function _qaEnsureSeedSkill(slot, algorithm = 'qlearning') {
   let user = await db.user.findUnique({ where: { username: QA_SEED_USERNAME } })
   if (!user) {
     user = await db.user.create({
@@ -88,13 +88,18 @@ async function _qaEnsureSeedSkill(slot) {
       },
     })
   }
-  const name = slot > 1 ? `${QA_SEED_SKILL_NAME} ${slot}` : QA_SEED_SKILL_NAME
+  // Per-(algorithm, slot) skill so the A3b.6 soak can fan out 10 virtual
+  // users × mixed algos without different algos clobbering each other's
+  // BotSkill row. Slot 1 + qlearning preserves the legacy name so the
+  // crash-recovery harness keeps finding its existing fixture.
+  const baseName = `${QA_SEED_SKILL_NAME}${algorithm === 'qlearning' ? '' : ` [${algorithm}]`}`
+  const name = slot > 1 ? `${baseName} ${slot}` : baseName
   let skill = await db.botSkill.findFirst({ where: { name, createdBy: null } })
   if (!skill) {
     skill = await db.botSkill.create({
       data: {
         name,
-        algorithm: 'qlearning',
+        algorithm,
         gameId:    'tic-tac-toe',
         weights:   {},
         config:    {},
@@ -196,7 +201,184 @@ router.get('/qa/training-recovery/status', async (req, res, next) => {
   }
 })
 
+// ─── A3b.1 spike — training worker round-trip ────────────────────────────────
+//
+// Round-trip smoke test for the new BullMQ queue → xo-training worker
+// path. Gated by QA_SECRET so it can be called from outside the admin
+// session (mirrors the training-recovery harness pattern). Returns
+// { jobId, queueWaitingCount } immediately; the actual `pong` log line
+// shows up in the worker process. A future PR (A3b.2b) will replace this
+// with the real `training:start` enqueue.
+router.post('/qa/training-worker/ping', async (req, res, next) => {
+  try {
+    const qaSecret = process.env.QA_SECRET
+    const headerSecret = req.headers['x-qa-secret']
+    if (!qaSecret || headerSecret !== qaSecret) return next('route')
+
+    const { message = 'hello from backend' } = req.body || {}
+    const { enqueuePing, getTrainingQueue } = await import('../queue/trainingQueue.js')
+    const job   = await enqueuePing(message)
+    const queue = getTrainingQueue()
+    const waiting = await queue.getWaitingCount()
+    res.json({ jobId: job.id, jobName: job.name, message, queueWaitingCount: waiting })
+  } catch (err) {
+    logger.error({ err }, 'qa/training-worker/ping failed')
+    next(err)
+  }
+})
+
+// ─── A3b.2b — QA pause/cancel via signalBus ──────────────────────────────────
+//
+// Lets the harness issue pause/cancel against a session running on the
+// worker without needing an admin session token. Both calls go through
+// the long-running backend process so the signalBus publisher is the
+// initialized-once-at-boot instance (a one-shot CLI subprocess would
+// publish from an uninitialized signalBus and silently no-op).
+router.post('/qa/training-worker/pause', async (req, res, next) => {
+  try {
+    const qaSecret = process.env.QA_SECRET
+    if (!qaSecret || req.headers['x-qa-secret'] !== qaSecret) return next('route')
+    const { sessionId } = req.body || {}
+    if (!sessionId) return res.status(400).json({ error: 'sessionId required' })
+    const { pauseSession } = await import('../services/mlService.js')
+    await pauseSession(sessionId)
+    res.json({ sessionId, action: 'pause-requested' })
+  } catch (err) {
+    logger.error({ err }, 'qa/training-worker/pause failed')
+    next(err)
+  }
+})
+
+router.post('/qa/training-worker/cancel', async (req, res, next) => {
+  try {
+    const qaSecret = process.env.QA_SECRET
+    if (!qaSecret || req.headers['x-qa-secret'] !== qaSecret) return next('route')
+    const { sessionId } = req.body || {}
+    if (!sessionId) return res.status(400).json({ error: 'sessionId required' })
+    const { cancelSession } = await import('../services/mlService.js')
+    await cancelSession(sessionId)
+    res.json({ sessionId, action: 'cancel-requested' })
+  } catch (err) {
+    logger.error({ err }, 'qa/training-worker/cancel failed')
+    next(err)
+  }
+})
+
+// ─── A3b.2a — shadow-mode training:start ─────────────────────────────────────
+//
+// Mints a TrainingSession on the qa-recovery-seed skill (same fixture
+// the crash-recovery harness uses) and enqueues a `training:start` job.
+// The session goes through the worker process end-to-end — the backend
+// does NOT setImmediate it. The startTraining() path used by real users
+// is unchanged; A3b.2b is the flag-gated cut-over.
+router.post('/qa/training-worker/start', async (req, res, next) => {
+  try {
+    const qaSecret = process.env.QA_SECRET
+    const headerSecret = req.headers['x-qa-secret']
+    if (!qaSecret || headerSecret !== qaSecret) return next('route')
+
+    const slotRaw       = req.body?.slot ?? 1
+    const iterationsRaw = req.body?.iterations ?? 200
+    const delayMsRaw    = req.body?.delayMs ?? 0
+    const algorithmRaw  = req.body?.algorithm
+    const slot          = parseInt(slotRaw, 10) || 1
+    const iterations    = parseInt(iterationsRaw, 10) || 200
+    const delayMs       = parseInt(delayMsRaw, 10) || 0
+    const algorithm     = typeof algorithmRaw === 'string' && algorithmRaw ? algorithmRaw : 'qlearning'
+
+    const skill = await _qaEnsureSeedSkill(slot, algorithm)
+
+    const session = await db.trainingSession.create({
+      data: {
+        modelId:    skill.id,
+        mode:       'VS_MINIMAX',
+        iterations,
+        status:     'RUNNING',
+        preset:     'quick',
+        config: {
+          algorithm,
+          difficulty:   'easy',
+          _qaHarness:   true,
+          _qaWorker:    true,
+          _qaDelayMs:   delayMs,
+        },
+      },
+    })
+    await db.botSkill.update({
+      where: { id: skill.id },
+      data:  { status: 'TRAINING' },
+    })
+
+    const { enqueueTrainingStart, getTrainingQueue } = await import('../queue/trainingQueue.js')
+    const job   = await enqueueTrainingStart(session.id)
+    const queue = getTrainingQueue()
+    const waiting = await queue.getWaitingCount()
+
+    res.json({
+      sessionId: session.id,
+      skillId:   skill.id,
+      iterations,
+      jobId:     job.id,
+      jobName:   job.name,
+      queueWaitingCount: waiting,
+    })
+  } catch (err) {
+    logger.error({ err }, 'qa/training-worker/start failed')
+    next(err)
+  }
+})
+
 router.use(requireAuth, requireAdmin)
+
+// ─── A3b.4 — Training dead-letter inspection ─────────────────────────────────
+//
+// BullMQ doesn't have a separate dead-letter queue concept — failed jobs
+// stay in the queue's `failed` set indefinitely (we don't set
+// removeOnFail). After 3 attempts (see enqueueTrainingStart) a job lands
+// here permanently. This endpoint exposes them so an admin can triage
+// without running redis-cli, and enriches each with the matching
+// TrainingSession summary if the job was a training:start.
+router.get('/training/dead-letter', async (req, res, next) => {
+  try {
+    const limit = Math.min(parseInt(req.query.limit, 10) || 50, 200)
+    const { getTrainingQueue } = await import('../queue/trainingQueue.js')
+    const queue = getTrainingQueue()
+    const failed = await queue.getFailed(0, limit - 1)
+
+    const sessionIds = failed
+      .map(j => j.name === 'training:start' ? j.data?.sessionId : null)
+      .filter(Boolean)
+    const sessions = sessionIds.length > 0
+      ? await db.trainingSession.findMany({
+          where:  { id: { in: sessionIds } },
+          select: { id: true, status: true, iterations: true, summary: true,
+                    pausedAt: true, checkpointEpisode: true,
+                    model: { select: { id: true, name: true, algorithm: true } } },
+        })
+      : []
+    const sessionById = new Map(sessions.map(s => [s.id, s]))
+
+    res.json({
+      count: failed.length,
+      jobs:  failed.map(j => ({
+        id:             j.id,
+        name:           j.name,
+        data:           j.data,
+        attemptsMade:   j.attemptsMade,
+        failedReason:   j.failedReason,
+        finishedOn:     j.finishedOn ?? null,
+        processedOn:    j.processedOn ?? null,
+        stacktrace:     Array.isArray(j.stacktrace) ? j.stacktrace.slice(0, 3) : j.stacktrace,
+        session:        j.name === 'training:start' && j.data?.sessionId
+          ? sessionById.get(j.data.sessionId) ?? null
+          : null,
+      })),
+    })
+  } catch (err) {
+    logger.error({ err }, 'admin/training/dead-letter failed')
+    next(err)
+  }
+})
 
 // ─── Resource health ─────────────────────────────────────────────────────────
 
@@ -254,6 +436,32 @@ router.get('/health/tables', (req, res) => {
     socketAdapter:     'sse',  // socket.io removed — SSE+POST is the only transport
     uptime: Math.round(process.uptime()),
   })
+})
+
+/**
+ * GET /api/v1/admin/health/training
+ *
+ * A3b.5 — training-worker observability surface. Returns the latest
+ * snapshot captured by the trainingHealthMonitor (queue depth + each
+ * worker's CPU/RAM sample + alert state). On a fresh process where the
+ * monitor hasn't ticked yet, returns `{ latest: null }` so the dashboard
+ * can render "warming up" rather than 500.
+ *
+ * Lives under the admin router → gated by requireAuth + requireAdmin.
+ */
+router.get('/health/training', async (_req, res, next) => {
+  try {
+    const { getTrainingHealthSnapshot, getTrainingHealthAlerts } =
+      await import('../queue/trainingHealthMonitor.js')
+    res.json({
+      latest: getTrainingHealthSnapshot(),
+      alerts: getTrainingHealthAlerts(),
+      uptime: Math.round(process.uptime()),
+    })
+  } catch (err) {
+    logger.error({ err }, 'admin/health/training failed')
+    next(err)
+  }
 })
 
 // ─── Real-User Web Vitals (RUM) ──────────────────────────────────────────────

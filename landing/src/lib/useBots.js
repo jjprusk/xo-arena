@@ -42,7 +42,11 @@ function applyFilters(bots, filters, currentUserId) {
     out = out.filter(b => b.botOwnerId === filters.ownerId)
   } else if (filters.owner === 'mine') {
     if (!currentUserId) return []  // guests have no "mine"
-    out = out.filter(b => b.botOwnerId === currentUserId)
+    // currentUserId comes from /api/session (better-auth user id); the bot
+    // rows carry both `botOwnerId` (domain User.id) and `ownerBetterAuthId`
+    // (the BA id of the owner). Compare against the BA id so "My bots"
+    // matches the same identifier the session exposes.
+    out = out.filter(b => b.ownerBetterAuthId === currentUserId)
   } else if (filters.owner === 'community') {
     out = out.filter(b => !b.botOwnerId)
   }
@@ -76,9 +80,12 @@ function applyFilters(bots, filters, currentUserId) {
 
 /**
  * @param {object}  filters         (optional) see file header for shape
- * @param {string?} currentUserId   domain User.id of the caller, used by
- *                                  `owner: 'mine'`. Null/undefined for
- *                                  guests — guest "mine" returns [].
+ * @param {string?} currentUserId   better-auth user id of the caller (the
+ *                                  `session.user.id` shape returned by
+ *                                  /api/session), compared against each
+ *                                  bot's `ownerBetterAuthId` for the
+ *                                  `owner: 'mine'` filter. Null/undefined
+ *                                  for guests — guest "mine" returns [].
  * @returns {{ bots, allBots, isLoading, isStale, error, refresh }}
  */
 export function useBots(filters = {}, currentUserId = null) {

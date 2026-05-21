@@ -81,6 +81,44 @@ expire) grows forever.
 - **gauge** — entries in presence store
 - **histogram** — entry age at eviction
 
+### 5. Training worker queue (A3b.5 — shipped)
+
+**Files:**
+`backend/src/queue/queueMetrics.js`,
+`backend/src/queue/workerResourceSampler.js`,
+`backend/src/queue/trainingHealthMonitor.js`,
+admin endpoint `GET /api/v1/admin/health/training`.
+
+**What it is:** BullMQ-backed `training` queue produced by the backend
+(`enqueueTrainingStart` in `trainingQueue.js`) and consumed by the
+`xo-training-*` worker app. The cutover landed in A3b.2b behind the
+`ml.useWorker` SystemConfig flag.
+
+**Risk:** A stalled worker pool is silent — `training:start` jobs pile up
+in BullMQ's `waiting` set with no client-visible signal until a user
+notices their training never started. The `attempts:3` retry policy
+(A3b.4) drops permanently-failed jobs into BullMQ's `failed` index,
+which is also invisible without explicit instrumentation.
+
+**Instrumented (shipped):**
+- **gauge** — queue depth (`waiting / active / delayed / failed / completed / prioritized`) via `queueMetrics.getTrainingQueueMetrics()`.
+- **gauge** — `oldestWaitingAgeMs` (now − head's `timestamp`). Powers the "queue is stalled" alert.
+- **gauge** — per-worker CPU% + RSS/heap MB + active-session count, sampled inside each worker process every 30s and written to Redis under `training:worker:metrics:<hostname>:<pid>` with a 120s TTL. A dead worker's key auto-evicts within one missed heartbeat.
+- **edge-triggered alert** — `queueStalled` fires when `waiting >= 1` **AND** `oldestWaitingAgeMs >= 5 min`. Both conditions must hold so a fresh burst that drains quickly doesn't page anyone.
+- **edge-triggered alert** — `deadLetter` fires when `failed >= 1` (a permanent failure after all retries).
+- Both alerts dispatch via the existing `notificationBus` to admins; cleared transitions also dispatch.
+
+**Surface:** `GET /api/v1/admin/health/training` returns the latest
+snapshot (queue counts, per-worker samples, alert flags, thresholds). The
+admin Health page can render the gauge inline — Bull-Board is deferred
+unless a real triage need surfaces.
+
+**Tuning:** thresholds default to `queueWaitingThreshold=1` and
+`queueAgeThresholdMs=5min`. Pass overrides through
+`startTrainingHealthMonitor({ thresholds })` if a noisier environment
+needs a higher bar; the per-tick `evaluateTrainingHealth` takes them as
+well so an admin endpoint could later expose runtime knobs.
+
 ## Delivery shape
 
 No preference yet between Prometheus, OTel, or a simple admin JSON endpoint.

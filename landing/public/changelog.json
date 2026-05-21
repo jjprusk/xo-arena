@@ -1,5 +1,10 @@
 [
   {
+    "version": "1.4.0-alpha-5.16",
+    "date": "2026-05-21",
+    "description": "A3b.5 training-worker observability + A3b.6 prep: algorithm-aware QA endpoint and 10-user mixed-algo soak harness"
+  },
+  {
     "version": "1.4.0-alpha-5.15",
     "date": "2026-05-21",
     "description": "QA — HTTP-only crash-recovery harness: um training-recovery start --slot N + GET /qa/training-recovery/status so the test runs against any env without DB creds; 3-session parallel recovery test passes locally end-to-end"

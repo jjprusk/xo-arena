@@ -13,7 +13,8 @@ import { startHelpRateLimitSweep } from './middleware/helpRateLimit.js'
 import { startResearchPublishRateLimitSweep } from './middleware/researchPublishRateLimit.js'
 import { startResearchLogExportCron } from './jobs/researchLogExport.js'
 import { prewarmCache } from './startup/prewarmCache.js'
-import { resumeOrphanedSessions } from './services/mlService.js'
+import { resumeOrphanedSessions, getSystemConfig as getMlSystemConfig } from './services/mlService.js'
+import { initSignalBus } from './lib/signalBus.js'
 import aiRouter from './routes/ai.js'
 import logsRouter from './routes/logs.js'
 import usersRouter from './routes/users.js'
@@ -53,6 +54,8 @@ import { startExpiredNotificationPruner } from './lib/notificationBus.js'
 import { startDispatcher } from './lib/scheduledJobs.js'
 import { start as startTableGc } from './services/tableGcService.js'
 import { startMetricsSnapshotCron } from './services/metricsSnapshotService.js'
+import { startTrainingHealthMonitor } from './queue/trainingHealthMonitor.js'
+import { dispatch as notificationDispatch } from './lib/notificationBus.js'
 
 const PORT = process.env.PORT || 3000
 
@@ -203,6 +206,41 @@ startTableGc(null)
 // window. Awaited so server.listen() (and thus Fly.io's healthcheck) only
 // flips to ready after the cache is warm.
 await prewarmCache()
+
+// A3b.2b — boot the pause/cancel signal bus. Mode mirrors `ml.useWorker`:
+// when the worker path is on, signals must cross processes so pause/cancel
+// reach the xo-training worker; otherwise the bus stays in-memory and is
+// indistinguishable from the old bare-Set behavior.
+{
+  const useWorker = await getMlSystemConfig('ml.useWorker', false)
+  await initSignalBus({ mode: useWorker ? 'redis' : 'memory' })
+}
+
+// A3b.5 — training health monitor: polls BullMQ queue depth + reads worker
+// resource samples from Redis, fires edge-triggered admin alerts on a
+// stalled queue or non-empty dead-letter. Only runs when Redis is
+// configured (training worker path is enabled in this env).
+if (process.env.REDIS_URL) {
+  try {
+    const { default: IORedis } = await import('ioredis')
+    const monitorRedis = new IORedis(process.env.REDIS_URL, { maxRetriesPerRequest: null })
+    monitorRedis.on('error', (err) => logger.warn({ err }, 'training health monitor Redis error'))
+    startTrainingHealthMonitor({
+      redis:    monitorRedis,
+      dispatch: notificationDispatch,
+      getAdminIds: async () => {
+        const baAdmins = await db.baUser.findMany({ where: { role: 'admin' }, select: { id: true } })
+        const admins   = await db.user.findMany({
+          where:  { betterAuthId: { in: baAdmins.map((b) => b.id) } },
+          select: { id: true },
+        })
+        return admins.map((a) => a.id)
+      },
+    })
+  } catch (err) {
+    logger.warn({ err }, 'training health monitor failed to start (non-fatal)')
+  }
+}
 
 // A3a.9 — pick up any training sessions left RUNNING by a crashed worker.
 // Fire-and-forget: we never want a slow resume scan to block the listen()
