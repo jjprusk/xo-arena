@@ -1736,6 +1736,12 @@ async function _runTraining(model, session, { mode, iterations, config, startEpi
       const t0 = Date.now()
       const result = _runEpisodeForAlgorithm(engine, mlMark, opponentFn, algorithm)
       const durationMs = Date.now() - t0
+      // QA harness hook: slow the loop so crash-recovery tests have time to
+      // restart the backend mid-run. Honoured only when explicitly set in
+      // config; zero perf cost otherwise. See `um training-recovery`.
+      if (config._qaDelayMs > 0) {
+        await new Promise(r => setTimeout(r, config._qaDelayMs))
+      }
       actualEpisodes++
       if (mlMarkConfig === 'alternating') mlMark = mlMark === 'X' ? 'O' : 'X'
 

@@ -14,6 +14,7 @@ import {
   approveSession,
   denySession,
   listPendingApprovals,
+  startTraining as mlStartTraining,
 } from '../services/mlService.js'
 import { GAME_IDS } from '../constants/games.js'
 import { hasRole } from '../utils/roles.js'
@@ -60,6 +61,39 @@ router.post('/gc/run', async (req, res, next) => {
     const result = await gcSweep(null)
     res.json(result)
   } catch (err) {
+    next(err)
+  }
+})
+
+// ─── QA crash-recovery start hook (A3a.9) ───────────────────────────────────
+// `um training-recovery start` POSTs here so the training loop runs in the
+// long-lived backend process. If the CLI called startTraining directly its
+// in-process setImmediate would die when the CLI exits — defeating the very
+// crash-recovery scenario the harness is supposed to test.
+// QA_SECRET-gated (same pattern as /gc/run); falls through to admin JWT
+// if header is missing.
+router.post('/qa/training-recovery/start', async (req, res, next) => {
+  try {
+    const qaSecret = process.env.QA_SECRET
+    const headerSecret = req.headers['x-qa-secret']
+    if (!qaSecret || headerSecret !== qaSecret) {
+      return next('route')
+    }
+    const { skillId, delayMs = 80 } = req.body || {}
+    if (!skillId) return res.status(400).json({ error: 'skillId required' })
+    const session = await mlStartTraining(skillId, {
+      mode:   'VS_MINIMAX',
+      preset: 'quick',
+      config: { difficulty: 'easy', _qaHarness: true, _qaDelayMs: delayMs },
+    })
+    res.json({
+      sessionId: session.id,
+      skillId,
+      iterations: session.iterations,
+      expectedDurationMs: session.expectedDurationMs,
+    })
+  } catch (err) {
+    logger.error({ err }, 'qa/training-recovery/start failed')
     next(err)
   }
 })

@@ -1,5 +1,10 @@
 [
   {
+    "version": "1.4.0-alpha-5.14",
+    "date": "2026-05-21",
+    "description": "QA — um training-recovery harness for A3a.9 crash recovery (start --count N + verify --session); QA_SECRET-gated admin endpoint runs training in the long-lived backend process; per-episode _qaDelayMs hook so the crash window stays open long enough to actually restart; 10 unit tests + runbook"
+  },
+  {
     "version": "1.4.0-alpha-5.13",
     "date": "2026-05-19",
     "description": "A3a backend — tournament match-level ELO opt-in (TTT off, C4 on at launch) + series-winner attribution fix; TrainingSession schema audit + TrainingCheckpoint/TrainingMetric tables; ml:session → training channel rename; Quick/Standard/Deep presets per (game, algorithm); 4hr ETA admin-approval gate + endpoints; per-user concurrency cap; multi-curve eval (~20 games/eval, primary+easy+medium); checkpoint-based crash recovery; pause/resume backend; corpus docs"
