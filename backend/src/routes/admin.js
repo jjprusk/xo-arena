@@ -76,7 +76,7 @@ router.post('/gc/run', async (req, res, next) => {
 const QA_SEED_USERNAME = 'qa-recovery-seed'
 const QA_SEED_SKILL_NAME = 'QA Recovery Skill'
 
-async function _qaEnsureSeedSkill(slot) {
+async function _qaEnsureSeedSkill(slot, algorithm = 'qlearning') {
   let user = await db.user.findUnique({ where: { username: QA_SEED_USERNAME } })
   if (!user) {
     user = await db.user.create({
@@ -88,13 +88,18 @@ async function _qaEnsureSeedSkill(slot) {
       },
     })
   }
-  const name = slot > 1 ? `${QA_SEED_SKILL_NAME} ${slot}` : QA_SEED_SKILL_NAME
+  // Per-(algorithm, slot) skill so the A3b.6 soak can fan out 10 virtual
+  // users × mixed algos without different algos clobbering each other's
+  // BotSkill row. Slot 1 + qlearning preserves the legacy name so the
+  // crash-recovery harness keeps finding its existing fixture.
+  const baseName = `${QA_SEED_SKILL_NAME}${algorithm === 'qlearning' ? '' : ` [${algorithm}]`}`
+  const name = slot > 1 ? `${baseName} ${slot}` : baseName
   let skill = await db.botSkill.findFirst({ where: { name, createdBy: null } })
   if (!skill) {
     skill = await db.botSkill.create({
       data: {
         name,
-        algorithm: 'qlearning',
+        algorithm,
         gameId:    'tic-tac-toe',
         weights:   {},
         config:    {},
@@ -275,11 +280,13 @@ router.post('/qa/training-worker/start', async (req, res, next) => {
     const slotRaw       = req.body?.slot ?? 1
     const iterationsRaw = req.body?.iterations ?? 200
     const delayMsRaw    = req.body?.delayMs ?? 0
+    const algorithmRaw  = req.body?.algorithm
     const slot          = parseInt(slotRaw, 10) || 1
     const iterations    = parseInt(iterationsRaw, 10) || 200
     const delayMs       = parseInt(delayMsRaw, 10) || 0
+    const algorithm     = typeof algorithmRaw === 'string' && algorithmRaw ? algorithmRaw : 'qlearning'
 
-    const skill = await _qaEnsureSeedSkill(slot)
+    const skill = await _qaEnsureSeedSkill(slot, algorithm)
 
     const session = await db.trainingSession.create({
       data: {
@@ -289,7 +296,7 @@ router.post('/qa/training-worker/start', async (req, res, next) => {
         status:     'RUNNING',
         preset:     'quick',
         config: {
-          algorithm:    'qlearning',
+          algorithm,
           difficulty:   'easy',
           _qaHarness:   true,
           _qaWorker:    true,
