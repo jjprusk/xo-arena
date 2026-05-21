@@ -72,6 +72,57 @@ router.post('/gc/run', async (req, res, next) => {
 // crash-recovery scenario the harness is supposed to test.
 // QA_SECRET-gated (same pattern as /gc/run); falls through to admin JWT
 // if header is missing.
+// Seed user constants (kept in sync with backend/src/cli/commands/trainingRecovery.js).
+const QA_SEED_USERNAME = 'qa-recovery-seed'
+const QA_SEED_SKILL_NAME = 'QA Recovery Skill'
+
+async function _qaEnsureSeedSkill(slot) {
+  let user = await db.user.findUnique({ where: { username: QA_SEED_USERNAME } })
+  if (!user) {
+    user = await db.user.create({
+      data: {
+        username:    QA_SEED_USERNAME,
+        email:       `${QA_SEED_USERNAME}@arena.test`,
+        displayName: 'QA Recovery Seed',
+        isBot:       false,
+      },
+    })
+  }
+  const name = slot > 1 ? `${QA_SEED_SKILL_NAME} ${slot}` : QA_SEED_SKILL_NAME
+  let skill = await db.botSkill.findFirst({ where: { name, createdBy: null } })
+  if (!skill) {
+    skill = await db.botSkill.create({
+      data: {
+        name,
+        algorithm: 'qlearning',
+        gameId:    'tic-tac-toe',
+        weights:   {},
+        config:    {},
+        status:    'IDLE',
+        createdBy: null,
+      },
+    })
+  } else if (skill.status === 'TRAINING') {
+    // Stale lock from a previous failed run — unstick it.
+    skill = await db.botSkill.update({
+      where: { id: skill.id },
+      data:  { status: 'IDLE' },
+    })
+  }
+  // Cancel any stale RUNNING/PENDING sessions on this skill.
+  const stale = await db.trainingSession.findMany({
+    where: { modelId: skill.id, status: { in: ['RUNNING', 'PENDING'] } },
+  })
+  if (stale.length > 0) {
+    await db.trainingSession.updateMany({
+      where: { id: { in: stale.map(s => s.id) } },
+      data:  { status: 'CANCELLED', completedAt: new Date(),
+               summary: { cancelledBy: 'qa/training-recovery/start (stale cleanup)' } },
+    })
+  }
+  return skill
+}
+
 router.post('/qa/training-recovery/start', async (req, res, next) => {
   try {
     const qaSecret = process.env.QA_SECRET
@@ -79,8 +130,18 @@ router.post('/qa/training-recovery/start', async (req, res, next) => {
     if (!qaSecret || headerSecret !== qaSecret) {
       return next('route')
     }
-    const { skillId, delayMs = 80 } = req.body || {}
-    if (!skillId) return res.status(400).json({ error: 'skillId required' })
+    // Two modes:
+    //   • {skillId}: caller (local CLI with DB access) ensured the skill.
+    //   • {slot}:    server ensures the seed user + per-slot skill so the
+    //                CLI doesn't need DB access — required for remote envs
+    //                (staging/prod) where the CLI can't reach the DB.
+    let { skillId, slot, delayMs = 60 } = req.body || {}
+    if (!skillId && slot != null) {
+      const skill = await _qaEnsureSeedSkill(parseInt(slot, 10) || 1)
+      skillId = skill.id
+    }
+    if (!skillId) return res.status(400).json({ error: 'skillId or slot required' })
+
     const session = await mlStartTraining(skillId, {
       mode:   'VS_MINIMAX',
       preset: 'quick',
@@ -94,6 +155,43 @@ router.post('/qa/training-recovery/start', async (req, res, next) => {
     })
   } catch (err) {
     logger.error({ err }, 'qa/training-recovery/start failed')
+    next(err)
+  }
+})
+
+router.get('/qa/training-recovery/status', async (req, res, next) => {
+  try {
+    const qaSecret = process.env.QA_SECRET
+    const headerSecret = req.headers['x-qa-secret']
+    if (!qaSecret || headerSecret !== qaSecret) {
+      return next('route')
+    }
+    const raw = req.query.sessionId
+    const ids = Array.isArray(raw) ? raw : raw ? [raw] : []
+    if (ids.length === 0) return res.status(400).json({ error: 'sessionId query param required' })
+
+    const sessions = await db.trainingSession.findMany({
+      where:  { id: { in: ids } },
+      select: {
+        id: true, status: true, checkpointEpisode: true, iterations: true,
+        pausedAt: true, summary: true, modelId: true,
+        model: { select: { status: true } },
+      },
+    })
+    res.json({
+      sessions: sessions.map(s => ({
+        sessionId:         s.id,
+        status:            s.status,
+        checkpointEpisode: s.checkpointEpisode,
+        iterations:        s.iterations,
+        pausedAt:          s.pausedAt,
+        summary:           s.summary,
+        modelId:           s.modelId,
+        botSkillStatus:    s.model?.status ?? null,
+      })),
+    })
+  } catch (err) {
+    logger.error({ err }, 'qa/training-recovery/status failed')
     next(err)
   }
 })

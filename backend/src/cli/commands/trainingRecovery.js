@@ -148,14 +148,30 @@ async function cleanupStaleSessions(skillId) {
   return stale.length
 }
 
-async function waitForFirstCheckpoint(sessionId, timeoutMs) {
+/**
+ * Fetch session status(es) over HTTP via the QA endpoint. Plural input,
+ * map output keyed by sessionId. Throws on any network / auth error.
+ */
+async function fetchStatuses(baseUrl, qaSecret, sessionIds) {
+  const url = `${baseUrl}/api/v1/admin/qa/training-recovery/status?` +
+    sessionIds.map(id => `sessionId=${encodeURIComponent(id)}`).join('&')
+  const res = await fetch(url, { headers: { 'x-qa-secret': qaSecret } })
+  if (!res.ok) {
+    const body = await res.text()
+    throw new Error(`status fetch failed (${res.status}): ${body}`)
+  }
+  const { sessions } = await res.json()
+  const byId = {}
+  for (const s of sessions) byId[s.sessionId] = s
+  return byId
+}
+
+async function waitForFirstCheckpoint(baseUrl, qaSecret, sessionId, timeoutMs) {
   const deadline = Date.now() + timeoutMs
   let lastReportedEpisode = -1
   while (Date.now() < deadline) {
-    const s = await db.trainingSession.findUnique({
-      where:  { id: sessionId },
-      select: { status: true, checkpointEpisode: true },
-    })
+    const map = await fetchStatuses(baseUrl, qaSecret, [sessionId])
+    const s = map[sessionId]
     if (!s) throw new Error(`session ${sessionId} disappeared`)
     if (s.status === 'FAILED' || s.status === 'CANCELLED') {
       throw new Error(`session ${sessionId} entered ${s.status} before first checkpoint`)
@@ -183,41 +199,33 @@ async function startCmd(opts) {
   }
   const baseUrl = backendBaseUrl(env)
 
-  const { skills } = await ensureSeedUserAndSkills(count)
-  for (const s of skills) {
-    const cleaned = await cleanupStaleSessions(s.id)
-    if (cleaned > 0) {
-      process.stderr.write(colorize(`  cleaned up ${cleaned} stale session(s) on skill ${s.id}\n`, 'dim'))
-    }
-  }
-
-  // POST to the backend QA endpoint so each training loop runs in the
-  // long-lived backend process (the one we'll restart). 60ms × 5000
-  // episodes = ~300s per session; all N are kicked off in parallel.
-  const started = await Promise.all(skills.map(async (skill) => {
+  // The endpoint now also handles seed prep when called with {slot:N},
+  // so the CLI doesn't need direct DB access — required for remote envs
+  // (staging/prod) where the CLI can't reach the database.
+  const started = await Promise.all(Array.from({ length: count }, (_, i) => i + 1).map(async (slot) => {
     const res = await fetch(`${baseUrl}/api/v1/admin/qa/training-recovery/start`, {
       method:  'POST',
       headers: { 'Content-Type': 'application/json', 'x-qa-secret': qaSecret },
-      body:    JSON.stringify({ skillId: skill.id, delayMs: 60 }),
+      body:    JSON.stringify({ slot, delayMs: 60 }),
     })
     if (!res.ok) {
       const body = await res.text()
-      throw new Error(`backend rejected start for skill ${skill.id} (${res.status}): ${body}`)
+      throw new Error(`backend rejected start for slot ${slot} (${res.status}): ${body}`)
     }
     const session = await res.json()
     session.id = session.sessionId
-    return { skill, session }
+    return { slot, session }
   }))
 
-  for (const { skill, session } of started) {
-    process.stderr.write(`Started session ${colorize(session.id, 'green')} on skill ${skill.id}\n`)
+  for (const { slot, session } of started) {
+    process.stderr.write(`Started session ${colorize(session.id, 'green')} on skill ${session.skillId} (slot ${slot})\n`)
   }
   process.stderr.write(`Waiting for first checkpoint on all ${count} session(s) (timeout ${FIRST_CHECKPOINT_TIMEOUT_MS / 1000}s)…\n`)
 
   // Wait for every session to hit its first checkpoint. Partial-success is
   // useful diagnostic data so we settle all, then report.
   const results = await Promise.allSettled(
-    started.map(r => waitForFirstCheckpoint(r.session.id, FIRST_CHECKPOINT_TIMEOUT_MS))
+    started.map(r => waitForFirstCheckpoint(baseUrl, qaSecret, r.session.id, FIRST_CHECKPOINT_TIMEOUT_MS))
   )
   let anyFailed = false
   results.forEach((r, idx) => {
@@ -257,12 +265,17 @@ async function verifyCmd(opts) {
   const env = umEnv ?? 'local'
   console.error(colorize(`[ training-recovery ]`, 'yellow') + ` env=${env} sessions=${sessionIds.length}`)
 
+  const qaSecret = process.env.QA_SECRET
+  if (!qaSecret) throw new Error('QA_SECRET env var is required')
+  const baseUrl = backendBaseUrl(env)
+
   // Snapshot the checkpointEpisode each session was at when verify started.
   // Used both as the "resumed from" diagnostic + to flag sessions that have
   // no checkpoint at all (no resume possible).
+  const initialMap = await fetchStatuses(baseUrl, qaSecret, sessionIds)
   const initial = {}
   for (const sid of sessionIds) {
-    const row = await db.trainingSession.findUnique({ where: { id: sid } })
+    const row = initialMap[sid]
     if (!row) { fail(`session ${sid} not found`); return }
     if (!row.checkpointEpisode) {
       fail(`session ${sid} has no checkpoint — did 'start' actually wait for one? (last status=${row.status})`)
@@ -274,17 +287,15 @@ async function verifyCmd(opts) {
   process.stderr.write(`Polling ${sessionIds.length} session(s) for resume → completion (timeout ${RESUME_TIMEOUT_MS / 1000}s)…\n`)
   const deadline = Date.now() + RESUME_TIMEOUT_MS
   const pending = new Set(sessionIds)
-  const results = {}   // sessionId → { decision, finalState, botSkill }
+  const results = {}   // sessionId → { decision, finalState, botSkillStatus }
   const lastSeen = {}  // sessionId → { status, episode }
 
   while (pending.size > 0 && Date.now() < deadline) {
+    const map = await fetchStatuses(baseUrl, qaSecret, [...pending])
     for (const sid of [...pending]) {
-      const s = await db.trainingSession.findUnique({
-        where:  { id: sid },
-        select: { status: true, checkpointEpisode: true, summary: true, iterations: true, modelId: true },
-      })
+      const s = map[sid]
       if (!s) {
-        results[sid] = { decision: { kind: 'fail', reason: 'disappeared' }, finalState: null, botSkill: null }
+        results[sid] = { decision: { kind: 'fail', reason: 'disappeared' }, finalState: null, botSkillStatus: null }
         pending.delete(sid)
         continue
       }
@@ -295,13 +306,12 @@ async function verifyCmd(opts) {
         lastSeen[sid] = { status: s.status, episode: s.checkpointEpisode }
       }
       if (s.status === 'COMPLETED' || s.status === 'FAILED' || s.status === 'CANCELLED') {
-        const botSkill = await db.botSkill.findUnique({
-          where: { id: s.modelId }, select: { status: true },
-        })
         const decision = evaluateVerifyState({
-          session: s, botSkill, startedFromCheckpoint: initial[sid],
+          session: s,
+          botSkill: { status: s.botSkillStatus },
+          startedFromCheckpoint: initial[sid],
         })
-        results[sid] = { decision, finalState: s, botSkill }
+        results[sid] = { decision, finalState: s, botSkillStatus: s.botSkillStatus }
         pending.delete(sid)
       }
     }
@@ -318,11 +328,11 @@ async function verifyCmd(opts) {
 
   let passes = 0, fails = 0
   for (const sid of sessionIds) {
-    const { decision, finalState, botSkill } = results[sid]
+    const { decision, finalState, botSkillStatus } = results[sid]
     if (decision.kind === 'pass') {
       passes++
       const anomalyNote = decision.anomalies.length > 0 ? ` (anomalies: ${decision.anomalies.join('; ')})` : ''
-      ok(`[${sid}] PASSED — resumed from ep ${initial[sid]} → final ep ${finalState?.checkpointEpisode}/${finalState?.iterations}, skill ${botSkill?.status}${anomalyNote}`)
+      ok(`[${sid}] PASSED — resumed from ep ${initial[sid]} → final ep ${finalState?.checkpointEpisode}/${finalState?.iterations}, skill ${botSkillStatus}${anomalyNote}`)
     } else {
       fails++
       fail(`[${sid}] FAILED — ${decision.reason}`)
