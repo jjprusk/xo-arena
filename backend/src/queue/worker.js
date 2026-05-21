@@ -18,8 +18,9 @@ import logger from '../logger.js'
 import { TRAINING_QUEUE_NAME } from './trainingQueue.js'
 import { handlePing } from './jobs/ping.js'
 import { handleTrainingStart } from './jobs/trainingStart.js'
-import { initSignalBus } from '../lib/signalBus.js'
+import { initSignalBus, requestPause } from '../lib/signalBus.js'
 import { readWorkerOptions } from './workerOptions.js'
+import { getActiveSessions } from './activeSessions.js'
 
 const HANDLERS = {
   'ping':           handlePing,
@@ -64,8 +65,31 @@ async function main() {
   worker.on('completed', (job) => logger.info({ jobId: job.id, name: job.name }, 'training job completed'))
   worker.on('failed',    (job, err) => logger.error({ jobId: job?.id, name: job?.name, err }, 'training job failed'))
 
+  // A3b.4 — graceful shutdown. For every in-flight training session,
+  // raise the signalBus pause flag so the loop's next tick force-writes
+  // a checkpoint and flips the row to PENDING + pausedAt. Then await
+  // worker.close() — BullMQ won't let it resolve until each active job
+  // either completes or throws. Because we paused first, the job
+  // resolves normally (it sees the flag, force-checkpoints, returns).
+  //
+  // If worker.close() outruns its grace period, BullMQ marks any still
+  // in-flight job stalled — and the next worker that picks it up will
+  // resume from the checkpoint we just wrote. Either way, no work is
+  // lost between checkpoints.
+  let shuttingDown = false
   const shutdown = async (sig) => {
-    logger.info({ sig }, 'training worker shutting down')
+    if (shuttingDown) return
+    shuttingDown = true
+    const active = getActiveSessions()
+    logger.info({ sig, activeSessions: active.length }, 'training worker shutting down')
+    for (const sessionId of active) {
+      try {
+        requestPause(sessionId)
+        logger.info({ sessionId }, 'pause requested for in-flight session')
+      } catch (err) {
+        logger.error({ err, sessionId }, 'failed to request pause during shutdown')
+      }
+    }
     try { await worker.close() } catch (err) { logger.error({ err }, 'worker close failed') }
     try { connection.disconnect() } catch {}
     process.exit(0)

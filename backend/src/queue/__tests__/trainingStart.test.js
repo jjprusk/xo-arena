@@ -47,4 +47,34 @@ describe('handleTrainingStart', () => {
     const job   = makeJob({ data: { sessionId: 'sess_err' } })
     await expect(handleTrainingStart(job, { runFn })).rejects.toThrow('boom')
   })
+
+  // A3b.4 — register/unregister must wrap the runner so SIGTERM can see
+  // every in-flight session, and unregister must still fire if the
+  // runner throws (otherwise the shutdown path waits forever on a
+  // phantom entry).
+  it('registers the session before the runner and unregisters after success', async () => {
+    const order = []
+    const onStart  = vi.fn(id => order.push(`reg:${id}`))
+    const onFinish = vi.fn(id => order.push(`unreg:${id}`))
+    const runFn    = vi.fn(async () => { order.push('ran'); return { completed: true } })
+
+    await handleTrainingStart(makeJob({ data: { sessionId: 'sess_lifecycle' } }), { runFn, onStart, onFinish })
+
+    expect(order).toEqual(['reg:sess_lifecycle', 'ran', 'unreg:sess_lifecycle'])
+    expect(onStart).toHaveBeenCalledWith('sess_lifecycle')
+    expect(onFinish).toHaveBeenCalledWith('sess_lifecycle')
+  })
+
+  it('unregisters even when the runner throws — no zombie registry entries', async () => {
+    const onStart  = vi.fn()
+    const onFinish = vi.fn()
+    const runFn    = vi.fn().mockRejectedValue(new Error('runner failed'))
+
+    await expect(
+      handleTrainingStart(makeJob({ data: { sessionId: 'sess_throw' } }), { runFn, onStart, onFinish }),
+    ).rejects.toThrow('runner failed')
+
+    expect(onStart).toHaveBeenCalledWith('sess_throw')
+    expect(onFinish).toHaveBeenCalledWith('sess_throw')
+  })
 })

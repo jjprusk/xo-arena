@@ -323,6 +323,56 @@ router.post('/qa/training-worker/start', async (req, res, next) => {
 
 router.use(requireAuth, requireAdmin)
 
+// ─── A3b.4 — Training dead-letter inspection ─────────────────────────────────
+//
+// BullMQ doesn't have a separate dead-letter queue concept — failed jobs
+// stay in the queue's `failed` set indefinitely (we don't set
+// removeOnFail). After 3 attempts (see enqueueTrainingStart) a job lands
+// here permanently. This endpoint exposes them so an admin can triage
+// without running redis-cli, and enriches each with the matching
+// TrainingSession summary if the job was a training:start.
+router.get('/training/dead-letter', async (req, res, next) => {
+  try {
+    const limit = Math.min(parseInt(req.query.limit, 10) || 50, 200)
+    const { getTrainingQueue } = await import('../queue/trainingQueue.js')
+    const queue = getTrainingQueue()
+    const failed = await queue.getFailed(0, limit - 1)
+
+    const sessionIds = failed
+      .map(j => j.name === 'training:start' ? j.data?.sessionId : null)
+      .filter(Boolean)
+    const sessions = sessionIds.length > 0
+      ? await db.trainingSession.findMany({
+          where:  { id: { in: sessionIds } },
+          select: { id: true, status: true, iterations: true, summary: true,
+                    pausedAt: true, checkpointEpisode: true,
+                    model: { select: { id: true, name: true, algorithm: true } } },
+        })
+      : []
+    const sessionById = new Map(sessions.map(s => [s.id, s]))
+
+    res.json({
+      count: failed.length,
+      jobs:  failed.map(j => ({
+        id:             j.id,
+        name:           j.name,
+        data:           j.data,
+        attemptsMade:   j.attemptsMade,
+        failedReason:   j.failedReason,
+        finishedOn:     j.finishedOn ?? null,
+        processedOn:    j.processedOn ?? null,
+        stacktrace:     Array.isArray(j.stacktrace) ? j.stacktrace.slice(0, 3) : j.stacktrace,
+        session:        j.name === 'training:start' && j.data?.sessionId
+          ? sessionById.get(j.data.sessionId) ?? null
+          : null,
+      })),
+    })
+  } catch (err) {
+    logger.error({ err }, 'admin/training/dead-letter failed')
+    next(err)
+  }
+})
+
 // ─── Resource health ─────────────────────────────────────────────────────────
 
 /**

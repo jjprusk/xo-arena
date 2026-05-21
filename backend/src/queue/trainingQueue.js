@@ -52,11 +52,21 @@ export async function enqueuePing(message) {
  * The caller is responsible for having created the session row and flipped
  * the BotSkill to TRAINING; the worker just runs the loop. See
  * `_runTrainingForQueueJob` in mlService.js for the consumer side.
+ *
+ * A3b.4 — `attempts: 3` + exponential backoff covers transient failures
+ * (Redis hiccup, brief DB outage, OOM-then-restart). After all attempts
+ * are exhausted, BullMQ keeps the job in the `failed` index (we don't
+ * set `removeOnFail`), which is what `GET /admin/training/dead-letter`
+ * reads. Backoff is intentionally generous — the worker pool is small
+ * and aggressive retries on a real bug just amplify the symptom.
  */
 export async function enqueueTrainingStart(sessionId) {
   if (!sessionId) throw new Error('enqueueTrainingStart: sessionId required')
   const queue = getTrainingQueue()
-  return queue.add('training:start', { sessionId, enqueuedAt: Date.now() })
+  return queue.add('training:start', { sessionId, enqueuedAt: Date.now() }, {
+    attempts: 3,
+    backoff:  { type: 'exponential', delay: 30_000 }, // 30s, 60s, 120s
+  })
 }
 
 // Test-only: close producer connections so vitest can exit cleanly.

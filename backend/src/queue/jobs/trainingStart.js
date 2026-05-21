@@ -13,8 +13,19 @@
  */
 import logger from '../../logger.js'
 import { _runTrainingForQueueJob } from '../../services/mlService.js'
+import {
+  registerActiveSession   as _defaultRegister,
+  unregisterActiveSession as _defaultUnregister,
+} from '../activeSessions.js'
 
-export async function handleTrainingStart(job, { runFn = _runTrainingForQueueJob } = {}) {
+export async function handleTrainingStart(
+  job,
+  {
+    runFn        = _runTrainingForQueueJob,
+    onStart      = _defaultRegister,
+    onFinish     = _defaultUnregister,
+  } = {},
+) {
   const { sessionId, enqueuedAt = null } = job.data ?? {}
   if (!sessionId) throw new Error('training:start job missing sessionId')
 
@@ -26,13 +37,19 @@ export async function handleTrainingStart(job, { runFn = _runTrainingForQueueJob
     'training:start picked up by worker'
   )
 
-  const result = await runFn(sessionId)
-
-  const durationMs = Date.now() - startedAt
-  logger.info(
-    { queueJobId: job.id, sessionId, durationMs, lagMs },
-    'training:start completed'
-  )
-
-  return { ok: true, sessionId, lagMs, durationMs, ...result }
+  // A3b.4 — record the session so SIGTERM can ask it to pause+checkpoint
+  // before the worker closes. unregister via try/finally so a thrown
+  // runner doesn't leave a phantom entry the shutdown path would wait on.
+  onStart(sessionId)
+  try {
+    const result = await runFn(sessionId)
+    const durationMs = Date.now() - startedAt
+    logger.info(
+      { queueJobId: job.id, sessionId, durationMs, lagMs },
+      'training:start completed'
+    )
+    return { ok: true, sessionId, lagMs, durationMs, ...result }
+  } finally {
+    onFinish(sessionId)
+  }
 }
