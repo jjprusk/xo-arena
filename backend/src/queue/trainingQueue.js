@@ -47,6 +47,18 @@ export async function enqueuePing(message) {
   return queue.add('ping', { message, enqueuedAt: Date.now() })
 }
 
+/**
+ * A3b.2a — enqueue a `training:start` job for an existing TrainingSession.
+ * The caller is responsible for having created the session row and flipped
+ * the BotSkill to TRAINING; the worker just runs the loop. See
+ * `_runTrainingForQueueJob` in mlService.js for the consumer side.
+ */
+export async function enqueueTrainingStart(sessionId) {
+  if (!sessionId) throw new Error('enqueueTrainingStart: sessionId required')
+  const queue = getTrainingQueue()
+  return queue.add('training:start', { sessionId, enqueuedAt: Date.now() })
+}
+
 // Test-only: close producer connections so vitest can exit cleanly.
 export async function _closeTrainingQueueForTests() {
   if (_queue) { await _queue.close(); _queue = null }

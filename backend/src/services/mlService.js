@@ -1008,6 +1008,48 @@ export async function resumeOrphanedSessions() {
 }
 
 /**
+ * A3b.2a — run an existing TrainingSession from a queue job.
+ *
+ * The worker handler (`backend/src/queue/jobs/trainingStart.js`) calls
+ * this with a sessionId after picking the job off the BullMQ queue. We
+ * resolve the session + model + latest checkpoint (so a re-enqueued job
+ * resumes from where the previous attempt left off, matching the
+ * setImmediate path's crash-recovery behavior).
+ *
+ * The caller is expected to have already created the TrainingSession
+ * row (status RUNNING) and flipped the BotSkill to TRAINING — this
+ * function just executes the loop. That mirrors what startTraining()
+ * does today before the setImmediate; A3b.2b lifts the create+enqueue
+ * pair into startTraining itself behind a SystemConfig flag.
+ */
+export async function _runTrainingForQueueJob(sessionId) {
+  const session = await db.trainingSession.findUnique({
+    where:   { id: sessionId },
+    include: { model: true },
+  })
+  if (!session) throw new Error(`Session not found: ${sessionId}`)
+  if (!session.model) throw new Error(`Model not found for session: ${sessionId}`)
+
+  const checkpoint = await db.trainingCheckpoint.findFirst({
+    where:   { sessionId },
+    orderBy: { episodeNum: 'desc' },
+  })
+
+  await _runTraining(session.model, session, {
+    mode:         session.mode,
+    iterations:   session.iterations,
+    config:       session.config,
+    startEpisode: checkpoint?.episodeNum ?? 0,
+    resumedEngineState: checkpoint ? {
+      weights: checkpoint.weights,
+      epsilon: checkpoint.runtimeState?.epsilon ?? null,
+    } : null,
+  })
+
+  return { completed: true, resumedFrom: checkpoint?.episodeNum ?? 0 }
+}
+
+/**
  * A3a.10 — request a graceful pause. Adds the session to the pausedSessions
  * signal Set; the training loop's next tick force-writes a checkpoint and
  * transitions the row to PENDING + pausedAt. Returns immediately — the loop

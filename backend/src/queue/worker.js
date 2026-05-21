@@ -17,9 +17,11 @@ import IORedis from 'ioredis'
 import logger from '../logger.js'
 import { TRAINING_QUEUE_NAME } from './trainingQueue.js'
 import { handlePing } from './jobs/ping.js'
+import { handleTrainingStart } from './jobs/trainingStart.js'
 
 const HANDLERS = {
-  ping: handlePing,
+  'ping':           handlePing,
+  'training:start': handleTrainingStart,
 }
 
 async function dispatch(job) {

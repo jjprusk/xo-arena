@@ -222,6 +222,68 @@ router.post('/qa/training-worker/ping', async (req, res, next) => {
   }
 })
 
+// ─── A3b.2a — shadow-mode training:start ─────────────────────────────────────
+//
+// Mints a TrainingSession on the qa-recovery-seed skill (same fixture
+// the crash-recovery harness uses) and enqueues a `training:start` job.
+// The session goes through the worker process end-to-end — the backend
+// does NOT setImmediate it. The startTraining() path used by real users
+// is unchanged; A3b.2b is the flag-gated cut-over.
+router.post('/qa/training-worker/start', async (req, res, next) => {
+  try {
+    const qaSecret = process.env.QA_SECRET
+    const headerSecret = req.headers['x-qa-secret']
+    if (!qaSecret || headerSecret !== qaSecret) return next('route')
+
+    const slotRaw       = req.body?.slot ?? 1
+    const iterationsRaw = req.body?.iterations ?? 200
+    const delayMsRaw    = req.body?.delayMs ?? 0
+    const slot          = parseInt(slotRaw, 10) || 1
+    const iterations    = parseInt(iterationsRaw, 10) || 200
+    const delayMs       = parseInt(delayMsRaw, 10) || 0
+
+    const skill = await _qaEnsureSeedSkill(slot)
+
+    const session = await db.trainingSession.create({
+      data: {
+        modelId:    skill.id,
+        mode:       'VS_MINIMAX',
+        iterations,
+        status:     'RUNNING',
+        preset:     'quick',
+        config: {
+          algorithm:    'qlearning',
+          difficulty:   'easy',
+          _qaHarness:   true,
+          _qaWorker:    true,
+          _qaDelayMs:   delayMs,
+        },
+      },
+    })
+    await db.botSkill.update({
+      where: { id: skill.id },
+      data:  { status: 'TRAINING' },
+    })
+
+    const { enqueueTrainingStart, getTrainingQueue } = await import('../queue/trainingQueue.js')
+    const job   = await enqueueTrainingStart(session.id)
+    const queue = getTrainingQueue()
+    const waiting = await queue.getWaitingCount()
+
+    res.json({
+      sessionId: session.id,
+      skillId:   skill.id,
+      iterations,
+      jobId:     job.id,
+      jobName:   job.name,
+      queueWaitingCount: waiting,
+    })
+  } catch (err) {
+    logger.error({ err }, 'qa/training-worker/start failed')
+    next(err)
+  }
+})
+
 router.use(requireAuth, requireAdmin)
 
 // ─── Resource health ─────────────────────────────────────────────────────────
