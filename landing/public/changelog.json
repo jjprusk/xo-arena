@@ -1,5 +1,10 @@
 [
   {
+    "version": "1.4.0-alpha-5.17",
+    "date": "2026-05-21",
+    "description": "A3b.6 — soak validated training-worker cutover (144 sessions, 0 DL, 0 alerts, A3b.4 retry recovered 8 transient errors); ready to promote"
+  },
+  {
     "version": "1.4.0-alpha-5.16",
     "date": "2026-05-21",
     "description": "A3b.5 training-worker observability + A3b.6 prep: algorithm-aware QA endpoint and 10-user mixed-algo soak harness"
