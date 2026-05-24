@@ -213,6 +213,11 @@ export const api = {
     getQTable:        (id)         => api.get(`/ml/models/${id}/qtable`),
     explainMove:      (id, board)  => api.post(`/ml/models/${id}/explain`, { board }),
     train:            (id, b, tok) => api.post(`/ml/models/${id}/train`, b, tok),
+    // A3b.10 — runtime resolver. Returns { gameId, algorithm, runtime }
+    // where runtime is 'frontend' | 'backend-in-process' | 'worker'.
+    // Public read; cached: no-store so admin matrix edits land immediately.
+    getRuntime:       (gameId, algorithm) =>
+      api.get(`/ml/runtime?gameId=${encodeURIComponent(gameId)}&algorithm=${encodeURIComponent(algorithm)}`),
     finishSession:    (id, b, tok) => api.post(`/ml/sessions/${id}/finish`, b, tok),
     getSessions:      (id)         => api.get(`/ml/models/${id}/sessions`),
     getSession:       (id)         => api.get(`/ml/sessions/${id}`),

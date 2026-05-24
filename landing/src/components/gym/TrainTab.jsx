@@ -53,6 +53,12 @@ export default function TrainTab({ model, sessions, onSessionsChange, onComplete
   const [progress, setProgress]             = useState(null)
   const [chartData, setChartData]           = useState([])
   const [curriculumDifficulty, setCurriculumDifficulty] = useState(null)
+  // A3b.10 — true when the runtime resolver routes this (game, algo) to
+  // 'worker' or 'backend-in-process'. We show a "Training in background —
+  // you can close this tab" affordance because the loop is no longer
+  // bound to this browser session (worker survives tab close, in-process
+  // backend survives navigation as long as the backend stays up).
+  const [backgroundMode, setBackgroundMode] = useState(false)
   const cleanupRef   = useRef(null)
   const cancelRef    = useRef(false)
   // Set by the resume-watch effect when a backend-driven session is running.
@@ -162,7 +168,24 @@ export default function TrainTab({ model, sessions, onSessionsChange, onComplete
       setProgress(null)
       setChartData([])
       setCurriculumDifficulty(null)
+      setBackgroundMode(false)
     })
+
+    // A3b.10 — consult the runtime matrix BEFORE deciding the request
+    // shape. TTT q-learning/sarsa/monte_carlo stays in the browser
+    // (fastest path, no server cycles). DQN/AlphaZero and all Connect 4
+    // algorithms get pushed to the worker so the loop survives tab close.
+    // Lookup failures fall back to the legacy frontend path so a
+    // backend hiccup never blocks the user from training.
+    let runtime = 'frontend'
+    try {
+      const r = await api.ml.getRuntime(model.gameId, algorithm)
+      if (r?.runtime === 'worker' || r?.runtime === 'backend-in-process') runtime = r.runtime
+      else if (r?.runtime === 'frontend') runtime = 'frontend'
+    } catch {
+      // Resolver unreachable — fall through to frontend. Better to train
+      // in the browser than to refuse with a confusing error.
+    }
 
     const token = await getToken()
     const cfg = {
@@ -175,7 +198,51 @@ export default function TrainTab({ model, sessions, onSessionsChange, onComplete
       ...(algorithm === 'ALPHA_ZERO' ? { numSimulations: azSimulations, cPuct: azCPuct, temperature: azTemperature } : {}),
     }
     try {
-      // Create session on backend and get current model weights for engine init
+      // A3b.10 — backend-driven runtimes ('worker' / 'backend-in-process')
+      // mint the session on the server and skip the local episode loop
+      // entirely. The existing SSE subscription (watchedSessionId) picks
+      // up progress events the backend / worker publishes to
+      // training:<sessionId>:progress.
+      if (runtime !== 'frontend') {
+        const { session } = await api.ml.train(model.id, { mode, iterations, config: cfg }, token)
+        flushSync(() => {
+          onSessionsChange(prev => [session, ...prev])
+          setSessionId(session.id)
+          setWatchedSessionId(session.id)
+          setBackgroundMode(true)
+          if (curriculum && mode === 'VS_MINIMAX') setCurriculumDifficulty('novice')
+        })
+        // Hook up SSE callbacks. The watcher consumes the same progress
+        // payload shape as the frontend loop's onProgress, so we just
+        // mirror that branch's transform here.
+        handlersRef.current = {
+          onProgress: (data) => {
+            flushSync(() => {
+              setProgress({ ...data, sessionId: session.id })
+              setChartData(prev => [...prev, {
+                ep: data.episode,
+                winRate:  Math.round(data.winRate  * 100),
+                lossRate: Math.round(data.lossRate * 100),
+                drawRate: Math.round(data.drawRate * 100),
+                recentWinRate:  Math.round((data.recentWinRate  ?? data.winRate)  * 100),
+                recentLossRate: Math.round((data.recentLossRate ?? data.lossRate) * 100),
+                recentDrawRate: Math.round((data.recentDrawRate ?? data.drawRate) * 100),
+                epsilon: parseFloat((data.epsilon * 100).toFixed(1)),
+                qDelta: data.avgQDelta,
+              }])
+            })
+          },
+          onCurriculumAdvance: ({ difficulty: newDiff }) => setCurriculumDifficulty(newDiff),
+          onComplete:  () => { stopRunning(); setWatchedSessionId(null); onComplete() },
+          onCancelled: () => { stopRunning(); setWatchedSessionId(null); onComplete() },
+          onError:     (payload) => { stopRunning(); setWatchedSessionId(null); alert(payload?.message ?? 'Training failed') },
+        }
+        return
+      }
+
+      // Frontend runtime — existing in-browser loop. Create the session
+      // (frontend:true), fetch current weights, run episodes locally,
+      // then post the final weights via finishSession.
       const { session, model: modelState } = await api.ml.train(model.id, { mode, iterations, config: cfg, frontend: true }, token)
 
       flushSync(() => {
@@ -234,7 +301,16 @@ export default function TrainTab({ model, sessions, onSessionsChange, onComplete
   }
 
   async function handleCancel() {
-    // Signal the training loop to stop; handleStart will call finishSession with CANCELLED
+    // A3b.10 — backend-driven sessions can't be cancelled by flipping a
+    // local ref (the loop runs in another process). Issue an explicit
+    // cancel request; the SSE 'cancelled' event will tear down state.
+    if (backgroundMode && sessionId) {
+      try { await api.ml.cancelSession(sessionId, await getToken()) } catch {}
+      return
+    }
+    // Frontend path — signal the local loop to stop; handleStart's
+    // runTrainingSession reads cancelRef on each episode and bails out,
+    // then calls finishSession with CANCELLED.
     cancelRef.current = true
   }
 
@@ -619,6 +695,27 @@ export default function TrainTab({ model, sessions, onSessionsChange, onComplete
             </div>
             <Btn onClick={handleCancel} variant="ghost">Cancel</Btn>
           </div>
+
+          {/* A3b.10 — background-mode affordance. Shown when the runtime
+              resolver routes this (game, algo) to worker or in-process,
+              meaning the loop is decoupled from this tab. */}
+          {backgroundMode && (
+            <div
+              role="status"
+              data-testid="train-background-banner"
+              className="mb-4 px-3 py-2 rounded-lg text-xs flex items-start gap-2"
+              style={{ backgroundColor: 'var(--bg-base)', borderLeft: '3px solid var(--color-blue-600)' }}
+            >
+              <span aria-hidden="true">⚡</span>
+              <div>
+                <strong style={{ color: 'var(--text-primary)' }}>Training in background.</strong>{' '}
+                <span style={{ color: 'var(--text-secondary)' }}>
+                  You can close this tab — progress streams from the server and the
+                  run continues. Come back anytime to see results.
+                </span>
+              </div>
+            </div>
+          )}
 
           {/* Progress bar */}
           <div className="flex items-center gap-2 mb-3">

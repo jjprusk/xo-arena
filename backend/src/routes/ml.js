@@ -52,6 +52,41 @@ async function assertModelOwner(req, res, modelId) {
 
 // ─── Models ──────────────────────────────────────────────────────────────────
 
+/**
+ * A3b.10 — runtime lookup for the training UI.
+ *
+ * GET /ml/runtime?gameId=<>&algorithm=<>
+ *
+ * Returns the routing decision the UI should honor when it kicks off a
+ * training run. Mirrors what mlService.startTraining would resolve, so
+ * the UI can branch between `startFrontendSession` (browser loop) and
+ * the backend `train` endpoint (in-process / worker) — and show the
+ * right affordance ("Training in background — close this tab" vs the
+ * existing in-page progress).
+ *
+ * Public read (no requireAuth): the matrix is non-secret config and
+ * unsigned visitors hitting the train CTA need to know which path to
+ * take before they sign in. Cache-Control: no-store because admin
+ * edits to ml.runtimeMatrix should take effect immediately.
+ */
+router.get('/runtime', async (req, res, next) => {
+  try {
+    const gameId    = typeof req.query.gameId    === 'string' ? req.query.gameId    : ''
+    const algorithm = typeof req.query.algorithm === 'string' ? req.query.algorithm : ''
+    if (!gameId || !algorithm) {
+      return res.status(400).json({ error: 'gameId and algorithm query params are required' })
+    }
+    const { resolveTrainingRuntime } = await import('../services/trainingRuntime.js')
+    const runtime = await resolveTrainingRuntime(gameId, algorithm, {
+      getConfig: svc.getSystemConfig,
+    })
+    res.set('Cache-Control', 'no-store')
+    res.json({ gameId, algorithm, runtime })
+  } catch (err) {
+    next(err)
+  }
+})
+
 router.get('/models', async (_req, res, next) => {
   try {
     const models = await svc.listModels()
