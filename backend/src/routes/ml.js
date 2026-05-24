@@ -53,6 +53,32 @@ async function assertModelOwner(req, res, modelId) {
 // ─── Models ──────────────────────────────────────────────────────────────────
 
 /**
+ * A3b.8 — preset enumeration for the training UI.
+ *
+ * GET /ml/presets?gameId=<>&algorithm=<>
+ *
+ * Returns the Quick / Standard / Deep table the UI shows on the
+ * default ("no knobs") training surface. Cache-Control no-store
+ * because the table can change with a deploy and we don't want a
+ * client to see stale ETAs after a release.
+ */
+router.get('/presets', async (req, res, next) => {
+  try {
+    const gameId    = typeof req.query.gameId    === 'string' ? req.query.gameId    : ''
+    const algorithm = typeof req.query.algorithm === 'string' ? req.query.algorithm : ''
+    if (!gameId || !algorithm) {
+      return res.status(400).json({ error: 'gameId and algorithm query params are required' })
+    }
+    const { listPresetsFor } = await import('../config/trainingPresets.js')
+    const presets = listPresetsFor({ gameId, algorithm })
+    res.set('Cache-Control', 'no-store')
+    res.json({ gameId, algorithm, presets })
+  } catch (err) {
+    next(err)
+  }
+})
+
+/**
  * A3b.10 — runtime lookup for the training UI.
  *
  * GET /ml/runtime?gameId=<>&algorithm=<>

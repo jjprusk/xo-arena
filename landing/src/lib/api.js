@@ -218,6 +218,10 @@ export const api = {
     // Public read; cached: no-store so admin matrix edits land immediately.
     getRuntime:       (gameId, algorithm) =>
       api.get(`/ml/runtime?gameId=${encodeURIComponent(gameId)}&algorithm=${encodeURIComponent(algorithm)}`),
+    // A3b.8 — preset table for the no-knobs UI. Returns
+    // { gameId, algorithm, presets: [{ name, iterations, expectedDurationMs }, …] }.
+    getPresets:       (gameId, algorithm) =>
+      api.get(`/ml/presets?gameId=${encodeURIComponent(gameId)}&algorithm=${encodeURIComponent(algorithm)}`),
     finishSession:    (id, b, tok) => api.post(`/ml/sessions/${id}/finish`, b, tok),
     getSessions:      (id)         => api.get(`/ml/models/${id}/sessions`),
     getSession:       (id)         => api.get(`/ml/sessions/${id}`),

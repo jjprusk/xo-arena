@@ -8,6 +8,8 @@ import {
 import { api } from '../../lib/api.js'
 import { getToken } from '../../lib/getToken.js'
 import { useEventStream } from '../../lib/useEventStream.js'
+import { useOptimisticSession } from '../../lib/useOptimisticSession.js'
+import { useFeatures } from '../../lib/useFeatures.js'
 import { runTrainingSession } from '../../services/trainingService.js'
 import { useGymStore } from '../../store/gymStore.js'
 import {
@@ -60,6 +62,38 @@ export default function TrainTab({ model, sessions, onSessionsChange, onComplete
   // bound to this browser session (worker survives tab close, in-process
   // backend survives navigation as long as the backend stays up).
   const [backgroundMode, setBackgroundMode] = useState(false)
+  // A3b.8 — no-knobs disclosure. Default v1 surface is presets-only
+  // (Quick / Standard / Deep); the full knob set is hidden behind an
+  // Advanced gate visible only to admins or to users whose env has
+  // `features.trainingAdvancedKnobs` flipped on in SystemConfig.
+  const { data: session }       = useOptimisticSession()
+  const { features }            = useFeatures()
+  const isAdmin                 = session?.user?.role === 'admin'
+  const showAdvanced            = isAdmin || !!features.trainingAdvancedKnobs
+  const [preset, setPreset]     = useState('quick')
+  const [presetOptions, setPresetOptions] = useState([])
+  // Fetch the preset table for this (game, algorithm). The endpoint
+  // returns { name, iterations, expectedDurationMs } per preset; we
+  // use it to seed both the picker labels and the default iterations.
+  useEffect(() => {
+    let cancelled = false
+    api.ml.getPresets(model.gameId, algorithm)
+      .then(r => {
+        if (cancelled) return
+        const opts = r?.presets ?? []
+        setPresetOptions(opts)
+        // Seed iterations from the selected preset on first load so the
+        // hidden slider has a sensible value when advanced is closed.
+        const match = opts.find(p => p.name === preset) ?? opts[0]
+        if (match) {
+          setIterations(match.iterations)
+          if (!opts.find(p => p.name === preset)) setPreset(match.name)
+        }
+      })
+      .catch(() => { /* preset endpoint failure → keep default iterations */ })
+    return () => { cancelled = true }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [model.gameId, algorithm])
   const cleanupRef   = useRef(null)
   const cancelRef    = useRef(false)
   // Set by the resume-watch effect when a backend-driven session is running.
@@ -301,6 +335,15 @@ export default function TrainTab({ model, sessions, onSessionsChange, onComplete
     }
   }
 
+  // A3b.8 — preset selection writes through to iterations so the kickoff
+  // sends the right episode count whether the advanced slider is visible
+  // or hidden.
+  function selectPreset(name) {
+    setPreset(name)
+    const opt = presetOptions.find(p => p.name === name)
+    if (opt) setIterations(opt.iterations)
+  }
+
   async function handleCancel() {
     // A3b.10 — backend-driven sessions can't be cancelled by flipping a
     // local ref (the loop runs in another process). Issue an explicit
@@ -336,8 +379,9 @@ export default function TrainTab({ model, sessions, onSessionsChange, onComplete
               </select>
             </div>
 
-            {/* VS_MINIMAX options: difficulty + play as */}
-            {mode === 'VS_MINIMAX' && (
+            {/* VS_MINIMAX options: difficulty + play as. Behind the A3b.8
+                advanced gate — v1 presets-only surface hides these. */}
+            {showAdvanced && mode === 'VS_MINIMAX' && (
               <div className="flex gap-4">
                 <div className="flex-1">
                   <label className="text-sm font-medium block mb-2" style={{ color: 'var(--text-secondary)' }}>
@@ -379,8 +423,59 @@ export default function TrainTab({ model, sessions, onSessionsChange, onComplete
                 </div>
               )})()}</div>
 
+            {/* A3b.8 — preset picker. Default v1 surface — always visible.
+                Picking a preset writes through to iterations so the
+                kickoff sends the right episode count whether the
+                advanced slider is rendered or not. */}
+            {presetOptions.length > 0 && (
+              <div data-testid="train-preset-picker">
+                <label className="text-sm font-medium block mb-2" style={{ color: 'var(--text-secondary)' }}>Preset</label>
+                <div className="flex gap-2 flex-wrap">
+                  {presetOptions.map(p => {
+                    const minutes = Math.round((p.expectedDurationMs ?? 0) / 60000)
+                    const eta = minutes < 1
+                      ? '<1 min'
+                      : minutes < 60
+                        ? `~${minutes} min`
+                        : `~${Math.round(minutes / 60)} hr`
+                    return (
+                      <button
+                        key={p.name}
+                        type="button"
+                        data-testid={`train-preset-${p.name}`}
+                        onClick={() => selectPreset(p.name)}
+                        className={`flex-1 min-w-[120px] py-3 rounded-lg text-sm font-semibold border-2 transition-colors ${preset === p.name ? 'border-[var(--color-blue-600)] bg-[var(--color-blue-50)] text-[var(--color-blue-600)]' : 'border-[var(--border-default)]'}`}
+                      >
+                        <div className="capitalize">{p.name}</div>
+                        <div className="text-xs font-normal opacity-70 tabular-nums">{p.iterations.toLocaleString()} eps · {eta}</div>
+                      </button>
+                    )
+                  })}
+                </div>
+              </div>
+            )}
+
+            {/* A3b.8 — Advanced disclosure. v1 hides the full knob set
+                from regular users; only admins or users in an env with
+                `features.trainingAdvancedKnobs` see the rest of the
+                config (DQN/AlphaZero/epsilon/curriculum/iterations/
+                early-stop). Rendered as a single block-level gate so
+                the train button stays anchored at the bottom of the
+                card regardless. */}
+            {showAdvanced && (
+              <div
+                data-testid="train-advanced-section"
+                className="pt-3 border-t"
+                style={{ borderColor: 'var(--border-default)' }}
+              >
+                <p className="text-xs font-semibold uppercase tracking-widest mb-3" style={{ color: 'var(--text-muted)' }}>
+                  Advanced{!isAdmin && ' (flagged)'}
+                </p>
+              </div>
+            )}
+
             {/* DQN config fields */}
-            {algorithm === 'DQN' && (() => {
+            {showAdvanced && algorithm === 'DQN' && (() => {
               const storedShape = model.config?.networkShape ?? [32]
               const archChanged = JSON.stringify(dqnLayers) !== JSON.stringify(storedShape)
               const LAYER_SIZES = [8, 16, 32, 64, 128]
@@ -478,8 +573,8 @@ export default function TrainTab({ model, sessions, onSessionsChange, onComplete
               )
             })()}
 
-            {/* AlphaZero config fields */}
-            {algorithm === 'ALPHA_ZERO' && (
+            {/* AlphaZero config fields — advanced */}
+            {showAdvanced && algorithm === 'ALPHA_ZERO' && (
               <div className="space-y-3 p-3 rounded-lg border" style={{ borderColor: 'var(--border-default)', backgroundColor: 'var(--bg-base)' }}>
                 <p className="text-xs font-semibold uppercase tracking-widest" style={{ color: 'var(--text-muted)' }}>AlphaZero Configuration</p>
                 <div className="flex flex-wrap gap-4">
@@ -509,8 +604,8 @@ export default function TrainTab({ model, sessions, onSessionsChange, onComplete
             )}
 
 
-            {/* Epsilon config (all models except AlphaZero) */}
-            {algorithm !== 'ALPHA_ZERO' && (
+            {/* Epsilon config (all models except AlphaZero) — advanced */}
+            {showAdvanced && algorithm !== 'ALPHA_ZERO' && (
               <div className="space-y-3 p-3 rounded-lg border" style={{ borderColor: 'var(--border-default)', backgroundColor: 'var(--bg-base)' }}>
                 <p className="text-xs font-semibold uppercase tracking-widest" style={{ color: 'var(--text-muted)' }}>Exploration</p>
 
@@ -594,8 +689,8 @@ export default function TrainTab({ model, sessions, onSessionsChange, onComplete
               </div>
             )}
 
-            {/* Curriculum learning (VS_MINIMAX only — advances Easy→Medium→Hard) */}
-            {mode === 'VS_MINIMAX' && (
+            {/* Curriculum learning (VS_MINIMAX only — advances Easy→Medium→Hard) — advanced */}
+            {showAdvanced && mode === 'VS_MINIMAX' && (
               <div className="flex items-center gap-3">
                 <input type="checkbox" id="curriculum" checked={curriculum} onChange={e => setCurriculum(e.target.checked)}
                   className="accent-[var(--color-blue-600)]" />
@@ -605,8 +700,10 @@ export default function TrainTab({ model, sessions, onSessionsChange, onComplete
               </div>
             )}
 
-            {/* Iterations */}
-            {(() => {
+            {/* Iterations slider — advanced; the preset picker above
+                writes through to the same state so users get the right
+                episode count without seeing the slider. */}
+            {showAdvanced && (() => {
               const remaining = model.maxEpisodes > 0 ? model.maxEpisodes - model.totalEpisodes : Infinity
               const atLimit = remaining <= 0
               const sliderMax = remaining === Infinity ? ITERATIONS_MAX : Math.max(ITERATIONS_MIN, Math.min(ITERATIONS_MAX, remaining))
@@ -646,7 +743,8 @@ export default function TrainTab({ model, sessions, onSessionsChange, onComplete
               )
             })()}
 
-            {/* Early stopping */}
+            {/* Early stopping — advanced */}
+            {showAdvanced && (
             <div className="space-y-2">
               <div className="flex items-center gap-3">
                 <input type="checkbox" id="earlyStop" checked={earlyStopEnabled} onChange={e => setEarlyStop(e.target.checked)}
@@ -674,6 +772,7 @@ export default function TrainTab({ model, sessions, onSessionsChange, onComplete
                 </div>
               )}
             </div>
+            )}
 
             <Btn onClick={handleStart} disabled={running || (model.maxEpisodes > 0 && model.totalEpisodes >= model.maxEpisodes)}>
               {model.maxEpisodes > 0 && model.totalEpisodes >= model.maxEpisodes ? 'Episode limit reached' : 'Start Training'}
