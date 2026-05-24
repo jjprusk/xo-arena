@@ -1,5 +1,10 @@
 [
   {
+    "version": "1.4.0-alpha-5.18",
+    "date": "2026-05-24",
+    "description": "Worker algo-dispatch fix + A3b sprint close (11/11) + A4 multi-skill bot UI (7/7). Fix: mlService normalized only legacy enum form (ALPHA_ZERO/MONTE_CARLO); flat-form strings silently ran QLearning on the worker — latent since A3b.2b cutover. Adds `um training-worker verify` one-shot to exercise all 5 algos with per-engine signature assertions."
+  },
+  {
     "version": "1.4.0-alpha-5.17",
     "date": "2026-05-21",
     "description": "A3b.6 — soak validated training-worker cutover (144 sessions, 0 DL, 0 alerts, A3b.4 retry recovered 8 transient errors); ready to promote"
