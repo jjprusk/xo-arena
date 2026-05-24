@@ -26,6 +26,9 @@ const mockDb = {
     delete: vi.fn(),
     deleteMany: vi.fn(),
   },
+  trainingSession: {
+    groupBy: vi.fn(async () => []),
+  },
   baUser: {
     delete: vi.fn(),
   },
@@ -284,8 +287,9 @@ describe('GET /api/v1/bots', () => {
 describe('GET /api/v1/bots/:id', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    mockDb.botSkill.findMany = vi.fn()
-    mockDb.gameElo.findMany  = vi.fn()
+    mockDb.botSkill.findMany       = vi.fn()
+    mockDb.gameElo.findMany        = vi.fn()
+    mockDb.trainingSession.groupBy = vi.fn(async () => [])
   })
 
   function arrangeBot(bot) {
@@ -369,6 +373,36 @@ describe('GET /api/v1/bots/:id', () => {
     const res = await request(app).get('/api/v1/bots/missing')
 
     expect(res.status).toBe(404)
+  })
+
+  // A4.1 — lastTrainedAt enrichment. Each skill row gets the newest
+  // completed-session timestamp tied to its id so the BotProfilePage
+  // can show a real "Last trained" date instead of falling back to
+  // BotSkill.updatedAt (which bumps on every checkpoint write).
+  it('skills are enriched with lastTrainedAt from the newest COMPLETED session', async () => {
+    arrangeBot({
+      id: 'bot_tt', displayName: 'Trainee', avatarUrl: null,
+      isBot: true, botActive: true, botAvailable: true, botCompetitive: false,
+      botProvisional: false, botGamesPlayed: 0,
+      botModelId: 'skill_xo', botModelType: 'qlearning', botOwnerId: 'usr_1',
+      createdAt: new Date(),
+    })
+    mockDb.botSkill.findMany.mockResolvedValue([
+      { id: 'skill_xo',  botId: 'bot_tt', gameId: 'tic-tac-toe',  algorithm: 'qlearning' },
+      { id: 'skill_c4',  botId: 'bot_tt', gameId: 'connect-four', algorithm: 'dqn' },
+    ])
+    mockDb.gameElo.findMany.mockResolvedValue([])
+    const trainedAt = new Date('2026-05-15T12:00:00Z')
+    mockDb.trainingSession.groupBy.mockResolvedValue([
+      { modelId: 'skill_xo', _max: { completedAt: trainedAt } },
+      // skill_c4 has no completed sessions → falls through to null
+    ])
+
+    const res = await request(app).get('/api/v1/bots/bot_tt')
+
+    expect(res.status).toBe(200)
+    expect(res.body.bot.skills[0].lastTrainedAt).toBe(trainedAt.toISOString())
+    expect(res.body.bot.skills[1].lastTrainedAt).toBeNull()
   })
 })
 
@@ -660,6 +694,30 @@ describe('PATCH /api/v1/bots/:id', () => {
     expect(res.status).toBe(200)
     expect(res.body.bot.displayName).toBe('NewName')
     expect(cache.invalidatePrefix).toHaveBeenCalledWith('bots:')
+  })
+
+  // A4.3 — rename carries skills. Skills are FK'd by botId and survive
+  // any User column mutation; the handler must never touch BotSkill rows
+  // so multi-skill bots keep their full skill set after a rename. The
+  // negative assertion (no botSkill mutation) is the contract.
+  it('rename does NOT touch BotSkill rows — multi-skill bots keep all skills', async () => {
+    setupPatchMocks()
+    mockDb.user.findFirst.mockResolvedValue(null)
+    getSystemConfig.mockResolvedValue([])
+    mockDb.user.update.mockResolvedValue({ ...mockBot, displayName: 'Renamed' })
+
+    const res = await request(app)
+      .patch('/api/v1/bots/bot_1')
+      .send({ displayName: 'Renamed' })
+
+    expect(res.status).toBe(200)
+    expect(mockDb.botSkill.delete).not.toHaveBeenCalled()
+    expect(mockDb.botSkill.deleteMany).not.toHaveBeenCalled()
+    // Update affects only the user row, not skills.
+    expect(mockDb.user.update).toHaveBeenCalledWith({
+      where: { id: 'bot_1' },
+      data:  { displayName: 'Renamed' },
+    })
   })
 
   it('empty displayName → 400', async () => {
@@ -1060,6 +1118,61 @@ describe('POST /api/v1/bots/:id/skills', () => {
       .send({ gameId: 'tic-tac-toe', algorithm: 'minimax' })
 
     expect(res.status).toBe(404)
+  })
+
+  // A4.2 — cloneFromSkillId. When the caller asks to inherit hyperparams
+  // from a sibling skill, the source's `config` blob is copied verbatim
+  // into the new skill. Source must belong to the same bot (so you can't
+  // lift another owner's config); a bogus id falls back to {} rather than
+  // 404 since the user explicitly opted in.
+  it('cloneFromSkillId — copies the source skill\'s config into the new skill', async () => {
+    arrangeOwnedBot({ botModelId: 'skill_xo' })
+    const sourceConfig = { learningRate: 0.05, epsilon: 0.2, batchSize: 64 }
+    mockDb.botSkill.findFirst
+      .mockResolvedValueOnce(null)  // (botId, gameId) existence check
+      .mockResolvedValueOnce({ config: sourceConfig })  // clone source lookup
+    mockDb.botSkill.create.mockResolvedValue({
+      id: 'skill_new', botId: 'bot_1', gameId: 'connect-four', algorithm: 'qlearning', config: sourceConfig,
+    })
+
+    const res = await request(app)
+      .post('/api/v1/bots/bot_1/skills')
+      .send({ gameId: 'connect-four', algorithm: 'qlearning', cloneFromSkillId: 'skill_xo' })
+
+    expect(res.status).toBe(201)
+    expect(mockDb.botSkill.create).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({ config: sourceConfig }),
+    }))
+  })
+
+  it('cloneFromSkillId — unknown source id falls back to empty config (no 404)', async () => {
+    arrangeOwnedBot({ botModelId: 'skill_xo' })
+    mockDb.botSkill.findFirst
+      .mockResolvedValueOnce(null)  // (botId, gameId) existence check
+      .mockResolvedValueOnce(null)  // clone source not found
+    mockDb.botSkill.create.mockResolvedValue({ id: 'skill_new', botId: 'bot_1', gameId: 'connect-four' })
+
+    const res = await request(app)
+      .post('/api/v1/bots/bot_1/skills')
+      .send({ gameId: 'connect-four', algorithm: 'qlearning', cloneFromSkillId: 'bogus_id' })
+
+    expect(res.status).toBe(201)
+    expect(mockDb.botSkill.create).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({ config: {} }),
+    }))
+  })
+
+  it('cloneFromSkillId must be a string → 400 INVALID_CLONE_SOURCE', async () => {
+    arrangeOwnedBot()
+    mockDb.botSkill.findFirst.mockResolvedValue(null)
+
+    const res = await request(app)
+      .post('/api/v1/bots/bot_1/skills')
+      .send({ gameId: 'tic-tac-toe', algorithm: 'minimax', cloneFromSkillId: 123 })
+
+    expect(res.status).toBe(400)
+    expect(res.body.code).toBe('INVALID_CLONE_SOURCE')
+    expect(mockDb.botSkill.create).not.toHaveBeenCalled()
   })
 })
 

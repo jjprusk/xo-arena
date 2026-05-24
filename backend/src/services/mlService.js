@@ -29,6 +29,7 @@ import { completeStep as completeJourneyStep } from './journeyService.js'
 import { grantDiscoveryReward } from './discoveryRewardsService.js'
 import { appendToStream } from '../lib/eventStream.js'
 import { resolvePreset } from '../config/trainingPresets.js'
+import { resolveTrainingRuntime } from './trainingRuntime.js'
 import { hasRole } from '../utils/roles.js'
 import { runEvalBatch, recordEvalMetrics, DEFAULT_EVAL_BUDGET } from '../lib/evalCurves.js'
 import {
@@ -817,29 +818,51 @@ export async function startTraining(modelId, { mode, iterations, config = {}, pr
     return session
   }
 
-  // A3b.2b — dispatch routing. With `ml.useWorker` true, mint the session
-  // tagged with `dispatch:'worker'` and enqueue a `training:start` job
-  // instead of running the loop in-process. The flag is read fresh every
-  // call so a SystemConfig flip is the kill switch — no deploy required
-  // to roll back. Default off keeps existing setImmediate behavior intact.
-  const useWorker = await getSystemConfig('ml.useWorker', false)
-  const dispatch  = useWorker ? 'worker' : 'in-process'
+  // A3b.10 — per-(game, algorithm) routing. The single global
+  // `ml.useWorker` flag from A3b.2b was too coarse for Connect 4's
+  // mixed workload, so we consult the runtime matrix instead. The
+  // resolver still honors `ml.useWorker` as a backward-compat fallback
+  // when no matrix is set, so existing prod config keeps working.
+  //
+  // Three possible routes:
+  //   - 'frontend'           — UI should have called startFrontendSession
+  //                            instead. If we somehow get here, fall back
+  //                            to in-process and log a warning (better to
+  //                            train than to refuse).
+  //   - 'backend-in-process' — current setImmediate(_runTraining) path
+  //   - 'worker'             — enqueue a training:start job (A3b.2b path)
+  const runtime = await resolveTrainingRuntime(model.gameId, model.algorithm, {
+    getConfig: getSystemConfig,
+  })
+  let effectiveRuntime = runtime
+  if (runtime === 'frontend') {
+    // startTraining is the backend-driven entry point — frontend training
+    // bypasses it entirely via routes/ml.js's `frontend: true` branch.
+    // Hitting this means the caller didn't consult the matrix; demote to
+    // in-process so the user still gets training.
+    logger.warn(
+      { modelId, gameId: model.gameId, algorithm: model.algorithm },
+      'startTraining called for a route the matrix routes to frontend — falling back to in-process'
+    )
+    effectiveRuntime = 'backend-in-process'
+  }
+  const dispatch = effectiveRuntime === 'worker' ? 'worker' : 'in-process'
 
   const session = await db.trainingSession.create({
     data: {
       modelId, mode, iterations,
       status: 'RUNNING',
-      config: { ...config, dispatch },
+      config: { ...config, dispatch, runtime: effectiveRuntime },
       preset,
       expectedDurationMs,
     },
   })
   await db.botSkill.update({ where: { id: modelId }, data: { status: 'TRAINING' } })
 
-  if (useWorker) {
+  if (effectiveRuntime === 'worker') {
     const { enqueueTrainingStart } = await import('../queue/trainingQueue.js')
     await enqueueTrainingStart(session.id)
-    logger.info({ modelId, sessionId: session.id }, 'training session dispatched to worker')
+    logger.info({ modelId, sessionId: session.id, runtime: effectiveRuntime }, 'training session dispatched to worker')
   } else {
     setImmediate(() => _runTraining(model, session, { mode, iterations, config: session.config }))
   }
@@ -1364,14 +1387,23 @@ const BATCH_SIZE     = 50    // episodes per DB batch insert
 const CHECKPOINT_GAP = 1000  // save checkpoint every N episodes
 const EVAL_GAP       = 1000  // A3a.7: write a TrainingMetric eval point every N episodes
 
-/** Instantiate the correct engine based on algorithm name. */
-function _buildEngine(modelConfig, algorithm) {
-  const alg = (algorithm || 'Q_LEARNING').toUpperCase()
+/** Instantiate the correct engine based on algorithm name.
+ *
+ * Algorithm strings reach us in two flavors: legacy enum form
+ * (`Q_LEARNING`, `MONTE_CARLO`, `ALPHA_ZERO`) and the modern flat form
+ * (`qlearning`, `montecarlo`, `alphazero`) — the BotSkill column + new
+ * QA endpoints write the latter. Strip underscores so both forms hit the
+ * same branches; without this the worker silently fell back to QLearning
+ * for `'montecarlo'`/`'policygradient'`/`'alphazero'` because the
+ * dotted-enum constants never matched the underscore-stripped uppercase
+ * form. Mirrors the matching normalisation in `skillService._buildEngine`. */
+export function _buildEngine(modelConfig, algorithm) {
+  const alg = (algorithm || 'Q_LEARNING').toUpperCase().replace(/_/g, '')
   if (alg === 'SARSA') return new SarsaEngine(modelConfig)
-  if (alg === 'MONTE_CARLO' || alg === 'MC') return new MonteCarloEngine(modelConfig)
-  if (alg === 'POLICY_GRADIENT' || alg === 'PG') return new PolicyGradientEngine(modelConfig)
+  if (alg === 'MONTECARLO' || alg === 'MC') return new MonteCarloEngine(modelConfig)
+  if (alg === 'POLICYGRADIENT' || alg === 'PG') return new PolicyGradientEngine(modelConfig)
   if (alg === 'DQN') return new DQNEngine(modelConfig)
-  if (alg === 'ALPHA_ZERO' || alg === 'AZ') return new AlphaZeroEngine(modelConfig)
+  if (alg === 'ALPHAZERO' || alg === 'AZ') return new AlphaZeroEngine(modelConfig)
   return new QLearningEngine(modelConfig)
 }
 
@@ -1680,13 +1712,17 @@ function _runPGEpisode(engine, mlMark, opponentFn) {
 }
 
 /** Run one episode using whatever engine/algorithm is active. */
-function _runEpisodeForAlgorithm(engine, mlMark, opponentFn, algorithm) {
-  const alg = (algorithm || 'Q_LEARNING').toUpperCase()
+// Same legacy/flat normalisation as `_buildEngine` above — without it,
+// flat-form algorithm strings silently fell through to the default
+// Q-Learning runner even when the engine itself was the right type
+// (since `_buildEngine` had the same matching gap).
+export function _runEpisodeForAlgorithm(engine, mlMark, opponentFn, algorithm) {
+  const alg = (algorithm || 'Q_LEARNING').toUpperCase().replace(/_/g, '')
   if (alg === 'SARSA') return _runSarsaEpisode(engine, mlMark, opponentFn)
-  if (alg === 'MONTE_CARLO' || alg === 'MC') return _runMCEpisode(engine, mlMark, opponentFn)
-  if (alg === 'POLICY_GRADIENT' || alg === 'PG') return _runPGEpisode(engine, mlMark, opponentFn)
+  if (alg === 'MONTECARLO' || alg === 'MC') return _runMCEpisode(engine, mlMark, opponentFn)
+  if (alg === 'POLICYGRADIENT' || alg === 'PG') return _runPGEpisode(engine, mlMark, opponentFn)
   if (alg === 'DQN') return _runDQNEpisode(engine, opponentFn, mlMark)
-  if (alg === 'ALPHA_ZERO' || alg === 'AZ') return _runAlphaZeroEpisode(engine)
+  if (alg === 'ALPHAZERO' || alg === 'AZ') return _runAlphaZeroEpisode(engine)
   return runEpisode(engine, mlMark, opponentFn)
 }
 

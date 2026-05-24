@@ -89,6 +89,17 @@ vi.mock('../../lib/db.js', () => ({
 // mocks during the assertion phase — replace with a no-op.
 vi.stubGlobal('setImmediate', vi.fn())
 
+// A3b.10 — DEFAULT_MATRIX routes AlphaZero to 'worker', which calls
+// enqueueTrainingStart and tries to open a Redis connection. The tests
+// in this file care about the preset + approval-gate behavior, not the
+// dispatch path, so stub the queue producer to a no-op. (No REDIS_URL
+// is set in CI.)
+vi.mock('../../queue/trainingQueue.js', () => ({
+  enqueueTrainingStart: vi.fn().mockResolvedValue({ id: 'mock_job' }),
+  getTrainingQueue:     vi.fn(),
+  TRAINING_QUEUE_NAME:  'training',
+}))
+
 const {
   startTraining,
   startFrontendSession,

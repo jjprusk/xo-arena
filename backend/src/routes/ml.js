@@ -52,6 +52,67 @@ async function assertModelOwner(req, res, modelId) {
 
 // ─── Models ──────────────────────────────────────────────────────────────────
 
+/**
+ * A3b.8 — preset enumeration for the training UI.
+ *
+ * GET /ml/presets?gameId=<>&algorithm=<>
+ *
+ * Returns the Quick / Standard / Deep table the UI shows on the
+ * default ("no knobs") training surface. Cache-Control no-store
+ * because the table can change with a deploy and we don't want a
+ * client to see stale ETAs after a release.
+ */
+router.get('/presets', async (req, res, next) => {
+  try {
+    const gameId    = typeof req.query.gameId    === 'string' ? req.query.gameId    : ''
+    const algorithm = typeof req.query.algorithm === 'string' ? req.query.algorithm : ''
+    if (!gameId || !algorithm) {
+      return res.status(400).json({ error: 'gameId and algorithm query params are required' })
+    }
+    const { listPresetsFor } = await import('../config/trainingPresets.js')
+    const presets = listPresetsFor({ gameId, algorithm })
+    res.set('Cache-Control', 'no-store')
+    res.json({ gameId, algorithm, presets })
+  } catch (err) {
+    next(err)
+  }
+})
+
+/**
+ * A3b.10 — runtime lookup for the training UI.
+ *
+ * GET /ml/runtime?gameId=<>&algorithm=<>
+ *
+ * Returns the routing decision the UI should honor when it kicks off a
+ * training run. Mirrors what mlService.startTraining would resolve, so
+ * the UI can branch between `startFrontendSession` (browser loop) and
+ * the backend `train` endpoint (in-process / worker) — and show the
+ * right affordance ("Training in background — close this tab" vs the
+ * existing in-page progress).
+ *
+ * Public read (no requireAuth): the matrix is non-secret config and
+ * unsigned visitors hitting the train CTA need to know which path to
+ * take before they sign in. Cache-Control: no-store because admin
+ * edits to ml.runtimeMatrix should take effect immediately.
+ */
+router.get('/runtime', async (req, res, next) => {
+  try {
+    const gameId    = typeof req.query.gameId    === 'string' ? req.query.gameId    : ''
+    const algorithm = typeof req.query.algorithm === 'string' ? req.query.algorithm : ''
+    if (!gameId || !algorithm) {
+      return res.status(400).json({ error: 'gameId and algorithm query params are required' })
+    }
+    const { resolveTrainingRuntime } = await import('../services/trainingRuntime.js')
+    const runtime = await resolveTrainingRuntime(gameId, algorithm, {
+      getConfig: svc.getSystemConfig,
+    })
+    res.set('Cache-Control', 'no-store')
+    res.json({ gameId, algorithm, runtime })
+  } catch (err) {
+    next(err)
+  }
+})
+
 router.get('/models', async (_req, res, next) => {
   try {
     const models = await svc.listModels()
@@ -270,6 +331,40 @@ router.get('/sessions/:id/episodes', async (req, res, next) => {
     }
 
     res.json(data)
+  } catch (err) { next(err) }
+})
+
+/**
+ * A3b.7 — stacked W/D/L visualization data feed.
+ *
+ * Returns the TrainingMetric eval points written by `recordEvalMetrics`
+ * during the training loop. One row per (eval point × opponent curve)
+ * with the W/D/L tally and the episodeNum the point was taken at. The
+ * frontend StackedCurvesChart groups by `opponentLabel` and renders one
+ * stacked-area chart per group.
+ *
+ * Ordering: stable ascending on (episodeNum, opponentLabel) so the
+ * frontend can render incrementally without re-sorting. Public read —
+ * we expose session existence + tallies via /sessions/:id already; the
+ * eval curves are derived data with no extra PII to gate.
+ */
+router.get('/sessions/:id/metrics', async (req, res, next) => {
+  try {
+    const session = await svc.getSession(req.params.id)
+    if (!session) return res.status(404).json({ error: 'Session not found' })
+    const metrics = await db.trainingMetric.findMany({
+      where:   { sessionId: req.params.id },
+      orderBy: [{ episodeNum: 'asc' }, { opponentLabel: 'asc' }],
+      select:  {
+        episodeNum:    true,
+        opponentLabel: true,
+        wins:          true,
+        draws:         true,
+        losses:        true,
+        asFirstMover:  true,
+      },
+    })
+    res.json({ metrics })
   } catch (err) { next(err) }
 })
 

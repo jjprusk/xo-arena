@@ -78,4 +78,55 @@ describe('<BotCard />', () => {
     const span = screen.getByText(longName)
     expect(span.getAttribute('title')).toBe(longName)
   })
+
+  // ── A4.4 — picker disambiguation ───────────────────────────────────
+  // When a multi-skill bot is rendered in a picker that's scoped to one
+  // game, the card shows "Name (Game)" so the user can tell which skill
+  // they're queueing. Single-game bots stay un-suffixed.
+
+  it('appends " (Game)" when bot has skills in multiple games AND pickerGameId is set', () => {
+    render(
+      <BotCard
+        bot={{ ...baseBot, playableGameIds: ['tic-tac-toe', 'connect-four'] }}
+        variant="select"
+        onSelect={() => {}}
+        pickerGameId="tic-tac-toe"
+      />,
+    )
+    expect(screen.getByText('Sterling One (Tic-tac-toe)')).toBeTruthy()
+  })
+
+  it('does NOT append a suffix when the bot only plays one game', () => {
+    render(
+      <BotCard
+        bot={{ ...baseBot, playableGameIds: ['tic-tac-toe'] }}
+        variant="select"
+        onSelect={() => {}}
+        pickerGameId="tic-tac-toe"
+      />,
+    )
+    expect(screen.getByText('Sterling One')).toBeTruthy()
+    expect(screen.queryByText(/Sterling One \(/)).toBeNull()
+  })
+
+  it('does NOT append a suffix when pickerGameId is not provided', () => {
+    render(
+      <BotCard
+        bot={{ ...baseBot, playableGameIds: ['tic-tac-toe', 'connect-four'] }}
+      />,
+    )
+    expect(screen.getByText('Sterling One')).toBeTruthy()
+  })
+
+  it('falls back to the raw gameId when the picker game is unknown', () => {
+    render(
+      <BotCard
+        bot={{ ...baseBot, playableGameIds: ['tic-tac-toe', 'mystery-game'] }}
+        variant="select"
+        onSelect={() => {}}
+        pickerGameId="mystery-game"
+      />,
+    )
+    expect(screen.getByText('Sterling One (mystery-game)')).toBeTruthy()
+  })
 })
