@@ -31,6 +31,7 @@ import { rewardsCommand }      from './commands/rewards.js'
 import { perfuserCommand }     from './commands/perfuser.js'
 import { helpCommand }         from './commands/help.js'
 import { trainingRecoveryCommand } from './commands/trainingRecovery.js'
+import { trainingWorkerVerifyCommand } from './commands/trainingWorkerVerify.js'
 
 guardProduction()
 await ensureProxy()
@@ -90,6 +91,7 @@ rewardsCommand(program)
 perfuserCommand(program)
 helpCommand(program)
 trainingRecoveryCommand(program)
+trainingWorkerVerifyCommand(program)
 
 program.hook('postAction', () => disconnect())
 // parseAsync (not parse) so commander awaits async action handlers and the

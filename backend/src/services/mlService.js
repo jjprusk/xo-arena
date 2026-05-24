@@ -1387,14 +1387,23 @@ const BATCH_SIZE     = 50    // episodes per DB batch insert
 const CHECKPOINT_GAP = 1000  // save checkpoint every N episodes
 const EVAL_GAP       = 1000  // A3a.7: write a TrainingMetric eval point every N episodes
 
-/** Instantiate the correct engine based on algorithm name. */
-function _buildEngine(modelConfig, algorithm) {
-  const alg = (algorithm || 'Q_LEARNING').toUpperCase()
+/** Instantiate the correct engine based on algorithm name.
+ *
+ * Algorithm strings reach us in two flavors: legacy enum form
+ * (`Q_LEARNING`, `MONTE_CARLO`, `ALPHA_ZERO`) and the modern flat form
+ * (`qlearning`, `montecarlo`, `alphazero`) — the BotSkill column + new
+ * QA endpoints write the latter. Strip underscores so both forms hit the
+ * same branches; without this the worker silently fell back to QLearning
+ * for `'montecarlo'`/`'policygradient'`/`'alphazero'` because the
+ * dotted-enum constants never matched the underscore-stripped uppercase
+ * form. Mirrors the matching normalisation in `skillService._buildEngine`. */
+export function _buildEngine(modelConfig, algorithm) {
+  const alg = (algorithm || 'Q_LEARNING').toUpperCase().replace(/_/g, '')
   if (alg === 'SARSA') return new SarsaEngine(modelConfig)
-  if (alg === 'MONTE_CARLO' || alg === 'MC') return new MonteCarloEngine(modelConfig)
-  if (alg === 'POLICY_GRADIENT' || alg === 'PG') return new PolicyGradientEngine(modelConfig)
+  if (alg === 'MONTECARLO' || alg === 'MC') return new MonteCarloEngine(modelConfig)
+  if (alg === 'POLICYGRADIENT' || alg === 'PG') return new PolicyGradientEngine(modelConfig)
   if (alg === 'DQN') return new DQNEngine(modelConfig)
-  if (alg === 'ALPHA_ZERO' || alg === 'AZ') return new AlphaZeroEngine(modelConfig)
+  if (alg === 'ALPHAZERO' || alg === 'AZ') return new AlphaZeroEngine(modelConfig)
   return new QLearningEngine(modelConfig)
 }
 
@@ -1703,13 +1712,17 @@ function _runPGEpisode(engine, mlMark, opponentFn) {
 }
 
 /** Run one episode using whatever engine/algorithm is active. */
-function _runEpisodeForAlgorithm(engine, mlMark, opponentFn, algorithm) {
-  const alg = (algorithm || 'Q_LEARNING').toUpperCase()
+// Same legacy/flat normalisation as `_buildEngine` above — without it,
+// flat-form algorithm strings silently fell through to the default
+// Q-Learning runner even when the engine itself was the right type
+// (since `_buildEngine` had the same matching gap).
+export function _runEpisodeForAlgorithm(engine, mlMark, opponentFn, algorithm) {
+  const alg = (algorithm || 'Q_LEARNING').toUpperCase().replace(/_/g, '')
   if (alg === 'SARSA') return _runSarsaEpisode(engine, mlMark, opponentFn)
-  if (alg === 'MONTE_CARLO' || alg === 'MC') return _runMCEpisode(engine, mlMark, opponentFn)
-  if (alg === 'POLICY_GRADIENT' || alg === 'PG') return _runPGEpisode(engine, mlMark, opponentFn)
+  if (alg === 'MONTECARLO' || alg === 'MC') return _runMCEpisode(engine, mlMark, opponentFn)
+  if (alg === 'POLICYGRADIENT' || alg === 'PG') return _runPGEpisode(engine, mlMark, opponentFn)
   if (alg === 'DQN') return _runDQNEpisode(engine, opponentFn, mlMark)
-  if (alg === 'ALPHA_ZERO' || alg === 'AZ') return _runAlphaZeroEpisode(engine)
+  if (alg === 'ALPHAZERO' || alg === 'AZ') return _runAlphaZeroEpisode(engine)
   return runEpisode(engine, mlMark, opponentFn)
 }
 
