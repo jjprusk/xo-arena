@@ -7,6 +7,8 @@ import { useOptimisticSession } from '../lib/useOptimisticSession.js'
 import TrainGuidedModal from '../components/guide/TrainGuidedModal.jsx'
 import Spotlight from '../components/guide/Spotlight.jsx'
 import ChallengeButton from '../components/bots/ChallengeButton.jsx'
+import AddSkillModal from '../components/ui/AddSkillModal.jsx'
+import { gameLabel } from '../lib/skillCategory.js'
 
 const ALGORITHM_LABELS = {
   Q_LEARNING: 'Q-Learning',
@@ -44,6 +46,12 @@ export default function BotProfilePage() {
   const [availError, setAvailError] = useState(null)
   const [sessions, setSessions] = useState([])
   const [selectedSession, setSelectedSession] = useState('')
+  // A4.1 — per-skill cards. `skills` is `BotSkill[]` enriched with
+  // `{ elo, lastTrainedAt }` from GET /bots/:id; fetched alongside the
+  // identity payload so the section can render in the same paint as
+  // the rest of the page.
+  const [skills, setSkills]         = useState([])
+  const [showAddSkill, setShowAddSkill] = useState(false)
   // Guided training (§5.3) — opens TrainGuidedModal which runs a real
   // ~5s Q-Learning self-play session. The modal handles starting the run,
   // streaming live progress over SSE, finalising the bot's primary skill,
@@ -81,8 +89,14 @@ export default function BotProfilePage() {
       api.get(`/users/${id}`),
       api.get(`/users/${id}/bot-stats`).catch(() => null),
       api.get(`/users/${id}/elo-history`).catch(() => null),
+      // /bots/:id is the only surface that returns the per-game skill
+      // array — /users/:id stays the source of truth for identity +
+      // mlModel so we don't change shape on the existing consumers.
+      // Promise.resolve().then(...) absorbs both sync (TypeError when
+      // tests stub out `api.bots`) and async failures.
+      Promise.resolve().then(() => api.bots.get(id)).catch(() => null),
     ])
-      .then(([userRes, statsRes, eloRes]) => {
+      .then(([userRes, statsRes, eloRes, botRes]) => {
         if (!userRes.user?.isBot) {
           setError('Not a bot profile.')
           return
@@ -91,6 +105,7 @@ export default function BotProfilePage() {
         setBot(botUser)
         if (statsRes?.stats) setBotStats(statsRes.stats)
         if (eloRes) setEloData(eloRes)
+        if (Array.isArray(botRes?.bot?.skills)) setSkills(botRes.bot.skills)
         // Load training sessions if this bot has an ML model
         if (botUser.mlModel?.id) {
           api.ml.getSessions(botUser.mlModel.id).then(r => {
@@ -286,6 +301,98 @@ export default function BotProfilePage() {
           <Row label="Member since" value={new Date(bot.createdAt).toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' })} />
         </dl>
       </div>
+
+      {/* A4.1 — Per-skill cards. Renders one card per BotSkill owned by
+          the bot, with the primary skill (User.botModelId) called out.
+          Owner sees an "Add skill" button that opens AddSkillModal.
+          Empty state isn't rendered — a brand-new identity bot legitimately
+          has zero skills, but the "Train your bot" affordance below covers
+          that flow; we don't want two empty boxes on the page. */}
+      {skills.length > 0 && (
+        <section className="space-y-2" data-testid="bot-profile-skills">
+          <div className="flex items-center justify-between">
+            <SectionLabel>Skills</SectionLabel>
+            {isOwner && (
+              <button
+                type="button"
+                onClick={() => setShowAddSkill(true)}
+                className="text-xs font-semibold"
+                style={{ color: 'var(--color-blue-600)' }}
+                data-testid="bot-profile-add-skill"
+              >
+                + Add skill
+              </button>
+            )}
+          </div>
+          <ul className="space-y-2" role="list">
+            {skills.map((s) => {
+              const isPrimary = bot.botModelId === s.id
+              const elo       = s.elo?.rating != null ? Math.round(s.elo.rating) : null
+              const lastTrained = s.lastTrainedAt
+                ? new Date(s.lastTrainedAt).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })
+                : 'Not trained yet'
+              return (
+                <li
+                  key={s.id}
+                  data-testid={`bot-profile-skill-${s.gameId}`}
+                  data-primary={isPrimary ? 'true' : 'false'}
+                  className="rounded-xl border p-4 flex items-center gap-3"
+                  style={{ backgroundColor: 'var(--bg-surface)', borderColor: 'var(--border-default)', boxShadow: 'var(--shadow-card)' }}
+                >
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>
+                        {gameLabel(s.gameId)}
+                      </span>
+                      <span className="text-xs" style={{ color: 'var(--text-muted)' }}>
+                        · {ALGORITHM_LABELS[s.algorithm] ?? s.algorithm}
+                      </span>
+                      {isPrimary && (
+                        <span
+                          className="text-[10px] font-semibold uppercase tracking-wide px-1.5 py-0.5 rounded"
+                          style={{ backgroundColor: 'var(--color-teal-100)', color: 'var(--color-teal-700)' }}
+                          data-testid={`bot-profile-skill-primary-${s.gameId}`}
+                        >
+                          Primary
+                        </span>
+                      )}
+                    </div>
+                    <div className="text-xs mt-0.5" style={{ color: 'var(--text-muted)' }}>
+                      {elo != null ? <>ELO <span className="tabular-nums font-medium">{elo}</span> · </> : null}
+                      Last trained: {lastTrained}
+                    </div>
+                  </div>
+                  {isOwner && (
+                    <Link
+                      to={`/gym?bot=${encodeURIComponent(bot.id)}&gameId=${encodeURIComponent(s.gameId)}`}
+                      className="shrink-0 text-xs font-semibold whitespace-nowrap"
+                      style={{ color: 'var(--color-blue-600)' }}
+                      data-testid={`bot-profile-skill-train-${s.gameId}`}
+                    >
+                      Train in Gym →
+                    </Link>
+                  )}
+                </li>
+              )
+            })}
+          </ul>
+        </section>
+      )}
+
+      {/* Add-skill modal (A4.2) — owner-only; the trigger is gated above
+          but the modal itself doesn't re-check ownership so a test can
+          render it directly. onAdded refreshes the local skills array
+          (POST returns the created/idempotent-existing row). */}
+      {showAddSkill && (
+        <AddSkillModal
+          bot={{ ...bot, skills }}
+          onClose={() => setShowAddSkill(false)}
+          onAdded={(skill) => {
+            if (!skill) return
+            setSkills(prev => prev.some(p => p.id === skill.id) ? prev : [...prev, { ...skill, elo: null, lastTrainedAt: null }])
+          }}
+        />
+      )}
 
       {/* Quick Bot training (Curriculum step 4 — §5.3). Only shown for the
           owner of a minimax bot still on the default (novice) tier; the

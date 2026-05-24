@@ -269,6 +269,7 @@ export const api = {
       const qs = p.toString()
       return request('GET', `/bots${qs ? `?${qs}` : ''}`, null, params.token)
     },
+    get:        (id, token)         => request('GET',    `/bots/${id}`, null, token),
     mine:       (token)             => request('GET',    '/bots/mine', null, token),
     checkName:  (name, token)       => request('GET',    `/bots/check-name?name=${encodeURIComponent(name)}`, null, token),
     /**
