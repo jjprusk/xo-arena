@@ -308,6 +308,40 @@ router.get('/sessions/:id/episodes', async (req, res, next) => {
   } catch (err) { next(err) }
 })
 
+/**
+ * A3b.7 — stacked W/D/L visualization data feed.
+ *
+ * Returns the TrainingMetric eval points written by `recordEvalMetrics`
+ * during the training loop. One row per (eval point × opponent curve)
+ * with the W/D/L tally and the episodeNum the point was taken at. The
+ * frontend StackedCurvesChart groups by `opponentLabel` and renders one
+ * stacked-area chart per group.
+ *
+ * Ordering: stable ascending on (episodeNum, opponentLabel) so the
+ * frontend can render incrementally without re-sorting. Public read —
+ * we expose session existence + tallies via /sessions/:id already; the
+ * eval curves are derived data with no extra PII to gate.
+ */
+router.get('/sessions/:id/metrics', async (req, res, next) => {
+  try {
+    const session = await svc.getSession(req.params.id)
+    if (!session) return res.status(404).json({ error: 'Session not found' })
+    const metrics = await db.trainingMetric.findMany({
+      where:   { sessionId: req.params.id },
+      orderBy: [{ episodeNum: 'asc' }, { opponentLabel: 'asc' }],
+      select:  {
+        episodeNum:    true,
+        opponentLabel: true,
+        wins:          true,
+        draws:         true,
+        losses:        true,
+        asFirstMover:  true,
+      },
+    })
+    res.json({ metrics })
+  } catch (err) { next(err) }
+})
+
 router.post('/sessions/:id/finish', requireAuth, async (req, res, next) => {
   try {
     const session = await svc.getSession(req.params.id)

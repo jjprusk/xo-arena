@@ -222,6 +222,10 @@ export const api = {
     getSessions:      (id)         => api.get(`/ml/models/${id}/sessions`),
     getSession:       (id)         => api.get(`/ml/sessions/${id}`),
     getEpisodes:      (id, page)   => api.get(`/ml/sessions/${id}/episodes?page=${page}&limit=500`),
+    // A3b.7 — stacked W/D/L eval points written by the multi-curve eval
+    // (A3a.7). One row per (episodeNum × opponentLabel) — frontend groups
+    // by opponentLabel and renders one stacked-area chart per group.
+    getMetrics:       (id)         => api.get(`/ml/sessions/${id}/metrics`),
     cancelSession:    (id, tok)    => api.post(`/ml/sessions/${id}/cancel`, {}, tok),
     getCheckpoints:   (id)         => api.get(`/ml/models/${id}/checkpoints`),
     getCheckpoint:    (id, cpId)   => api.get(`/ml/models/${id}/checkpoints/${cpId}`),

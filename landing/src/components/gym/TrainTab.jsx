@@ -14,6 +14,7 @@ import {
   MODES, DIFFICULTIES, ALGORITHMS, normalizeAlgorithm,
   Card, SectionLabel, Btn, StatusBadge, Spinner, MiniStat, ChartPanel, tooltipStyle,
 } from './gymShared.jsx'
+import StackedCurvesChart from './StackedCurvesChart.jsx'
 
 const ITERATIONS_MIN = 100
 const ITERATIONS_MAX = 100_000
@@ -770,6 +771,14 @@ export default function TrainTab({ model, sessions, onSessionsChange, onComplete
                   <Line isAnimationActive={false} type="monotone" dataKey="epsilon" stroke="var(--color-blue-600)" dot={false} name="ε %" strokeWidth={2} />
                 </LineChart>
               </ChartPanel>
+              {/* A3b.7 — multi-curve eval breakdown. Polls every 5s
+                  during live training so curves fill in as eval points
+                  land; the component itself renders nothing when no
+                  multi-curve data exists (legacy single-opponent
+                  sessions). */}
+              {sessionId && (
+                <StackedCurvesChart sessionId={sessionId} refreshMs={5_000} />
+              )}
             </div>
           )}
         </Card>
@@ -817,6 +826,11 @@ export default function TrainTab({ model, sessions, onSessionsChange, onComplete
                 <Line type="monotone" dataKey="qDelta" stroke="var(--color-blue-600)" dot={false} name="Avg ΔQ" strokeWidth={2} />
               </LineChart>
             </ChartPanel>
+            {/* A3b.7 — post-session stacked W/D/L per opponent curve.
+                No polling here — the session is done, eval points are
+                immutable. Renders nothing when the session has no
+                multi-curve metrics (single-opponent legacy sessions). */}
+            {sessionId && <StackedCurvesChart sessionId={sessionId} />}
           </div>
         </Card>
       )}
