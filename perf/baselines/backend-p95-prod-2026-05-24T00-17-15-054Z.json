@@ -1,0 +1,121 @@
+{
+  "timestamp": "2026-05-24T00:17:15.054Z",
+  "env": "prod",
+  "bases": {
+    "landing": "https://xo-landing-prod.fly.dev",
+    "backend": "https://xo-backend-prod.fly.dev",
+    "tournament": "https://xo-tournament-prod.fly.dev"
+  },
+  "requests": 200,
+  "concurrency": 5,
+  "warmup": 50,
+  "authedIncluded": false,
+  "results": [
+    {
+      "name": "GET /api/version",
+      "url": "https://xo-backend-prod.fly.dev/api/version",
+      "base": "backend",
+      "authed": false,
+      "authFlow": false,
+      "method": "GET",
+      "requests": 200,
+      "stats": {
+        "p50": 28,
+        "p95": 114,
+        "p99": 170,
+        "ok": 200,
+        "err": 0
+      },
+      "errors": []
+    },
+    {
+      "name": "GET /api/v1/bots?gameId=xo",
+      "url": "https://xo-backend-prod.fly.dev/api/v1/bots?gameId=xo",
+      "base": "backend",
+      "authed": false,
+      "authFlow": false,
+      "method": "GET",
+      "requests": 200,
+      "stats": {
+        "p50": 29,
+        "p95": 62,
+        "p99": 122,
+        "ok": 200,
+        "err": 0
+      },
+      "errors": []
+    },
+    {
+      "name": "GET /api/v1/leaderboard?game=xo",
+      "url": "https://xo-backend-prod.fly.dev/api/v1/leaderboard?game=xo",
+      "base": "backend",
+      "authed": false,
+      "authFlow": false,
+      "method": "GET",
+      "requests": 200,
+      "stats": {
+        "p50": 28,
+        "p95": 50,
+        "p99": 115,
+        "ok": 200,
+        "err": 0
+      },
+      "errors": []
+    },
+    {
+      "name": "GET /api/auth/get-session",
+      "url": "https://xo-backend-prod.fly.dev/api/auth/get-session",
+      "base": "backend",
+      "authed": false,
+      "authFlow": false,
+      "method": "GET",
+      "requests": 200,
+      "stats": {
+        "p50": 31,
+        "p95": 114,
+        "p99": 125,
+        "ok": 150,
+        "err": 50
+      },
+      "errors": [
+        {
+          "status": 429,
+          "ms": 30
+        },
+        {
+          "status": 429,
+          "ms": 29
+        },
+        {
+          "status": 429,
+          "ms": 28
+        },
+        {
+          "status": 429,
+          "ms": 37
+        },
+        {
+          "status": 429,
+          "ms": 36
+        }
+      ]
+    },
+    {
+      "name": "GET /api/tournaments",
+      "url": "https://xo-tournament-prod.fly.dev/api/tournaments",
+      "base": "tournament",
+      "authed": false,
+      "authFlow": false,
+      "method": "GET",
+      "requests": 200,
+      "stats": {
+        "p50": 38,
+        "p95": 126,
+        "p99": 144,
+        "ok": 200,
+        "err": 0
+      },
+      "errors": []
+    }
+  ]
+}
