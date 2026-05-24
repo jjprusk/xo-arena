@@ -14,7 +14,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen, waitFor } from '@testing-library/react'
 import '@testing-library/jest-dom'
-import StackedCurvesChart, { isCurveSaturated } from '../StackedCurvesChart.jsx'
+import StackedCurvesChart, { isCurveSaturated, splitByFirstMover } from '../StackedCurvesChart.jsx'
 
 vi.mock('../../../lib/api.js', () => ({
   api: { ml: { getMetrics: vi.fn() } },
@@ -119,5 +119,100 @@ describe('StackedCurvesChart — render', () => {
     const card = await screen.findByTestId('stacked-curve-primary')
     expect(card.getAttribute('data-saturated')).toBe('false')
     expect(card.style.opacity).toBe('1')
+  })
+})
+
+// ── A3b.9 — Master split stub ──────────────────────────────────────
+
+describe('splitByFirstMover', () => {
+  it('returns {split:false} when every row has asFirstMover=null (TTT default)', () => {
+    expect(splitByFirstMover([
+      { wins: 5, draws: 2, losses: 3, asFirstMover: null },
+      { wins: 6, draws: 1, losses: 3, asFirstMover: null },
+    ])).toEqual({ split: false })
+  })
+
+  it('returns {split:false} when only one side is present', () => {
+    // All asFirstMover=true → no split (we need both halves to render
+    // a meaningful "first vs second" comparison).
+    expect(splitByFirstMover([
+      { wins: 5, draws: 2, losses: 3, asFirstMover: true },
+      { wins: 6, draws: 1, losses: 3, asFirstMover: true },
+    ])).toEqual({ split: false })
+  })
+
+  it('splits into firstMover + secondMover when both sides are present', () => {
+    const out = splitByFirstMover([
+      { episodeNum: 1, wins: 1, draws: 1, losses: 8, asFirstMover: true  },
+      { episodeNum: 1, wins: 0, draws: 2, losses: 8, asFirstMover: false },
+      { episodeNum: 2, wins: 2, draws: 1, losses: 7, asFirstMover: true  },
+      { episodeNum: 2, wins: 1, draws: 1, losses: 8, asFirstMover: false },
+    ])
+    expect(out.split).toBe(true)
+    expect(out.firstMover).toHaveLength(2)
+    expect(out.secondMover).toHaveLength(2)
+    expect(out.firstMover.every(p => p.asFirstMover !== false)).toBe(true)
+    expect(out.secondMover.every(p => p.asFirstMover !== true)).toBe(true)
+  })
+
+  it('asFirstMover=null rows in a split curve land in BOTH halves (defensive guard)', () => {
+    const out = splitByFirstMover([
+      { episodeNum: 1, wins: 1, draws: 1, losses: 8, asFirstMover: true  },
+      { episodeNum: 2, wins: 0, draws: 2, losses: 8, asFirstMover: false },
+      { episodeNum: 3, wins: 1, draws: 1, losses: 8, asFirstMover: null  },
+    ])
+    expect(out.split).toBe(true)
+    // The null row goes into both halves rather than getting dropped.
+    expect(out.firstMover.find(p => p.asFirstMover === null)).toBeDefined()
+    expect(out.secondMover.find(p => p.asFirstMover === null)).toBeDefined()
+  })
+})
+
+describe('StackedCurvesChart — split rendering', () => {
+  it('renders ONE chart per label when no per-side data exists (TTT default)', async () => {
+    api.ml.getMetrics.mockResolvedValue({ metrics: [
+      { episodeNum: 1000, opponentLabel: 'master', wins: 1, draws: 1, losses: 8, asFirstMover: null },
+      { episodeNum: 2000, opponentLabel: 'master', wins: 2, draws: 1, losses: 7, asFirstMover: null },
+      { episodeNum: 3000, opponentLabel: 'master', wins: 3, draws: 1, losses: 6, asFirstMover: null },
+    ]})
+    render(<StackedCurvesChart sessionId="sess_master_unsplit" />)
+    await screen.findByTestId('stacked-curve-master')
+    // No sub-cards rendered when not split.
+    expect(screen.queryByTestId('stacked-curve-master-firstmover')).toBeNull()
+    expect(screen.queryByTestId('stacked-curve-master-secondmover')).toBeNull()
+  })
+
+  it('renders TWO sub-charts when the master curve is split by asFirstMover', async () => {
+    api.ml.getMetrics.mockResolvedValue({ metrics: [
+      { episodeNum: 1000, opponentLabel: 'master', wins: 1, draws: 1, losses: 8, asFirstMover: true  },
+      { episodeNum: 1000, opponentLabel: 'master', wins: 0, draws: 2, losses: 8, asFirstMover: false },
+      { episodeNum: 2000, opponentLabel: 'master', wins: 2, draws: 1, losses: 7, asFirstMover: true  },
+      { episodeNum: 2000, opponentLabel: 'master', wins: 1, draws: 1, losses: 8, asFirstMover: false },
+    ]})
+    render(<StackedCurvesChart sessionId="sess_master_split" />)
+    await screen.findByTestId('stacked-curves-chart')
+
+    expect(screen.getByTestId('stacked-curve-master-firstmover')).toBeInTheDocument()
+    expect(screen.getByTestId('stacked-curve-master-secondmover')).toBeInTheDocument()
+    // The base (non-split) test-id must NOT exist when split.
+    expect(screen.queryByTestId('stacked-curve-master')).toBeNull()
+  })
+
+  it('saturation flag applies independently per split half', async () => {
+    api.ml.getMetrics.mockResolvedValue({ metrics: [
+      // first-mover side: dominating (3x 100% → saturated)
+      { episodeNum: 1000, opponentLabel: 'master', wins: 10, draws: 0, losses: 0, asFirstMover: true },
+      { episodeNum: 2000, opponentLabel: 'master', wins: 10, draws: 0, losses: 0, asFirstMover: true },
+      { episodeNum: 3000, opponentLabel: 'master', wins: 10, draws: 0, losses: 0, asFirstMover: true },
+      // second-mover side: still losing (NOT saturated)
+      { episodeNum: 1000, opponentLabel: 'master', wins: 1, draws: 1, losses: 8, asFirstMover: false },
+      { episodeNum: 2000, opponentLabel: 'master', wins: 1, draws: 1, losses: 8, asFirstMover: false },
+      { episodeNum: 3000, opponentLabel: 'master', wins: 2, draws: 1, losses: 7, asFirstMover: false },
+    ]})
+    render(<StackedCurvesChart sessionId="sess_master_partial_sat" />)
+    const first  = await screen.findByTestId('stacked-curve-master-firstmover')
+    const second = screen.getByTestId('stacked-curve-master-secondmover')
+    expect(first.getAttribute('data-saturated')).toBe('true')
+    expect(second.getAttribute('data-saturated')).toBe('false')
   })
 })
