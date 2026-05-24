@@ -592,7 +592,7 @@ function MatchReplayModal({ matchId, matchLabel, onClose }) {
 function SpectatorGame({ slug, onGameEnd }) {
   const themeStyle = resolveThemeVars(xoMeta.theme, document.documentElement.classList.contains('dark'))
   const { session, sdk } = useGameSDK({
-    gameId: 'xo',
+    gameId: 'tic-tac-toe',
     joinSlug: slug,
     spectate: true,
     currentUser: null,

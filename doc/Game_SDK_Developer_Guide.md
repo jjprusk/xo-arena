@@ -117,16 +117,17 @@ Static metadata the platform reads at registration time.
 ```js
 // src/meta.js
 export const meta = {
-  id:               'xo',
+  id:               'tic-tac-toe',
   title:            'Tic-Tac-Toe',
   description:      'Classic 3x3 strategy game. First to three in a row wins.',
-  icon:             '/icons/xo.svg',
+  icon:             '/icons/tic-tac-toe.svg',
   minPlayers:       2,
   maxPlayers:       2,
   layout: {
     preferredWidth: 'compact',   // max-w-sm — small square board
     aspectRatio:    '1/1',       // pre-allocates square space while loading
   },
+  inputMode:        'cell',      // players target a cell (vs 'column' for Connect Four)
   supportsBots:     true,
   supportsTraining: true,
   supportsPuzzles:  true,
@@ -134,15 +135,18 @@ export const meta = {
 }
 ```
 
+> Slugs are kebab-case platform-wide. `'tic-tac-toe'`, `'connect-four'`, `'poker'` — never `'xo'`, `'connect4'`, or camelCase.
+
 | Field | Type | Notes |
 |---|---|---|
-| `id` | `string` | Stable, lowercase, unique across all games. Used as a key throughout the platform. |
+| `id` | `string` | Stable, lowercase, kebab-case, unique across all games. Used as a key throughout the platform. |
 | `title` | `string` | Human-readable name shown in UI. |
 | `description` | `string` | One sentence shown on table cards and game detail views. |
 | `icon` | `string?` | Path or URL to game icon. |
 | `minPlayers` | `number` | Minimum seated players to start. |
 | `maxPlayers` | `number` | Maximum players allowed at the table. |
 | `layout` | `GameLayout?` | Container sizing preferences. Defaults to `standard` if omitted. See Layout below. |
+| `inputMode` | `'cell' \| 'column' \| undefined` | Hint to the platform about how players make moves. `'cell'` = target a specific cell (TTT). `'column'` = choose a column and the piece settles by rules (Connect Four). Used for a11y labels and mobile gesture hints; game still implements its own input. Omit for real-time or other input styles. |
 | `supportsBots` | `boolean` | Enables bot opponent options at table creation. |
 | `supportsTraining` | `boolean` | Enables Gym tab in the platform shell. |
 | `supportsPuzzles` | `boolean` | Enables Puzzles tab in the platform shell. |
@@ -190,10 +194,12 @@ Token values may reference platform CSS variables via `var()`. Since platform va
 
 | Token | Light & Dark value | Purpose |
 |---|---|---|
-| `--game-mark-x` | `var(--color-blue-600)` → `#1A6FD4` | X player mark color |
-| `--game-mark-o` | `var(--color-teal-600)` → `#1D9E75` | O player mark color |
+| `--game-mark-1` | `var(--color-blue-600)` → `#1A6FD4` | First-mover mark color (X in TTT, Red in Connect Four, etc.) |
+| `--game-mark-2` | `var(--color-teal-600)` → `#1D9E75` | Second-mover mark color (O in TTT, Yellow in Connect Four, etc.) |
 | `--game-cell-win-bg` | `var(--color-amber-100)` → `#FAEEDA` | Winning cell background |
 | `--game-cell-win-border` | `var(--color-amber-500)` → `#D4891E` | Winning cell border |
+
+> Token names are game-agnostic. Map `--game-mark-1`/`--game-mark-2` to whatever your game calls its sides inside your GameComponent. The platform default uses blue/teal; Connect Four overrides to red/yellow.
 
 **Usage — explicitly declare platform defaults:**
 
@@ -211,12 +217,12 @@ export const meta = {
 ```js
 theme: {
   tokens: {
-    '--game-mark-x': '#e63946',    // red discs (raw value — requires dark override if needed)
-    '--game-mark-o': '#f4d03f',    // yellow discs
+    '--game-mark-1': '#e63946',    // red discs (raw value — requires dark override if needed)
+    '--game-mark-2': '#f4d03f',    // yellow discs
     '--game-board-bg': '#1a5276',  // game-specific token consumed by GameComponent
   },
   dark: {
-    '--game-mark-x': '#ff6b6b',    // lighter red for dark mode legibility
+    '--game-mark-1': '#ff6b6b',    // lighter red for dark mode legibility
   },
 }
 ```
@@ -230,7 +236,7 @@ theme: {
   ...platformDefaultTheme,
   tokens: {
     ...platformDefaultTheme.tokens,
-    '--game-mark-x': 'var(--color-red-600)',   // red X, everything else unchanged
+    '--game-mark-1': 'var(--color-red-600)',   // red first-mover, everything else unchanged
   },
 }
 ```
@@ -239,7 +245,7 @@ theme: {
 
 ```js
 // Do this — reads from the game container's scoped tokens
-const MARK_COLOR = { X: 'var(--game-mark-x)', O: 'var(--game-mark-o)' }
+const MARK_COLOR = { X: 'var(--game-mark-1)', O: 'var(--game-mark-2)' }
 
 // Not this — bypasses the theme system
 const MARK_COLOR = { X: 'var(--color-blue-600)', O: 'var(--color-teal-600)' }
@@ -536,10 +542,15 @@ interface BotPersona {
   id:          string    // stable identifier
   name:        string    // display name
   description: string    // short playstyle description
-  difficulty:  'beginner' | 'easy' | 'medium' | 'hard' | 'expert'
+  difficulty:  'beginner' | 'easy' | 'medium' | 'hard' | 'expert' | 'master'
   algorithm:   string    // 'minimax' | 'qlearning' | 'alphazero' | etc.
+  offLadder?:  boolean   // true = matches do not update ELO (e.g. Connect Four Master)
 }
 ```
+
+**The `master` difficulty + `offLadder` pairing.** Use these together when a game is mathematically solved at a level that would break the rated ladder. The canonical example is Connect Four: the game is solved with first-player wins under perfect play, so a "Master" bot is structurally unbeatable as first-mover. The platform skips ELO updates for matches against `offLadder: true` personas and tracks them in a separate stat bucket on the bot detail page.
+
+Tic-Tac-Toe does **not** use the Master tier — Hard is already the ceiling (perfect TTT play forces a draw). Reserve `'master'` + `offLadder: true` for solved-game ceilings that would otherwise produce structural, non-skill-based outcomes.
 
 **Dispatch guidance:**
 
@@ -1024,7 +1035,7 @@ export { botInterface } from './botInterface.js'
 import { platformDefaultTheme } from '@callidity/sdk'
 
 export const meta = {
-  id:               'xo',
+  id:               'tic-tac-toe',
   title:            'Tic-Tac-Toe',
   description:      'Classic 3×3 strategy game. First to get three in a row wins.',
   minPlayers:       2,
@@ -1033,6 +1044,7 @@ export const meta = {
     preferredWidth: 'compact',
     aspectRatio:    '1/1',
   },
+  inputMode:        'cell',
   theme: platformDefaultTheme,
   supportsBots:     true,
   supportsTraining: true,
@@ -1127,8 +1139,8 @@ import React, { useState, useEffect, useRef } from 'react'
 import { initialGameState } from './logic.js'
 
 const MARK_COLOR = {
-  X: 'var(--game-mark-x)',
-  O: 'var(--game-mark-o)',
+  X: 'var(--game-mark-1)',  // first-mover token, blue by default
+  O: 'var(--game-mark-2)',  // second-mover token, teal by default
 }
 
 const REACTIONS = ['👍', '😂', '😮', '🔥', '😭', '🤔', '👏', '💀']

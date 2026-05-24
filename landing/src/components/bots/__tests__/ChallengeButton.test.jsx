@@ -37,7 +37,7 @@ describe('<ChallengeButton />', () => {
 
     await waitFor(() => expect(mockNavigate).toHaveBeenCalled())
     expect(mockRtFetch).toHaveBeenCalledWith('/rt/tables', {
-      body: { kind: 'hvb', botUserId: 'bot_xyz', gameId: 'xo', spectatorAllowed: true },
+      body: { kind: 'hvb', botUserId: 'bot_xyz', gameId: 'tic-tac-toe', spectatorAllowed: true },
     })
     expect(mockNavigate).toHaveBeenCalledWith('/play?join=abc123', expect.objectContaining({ state: expect.objectContaining({ from: expect.any(String) }) }))
   })

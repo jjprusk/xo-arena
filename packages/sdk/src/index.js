@@ -11,23 +11,28 @@
  *   import { platformDefaultTheme } from '@callidity/sdk'
  *   export const meta = { ..., theme: platformDefaultTheme }
  *
+ * Token naming is game-agnostic: `--game-mark-1` is the first-mover / first
+ * player mark color, `--game-mark-2` is the second. Map them to whatever your
+ * game calls its sides (X/O, Red/Yellow, Black/White, etc.) inside your game
+ * component.
+ *
  * Custom games can spread and override individual tokens:
  *
  *   theme: {
  *     ...platformDefaultTheme,
  *     tokens: {
  *       ...platformDefaultTheme.tokens,
- *       '--game-mark-x': '#e63946',   // red instead of blue
- *       '--game-mark-o': '#f4d03f',   // yellow instead of teal
+ *       '--game-mark-1': '#e63946',   // red for first player
+ *       '--game-mark-2': '#f4d03f',   // yellow for second player
  *     },
  *   }
  */
 export const platformDefaultTheme = {
   tokens: {
-    /** X player mark color — applied to the X symbol and turn/result indicators. */
-    '--game-mark-x':          'var(--color-blue-600)',
-    /** O player mark color — applied to the O symbol and turn/result indicators. */
-    '--game-mark-o':          'var(--color-teal-600)',
+    /** First player mark color (X in TTT, Red in Connect Four, etc.). */
+    '--game-mark-1':          'var(--color-blue-600)',
+    /** Second player mark color (O in TTT, Yellow in Connect Four, etc.). */
+    '--game-mark-2':          'var(--color-teal-600)',
     /** Background color of a winning cell. */
     '--game-cell-win-bg':     'var(--color-amber-100)',
     /** Border color of a winning cell. */

@@ -12,6 +12,9 @@ import { seedCorpus as seedHelpCorpus, reindexAllIfStale as reindexHelpCorpusIfS
 import { startHelpRateLimitSweep } from './middleware/helpRateLimit.js'
 import { startResearchPublishRateLimitSweep } from './middleware/researchPublishRateLimit.js'
 import { startResearchLogExportCron } from './jobs/researchLogExport.js'
+import { prewarmCache } from './startup/prewarmCache.js'
+import { resumeOrphanedSessions, getSystemConfig as getMlSystemConfig } from './services/mlService.js'
+import { initSignalBus } from './lib/signalBus.js'
 import aiRouter from './routes/ai.js'
 import logsRouter from './routes/logs.js'
 import usersRouter from './routes/users.js'
@@ -41,6 +44,7 @@ import realtimeRouter, { modeRouter as realtimeModeRouter } from './routes/realt
 import playRouter from './routes/play.js'
 import perfVitalsRouter from './routes/perfVitals.js'
 import swControlRouter from './routes/swControl.js'
+import { validateGameSlug } from './middleware/gameSlug.js'
 import { getSystemConfig } from './services/skillService.js'
 import { startActivityFlushJob } from './services/activityService.js'
 import { startReplayPurgeJob } from './services/replayPurgeService.js'
@@ -50,8 +54,31 @@ import { startExpiredNotificationPruner } from './lib/notificationBus.js'
 import { startDispatcher } from './lib/scheduledJobs.js'
 import { start as startTableGc } from './services/tableGcService.js'
 import { startMetricsSnapshotCron } from './services/metricsSnapshotService.js'
+import { startTrainingHealthMonitor } from './queue/trainingHealthMonitor.js'
+import { dispatch as notificationDispatch } from './lib/notificationBus.js'
 
 const PORT = process.env.PORT || 3000
+
+// A1.4 — game-as-prefix route layer. Registered BEFORE the flat mounts below
+// so /api/v1/games/:slug/<sub> takes precedence over /api/v1/games's other
+// routes. Each prefix mount runs the slug validator first; unknown slugs 404
+// cleanly. Inner handlers read req.gameId (set by validator); req.query.gameId
+// is also injected for back-compat with handlers that pre-date the prefix.
+//
+// "Pure" game-scoped routers (bots, play, skills, ml, puzzles, leaderboard)
+// are the natural prefix consumers. "Dual-addressable" routers (tables, the
+// renamed game-results) are reachable BOTH via the prefix (per-game scope)
+// AND via their flat mounts below (cross-game scope, used by admin views).
+registerRoutes(app, {
+  '/games/:slug/bots':         [validateGameSlug, botsRouter],
+  '/games/:slug/play':         [validateGameSlug, playRouter],
+  '/games/:slug/skills':       [validateGameSlug, skillsRouter],
+  '/games/:slug/ml':           [validateGameSlug, mlRouter],
+  '/games/:slug/puzzles':      [validateGameSlug, puzzlesRouter],
+  '/games/:slug/leaderboard':  [validateGameSlug, leaderboardRouter],
+  '/games/:slug/tables':       [validateGameSlug, tablesRouter],
+  '/games/:slug/results':      [validateGameSlug, gamesRouter],
+})
 
 registerRoutes(app, {
   '/ai': aiRouter,
@@ -64,6 +91,11 @@ registerRoutes(app, {
   '/admin/help': helpAdminRouter,
   '/help':       helpRouter,
   '/research':   researchRouter,
+  // /game-results is the canonical mount for game-result records (POST /, GET /,
+  // GET /:id/replay). The legacy /games mount is kept for back-compat until A1.9
+  // adds 301s. The name games-as-records was historically confusing; game-results
+  // is unambiguous and frees the /games namespace for the prefix router above.
+  '/game-results': gamesRouter,
   '/games': gamesRouter,
   '/ml': mlRouter,
   '/skills': skillsRouter,
@@ -167,6 +199,56 @@ startResearchLogExportCron()
 app.set('io', null)
 startTournamentBridge(null)
 startTableGc(null)
+
+// Prewarm the in-process bots cache before serving traffic. Without this,
+// the first burst of post-deploy requests hits the cold path and drags
+// `/api/v1/bots?gameId=...` p95 from ~30 ms to ~150 ms for the full TTL
+// window. Awaited so server.listen() (and thus Fly.io's healthcheck) only
+// flips to ready after the cache is warm.
+await prewarmCache()
+
+// A3b.2b — boot the pause/cancel signal bus. Mode mirrors `ml.useWorker`:
+// when the worker path is on, signals must cross processes so pause/cancel
+// reach the xo-training worker; otherwise the bus stays in-memory and is
+// indistinguishable from the old bare-Set behavior.
+{
+  const useWorker = await getMlSystemConfig('ml.useWorker', false)
+  await initSignalBus({ mode: useWorker ? 'redis' : 'memory' })
+}
+
+// A3b.5 — training health monitor: polls BullMQ queue depth + reads worker
+// resource samples from Redis, fires edge-triggered admin alerts on a
+// stalled queue or non-empty dead-letter. Only runs when Redis is
+// configured (training worker path is enabled in this env).
+if (process.env.REDIS_URL) {
+  try {
+    const { default: IORedis } = await import('ioredis')
+    const monitorRedis = new IORedis(process.env.REDIS_URL, { maxRetriesPerRequest: null })
+    monitorRedis.on('error', (err) => logger.warn({ err }, 'training health monitor Redis error'))
+    startTrainingHealthMonitor({
+      redis:    monitorRedis,
+      dispatch: notificationDispatch,
+      getAdminIds: async () => {
+        const baAdmins = await db.baUser.findMany({ where: { role: 'admin' }, select: { id: true } })
+        const admins   = await db.user.findMany({
+          where:  { betterAuthId: { in: baAdmins.map((b) => b.id) } },
+          select: { id: true },
+        })
+        return admins.map((a) => a.id)
+      },
+    })
+  } catch (err) {
+    logger.warn({ err }, 'training health monitor failed to start (non-fatal)')
+  }
+}
+
+// A3a.9 — pick up any training sessions left RUNNING by a crashed worker.
+// Fire-and-forget: we never want a slow resume scan to block the listen()
+// call. Each session is recovered or marked FAILED independently.
+resumeOrphanedSessions().catch((err) =>
+  logger.error({ err }, 'orphaned training resume failed')
+)
+
 server.listen(PORT, () => {
   logger.info(`XO Arena backend running on port ${PORT}`)
 })

@@ -32,9 +32,9 @@ describe('skillCategory', () => {
 
 describe('gameLabel', () => {
   it('returns the registry label for a known gameId', () => {
-    // 'xo' is the only registered game today; if the registry renames it,
+    // 'tic-tac-toe' is the only registered game today; if the registry renames it,
     // this test fails loudly so the upgrader notices the dependent UI strings.
-    expect(gameLabel('xo')).toMatch(/xo|tic-?tac-?toe/i)
+    expect(gameLabel('tic-tac-toe')).toMatch(/xo|tic-?tac-?toe/i)
   })
 
   it('falls back to the upper-cased gameId for an unknown gameId', () => {

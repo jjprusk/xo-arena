@@ -13,6 +13,7 @@ import registry from '../ai/registry.js'
 import { getMoveForModel } from '../services/skillService.js'
 import { createGame } from '../services/userService.js'
 import { updateBothElosAfterBotVsBot } from '../services/eloService.js'
+import { GAME_IDS } from '../constants/games.js'
 import db from '../lib/db.js'
 import { releaseSeats } from '../lib/tableSeats.js'
 import { dispatchTableReleased, TABLE_RELEASED_REASONS } from '../lib/tableReleased.js'
@@ -105,7 +106,7 @@ class BotGameRunner {
    * @param {string|null} [opts.tournamentMatchId]
    * @returns {{ slug, displayName }}
    */
-  async startGame({ bot1, bot2, gameId = 'xo', moveDelayMs = DEFAULT_MOVE_DELAY_MS, tournamentId = null, tournamentMatchId = null, bestOfN = 1, slug: explicitSlug = null, isSpar = false, sparUserId = null }) {
+  async startGame({ bot1, bot2, gameId = GAME_IDS.TIC_TAC_TOE, moveDelayMs = DEFAULT_MOVE_DELAY_MS, tournamentId = null, tournamentMatchId = null, bestOfN = 1, slug: explicitSlug = null, isSpar = false, sparUserId = null }) {
     // Demo Table macro (§5.1) pre-allocates a slug so the Table row's slug
     // matches the bot-game slug. Otherwise we mint our own.
     const slug = explicitSlug ?? nanoid(8)

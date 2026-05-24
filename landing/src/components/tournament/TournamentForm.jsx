@@ -66,7 +66,7 @@ function toLocalDatetimeValue(val) {
 }
 
 // Default game = first registered game in gameRegistry. Dodges a hardcoded
-// 'xo' literal so adding a new game doesn't require touching this file.
+// 'tic-tac-toe' literal so adding a new game doesn't require touching this file.
 const DEFAULT_GAME_ID = GAMES[0]?.id
 
 const DEFAULT_FORM = {

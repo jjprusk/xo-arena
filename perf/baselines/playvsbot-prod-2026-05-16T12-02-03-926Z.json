@@ -1,0 +1,467 @@
+{
+  "env": "prod",
+  "base": "https://xo-landing-prod.fly.dev",
+  "runs": 5,
+  "summary": {
+    "tReadyP50": 842,
+    "tReadyP95": 846,
+    "tPlayBotP50": 125,
+    "joinPostsTotal": 0,
+    "tokenGetsTotal": 0,
+    "botsListGetsTotal": 0,
+    "tablesCreatePostsTotal": 0,
+    "playBotPostsTotal": 5
+  },
+  "results": [
+    {
+      "run": 1,
+      "tReady": 844,
+      "tCreateMs": null,
+      "tPlayBotMs": 124,
+      "joinPOSTs": 0,
+      "tokenGETs": 0,
+      "botsListGETs": 0,
+      "tablesCreatePOSTs": 0,
+      "playBotPOSTs": 1,
+      "apiCalls": [
+        {
+          "kind": "other",
+          "url": "https://xo-landing-prod.fly.dev/api/session",
+          "method": "GET",
+          "status": 200,
+          "duration": 235
+        },
+        {
+          "kind": "other",
+          "url": "https://xo-landing-prod.fly.dev/api/session",
+          "method": "GET",
+          "status": 200,
+          "duration": 194
+        },
+        {
+          "kind": "other",
+          "url": "https://xo-landing-prod.fly.dev/api/session",
+          "method": "GET",
+          "status": 200,
+          "duration": 80
+        },
+        {
+          "kind": "bots",
+          "url": "https://xo-landing-prod.fly.dev/api/v1/bots",
+          "method": "GET",
+          "status": 200,
+          "duration": 54
+        },
+        {
+          "kind": "other",
+          "url": "https://xo-landing-prod.fly.dev/api/session",
+          "method": "GET",
+          "status": 200,
+          "duration": 39
+        },
+        {
+          "kind": "api",
+          "url": "https://xo-landing-prod.fly.dev/api/v1/events/stream",
+          "method": "GET",
+          "status": 200,
+          "duration": 52
+        },
+        {
+          "kind": "other",
+          "url": "https://xo-landing-prod.fly.dev/api/session",
+          "method": "GET",
+          "status": 200,
+          "duration": 142
+        },
+        {
+          "kind": "other",
+          "url": "https://xo-landing-prod.fly.dev/api/session",
+          "method": "GET",
+          "status": 200,
+          "duration": 106
+        },
+        {
+          "kind": "play-bot",
+          "url": "https://xo-landing-prod.fly.dev/api/v1/play/bot",
+          "method": "POST",
+          "status": 200,
+          "duration": 124
+        },
+        {
+          "kind": "other",
+          "url": "https://xo-landing-prod.fly.dev/api/session",
+          "method": "GET",
+          "status": 200,
+          "duration": 44
+        },
+        {
+          "kind": "api",
+          "url": "https://xo-landing-prod.fly.dev/api/v1/events/stream?lastEventId=1778932580548-8",
+          "method": "GET",
+          "status": 200,
+          "duration": 40
+        }
+      ]
+    },
+    {
+      "run": 2,
+      "tReady": 846,
+      "tCreateMs": null,
+      "tPlayBotMs": 121,
+      "joinPOSTs": 0,
+      "tokenGETs": 0,
+      "botsListGETs": 0,
+      "tablesCreatePOSTs": 0,
+      "playBotPOSTs": 1,
+      "apiCalls": [
+        {
+          "kind": "other",
+          "url": "https://xo-landing-prod.fly.dev/api/session",
+          "method": "GET",
+          "status": 200,
+          "duration": 253
+        },
+        {
+          "kind": "other",
+          "url": "https://xo-landing-prod.fly.dev/api/session",
+          "method": "GET",
+          "status": 200,
+          "duration": 203
+        },
+        {
+          "kind": "other",
+          "url": "https://xo-landing-prod.fly.dev/api/session",
+          "method": "GET",
+          "status": 200,
+          "duration": 162
+        },
+        {
+          "kind": "bots",
+          "url": "https://xo-landing-prod.fly.dev/api/v1/bots",
+          "method": "GET",
+          "status": 200,
+          "duration": 52
+        },
+        {
+          "kind": "other",
+          "url": "https://xo-landing-prod.fly.dev/api/session",
+          "method": "GET",
+          "status": 200,
+          "duration": 52
+        },
+        {
+          "kind": "api",
+          "url": "https://xo-landing-prod.fly.dev/api/v1/events/stream",
+          "method": "GET",
+          "status": 200,
+          "duration": 51
+        },
+        {
+          "kind": "other",
+          "url": "https://xo-landing-prod.fly.dev/api/session",
+          "method": "GET",
+          "status": 200,
+          "duration": 139
+        },
+        {
+          "kind": "other",
+          "url": "https://xo-landing-prod.fly.dev/api/session",
+          "method": "GET",
+          "status": 200,
+          "duration": 101
+        },
+        {
+          "kind": "play-bot",
+          "url": "https://xo-landing-prod.fly.dev/api/v1/play/bot",
+          "method": "POST",
+          "status": 200,
+          "duration": 121
+        },
+        {
+          "kind": "other",
+          "url": "https://xo-landing-prod.fly.dev/api/session",
+          "method": "GET",
+          "status": 200,
+          "duration": 43
+        },
+        {
+          "kind": "api",
+          "url": "https://xo-landing-prod.fly.dev/api/v1/events/stream?lastEventId=1778932580548-8",
+          "method": "GET",
+          "status": 200,
+          "duration": 43
+        }
+      ]
+    },
+    {
+      "run": 3,
+      "tReady": 837,
+      "tCreateMs": null,
+      "tPlayBotMs": 203,
+      "joinPOSTs": 0,
+      "tokenGETs": 0,
+      "botsListGETs": 0,
+      "tablesCreatePOSTs": 0,
+      "playBotPOSTs": 1,
+      "apiCalls": [
+        {
+          "kind": "other",
+          "url": "https://xo-landing-prod.fly.dev/api/session",
+          "method": "GET",
+          "status": 200,
+          "duration": 240
+        },
+        {
+          "kind": "other",
+          "url": "https://xo-landing-prod.fly.dev/api/session",
+          "method": "GET",
+          "status": 200,
+          "duration": 204
+        },
+        {
+          "kind": "other",
+          "url": "https://xo-landing-prod.fly.dev/api/session",
+          "method": "GET",
+          "status": 200,
+          "duration": 165
+        },
+        {
+          "kind": "bots",
+          "url": "https://xo-landing-prod.fly.dev/api/v1/bots",
+          "method": "GET",
+          "status": 200,
+          "duration": 56
+        },
+        {
+          "kind": "other",
+          "url": "https://xo-landing-prod.fly.dev/api/session",
+          "method": "GET",
+          "status": 200,
+          "duration": 56
+        },
+        {
+          "kind": "api",
+          "url": "https://xo-landing-prod.fly.dev/api/v1/events/stream",
+          "method": "GET",
+          "status": 200,
+          "duration": 53
+        },
+        {
+          "kind": "other",
+          "url": "https://xo-landing-prod.fly.dev/api/session",
+          "method": "GET",
+          "status": 200,
+          "duration": 139
+        },
+        {
+          "kind": "other",
+          "url": "https://xo-landing-prod.fly.dev/api/session",
+          "method": "GET",
+          "status": 200,
+          "duration": 81
+        },
+        {
+          "kind": "play-bot",
+          "url": "https://xo-landing-prod.fly.dev/api/v1/play/bot",
+          "method": "POST",
+          "status": 200,
+          "duration": 203
+        },
+        {
+          "kind": "other",
+          "url": "https://xo-landing-prod.fly.dev/api/session",
+          "method": "GET",
+          "status": 200,
+          "duration": 42
+        },
+        {
+          "kind": "api",
+          "url": "https://xo-landing-prod.fly.dev/api/v1/events/stream?lastEventId=1778932580548-8",
+          "method": "GET",
+          "status": 200,
+          "duration": 79
+        }
+      ]
+    },
+    {
+      "run": 4,
+      "tReady": 838,
+      "tCreateMs": null,
+      "tPlayBotMs": 135,
+      "joinPOSTs": 0,
+      "tokenGETs": 0,
+      "botsListGETs": 0,
+      "tablesCreatePOSTs": 0,
+      "playBotPOSTs": 1,
+      "apiCalls": [
+        {
+          "kind": "other",
+          "url": "https://xo-landing-prod.fly.dev/api/session",
+          "method": "GET",
+          "status": 200,
+          "duration": 242
+        },
+        {
+          "kind": "other",
+          "url": "https://xo-landing-prod.fly.dev/api/session",
+          "method": "GET",
+          "status": 200,
+          "duration": 203
+        },
+        {
+          "kind": "other",
+          "url": "https://xo-landing-prod.fly.dev/api/session",
+          "method": "GET",
+          "status": 200,
+          "duration": 76
+        },
+        {
+          "kind": "bots",
+          "url": "https://xo-landing-prod.fly.dev/api/v1/bots",
+          "method": "GET",
+          "status": 200,
+          "duration": 50
+        },
+        {
+          "kind": "other",
+          "url": "https://xo-landing-prod.fly.dev/api/session",
+          "method": "GET",
+          "status": 200,
+          "duration": 48
+        },
+        {
+          "kind": "api",
+          "url": "https://xo-landing-prod.fly.dev/api/v1/events/stream",
+          "method": "GET",
+          "status": 200,
+          "duration": 48
+        },
+        {
+          "kind": "other",
+          "url": "https://xo-landing-prod.fly.dev/api/session",
+          "method": "GET",
+          "status": 200,
+          "duration": 144
+        },
+        {
+          "kind": "other",
+          "url": "https://xo-landing-prod.fly.dev/api/session",
+          "method": "GET",
+          "status": 200,
+          "duration": 102
+        },
+        {
+          "kind": "play-bot",
+          "url": "https://xo-landing-prod.fly.dev/api/v1/play/bot",
+          "method": "POST",
+          "status": 200,
+          "duration": 135
+        },
+        {
+          "kind": "other",
+          "url": "https://xo-landing-prod.fly.dev/api/session",
+          "method": "GET",
+          "status": 200,
+          "duration": 41
+        },
+        {
+          "kind": "api",
+          "url": "https://xo-landing-prod.fly.dev/api/v1/events/stream?lastEventId=1778932580548-8",
+          "method": "GET",
+          "status": 200,
+          "duration": 45
+        }
+      ]
+    },
+    {
+      "run": 5,
+      "tReady": 842,
+      "tCreateMs": null,
+      "tPlayBotMs": 125,
+      "joinPOSTs": 0,
+      "tokenGETs": 0,
+      "botsListGETs": 0,
+      "tablesCreatePOSTs": 0,
+      "playBotPOSTs": 1,
+      "apiCalls": [
+        {
+          "kind": "other",
+          "url": "https://xo-landing-prod.fly.dev/api/session",
+          "method": "GET",
+          "status": 200,
+          "duration": 231
+        },
+        {
+          "kind": "other",
+          "url": "https://xo-landing-prod.fly.dev/api/session",
+          "method": "GET",
+          "status": 200,
+          "duration": 190
+        },
+        {
+          "kind": "other",
+          "url": "https://xo-landing-prod.fly.dev/api/session",
+          "method": "GET",
+          "status": 200,
+          "duration": 78
+        },
+        {
+          "kind": "bots",
+          "url": "https://xo-landing-prod.fly.dev/api/v1/bots",
+          "method": "GET",
+          "status": 200,
+          "duration": 43
+        },
+        {
+          "kind": "other",
+          "url": "https://xo-landing-prod.fly.dev/api/session",
+          "method": "GET",
+          "status": 200,
+          "duration": 38
+        },
+        {
+          "kind": "api",
+          "url": "https://xo-landing-prod.fly.dev/api/v1/events/stream",
+          "method": "GET",
+          "status": 200,
+          "duration": 40
+        },
+        {
+          "kind": "other",
+          "url": "https://xo-landing-prod.fly.dev/api/session",
+          "method": "GET",
+          "status": 200,
+          "duration": 140
+        },
+        {
+          "kind": "other",
+          "url": "https://xo-landing-prod.fly.dev/api/session",
+          "method": "GET",
+          "status": 200,
+          "duration": 99
+        },
+        {
+          "kind": "play-bot",
+          "url": "https://xo-landing-prod.fly.dev/api/v1/play/bot",
+          "method": "POST",
+          "status": 200,
+          "duration": 125
+        },
+        {
+          "kind": "other",
+          "url": "https://xo-landing-prod.fly.dev/api/session",
+          "method": "GET",
+          "status": 200,
+          "duration": 45
+        },
+        {
+          "kind": "api",
+          "url": "https://xo-landing-prod.fly.dev/api/v1/events/stream?lastEventId=1778932580548-8",
+          "method": "GET",
+          "status": 200,
+          "duration": 47
+        }
+      ]
+    }
+  ]
+}

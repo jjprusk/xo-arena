@@ -2,11 +2,15 @@ FROM node:22-alpine
 WORKDIR /app
 ENV NODE_OPTIONS=--experimental-transform-types
 
-COPY package.json ./
+# Copy workspace manifests + the root lockfile for deterministic
+# transitive resolution. Without the lockfile, workspace installs
+# silently drop deep deps (e.g. bullmq's tslib / msgpackr) and the
+# image only fails at runtime when the affected module is imported.
+COPY package.json package-lock.json ./
 COPY packages/ai/package.json ./packages/ai/
 COPY packages/db/package.json ./packages/db/
 COPY backend/package.json ./backend/
-RUN npm install --workspace=backend --workspace=packages/ai --workspace=packages/db --no-package-lock --omit=dev --ignore-scripts
+RUN npm install --workspace=backend --workspace=packages/ai --workspace=packages/db --omit=dev --ignore-scripts
 
 COPY packages/ai/ ./packages/ai/
 COPY packages/db/ ./packages/db/

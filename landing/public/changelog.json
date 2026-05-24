@@ -1,8 +1,48 @@
 [
   {
+    "version": "1.4.0-alpha-5.17",
+    "date": "2026-05-21",
+    "description": "A3b.6 — soak validated training-worker cutover (144 sessions, 0 DL, 0 alerts, A3b.4 retry recovered 8 transient errors); ready to promote"
+  },
+  {
+    "version": "1.4.0-alpha-5.16",
+    "date": "2026-05-21",
+    "description": "A3b.5 training-worker observability + A3b.6 prep: algorithm-aware QA endpoint and 10-user mixed-algo soak harness"
+  },
+  {
+    "version": "1.4.0-alpha-5.15",
+    "date": "2026-05-21",
+    "description": "QA — HTTP-only crash-recovery harness: um training-recovery start --slot N + GET /qa/training-recovery/status so the test runs against any env without DB creds; 3-session parallel recovery test passes locally end-to-end"
+  },
+  {
+    "version": "1.4.0-alpha-5.14",
+    "date": "2026-05-21",
+    "description": "QA — um training-recovery harness for A3a.9 crash recovery (start --count N + verify --session); QA_SECRET-gated admin endpoint runs training in the long-lived backend process; per-episode _qaDelayMs hook so the crash window stays open long enough to actually restart; 10 unit tests + runbook"
+  },
+  {
+    "version": "1.4.0-alpha-5.13",
+    "date": "2026-05-19",
+    "description": "A3a backend — tournament match-level ELO opt-in (TTT off, C4 on at launch) + series-winner attribution fix; TrainingSession schema audit + TrainingCheckpoint/TrainingMetric tables; ml:session → training channel rename; Quick/Standard/Deep presets per (game, algorithm); 4hr ETA admin-approval gate + endpoints; per-user concurrency cap; multi-curve eval (~20 games/eval, primary+easy+medium); checkpoint-based crash recovery; pause/resume backend; corpus docs"
+  },
+  {
+    "version": "1.4.0-alpha-5.12",
+    "date": "2026-05-19",
+    "description": "A2 — ranked best-of-2 matches with match-level ELO, BO2 UI (banner + completion panel), tournament BO3 color rotation + game-3 tiebreaker, corpus alignment + pinned worked-example test"
+  },
+  {
+    "version": "1.4.0-alpha-5.11",
+    "date": "2026-05-18",
+    "description": "Perf \u2014 cache prewarm at backend boot + rolling-median regression detector (fewer false-positive flags)"
+  },
+  {
+    "version": "1.4.0-alpha-5.10",
+    "date": "2026-05-18",
+    "description": "A1 architectural alignment \u2014 slug rename xo \u2192 tic-tac-toe, SDK + /games/<slug> routing, eloService multi-game, landing flips, SSE+auth fixes, A1.9 deferred to C6"
+  },
+  {
     "version": "1.4.0-alpha-5.9",
     "date": "2026-05-16",
-    "description": "Research Log v1 (Sprints 1–3) + Help System backlog wins"
+    "description": "Research Log v1 (Sprints 1\u20133) + Help System backlog wins"
   },
   {
     "version": "1.4.0-alpha-5.8",
@@ -12,12 +52,12 @@
   {
     "version": "1.4.0-alpha-5.7",
     "date": "2026-05-16",
-    "description": "PlayVsBot start-flow — full collapse to POST /api/v1/play/bot"
+    "description": "PlayVsBot start-flow \u2014 full collapse to POST /api/v1/play/bot"
   },
   {
     "version": "1.4.0-alpha-5.6",
     "date": "2026-05-15",
-    "description": "PlayVsBot perf — ready-marker + gameId cache"
+    "description": "PlayVsBot perf \u2014 ready-marker + gameId cache"
   },
   {
     "version": "1.4.0-alpha-5.5",
@@ -37,12 +77,12 @@
   {
     "version": "1.4.0-alpha-5.1",
     "date": "2026-05-14",
-    "description": "Help System Sprint 3 batch 1 — Guide chat input live (streaming gpt-4o-mini answers, link tracking), prompt help.v3, 10 backlog questions ingested"
+    "description": "Help System Sprint 3 batch 1 \u2014 Guide chat input live (streaming gpt-4o-mini answers, link tracking), prompt help.v3, 10 backlog questions ingested"
   },
   {
     "version": "1.4.0-alpha-5.0",
     "date": "2026-05-14",
-    "description": "Help System Sprint 2 — live OpenAI RAG (gpt-4o-mini + embed-3-small), graceful degradation, adversarial pins, rate limit"
+    "description": "Help System Sprint 2 \u2014 live OpenAI RAG (gpt-4o-mini + embed-3-small), graceful degradation, adversarial pins, rate limit"
   },
   {
     "version": "1.4.0-alpha-4.15",
@@ -82,12 +122,12 @@
   {
     "version": "1.4.0-alpha-4.7",
     "date": "2026-05-05",
-    "description": "Journey fixes — cup runner unblocked, repointBotPrimarySkill flip, journey suite green on staging"
+    "description": "Journey fixes \u2014 cup runner unblocked, repointBotPrimarySkill flip, journey suite green on staging"
   },
   {
     "version": "1.4.0-alpha-4.6",
     "date": "2026-05-05",
-    "description": "Phase 20 — SW app shell + SWR data layer + um CLI exit fix"
+    "description": "Phase 20 \u2014 SW app shell + SWR data layer + um CLI exit fix"
   },
   {
     "version": "1.4.0-alpha-4.5",
@@ -97,12 +137,12 @@
   {
     "version": "1.4.0-alpha-4.4",
     "date": "2026-05-05",
-    "description": "F9 instrumentation probes — granular apply Server-Timing + live pg.Pool stats"
+    "description": "F9 instrumentation probes \u2014 granular apply Server-Timing + live pg.Pool stats"
   },
   {
     "version": "1.4.0-alpha-4.3",
     "date": "2026-05-05",
-    "description": "Phase 5 cold-broker fix + DB pool 10→30 (F9.1)"
+    "description": "Phase 5 cold-broker fix + DB pool 10\u219230 (F9.1)"
   },
   {
     "version": "1.4.0-alpha-4.2",
@@ -137,12 +177,12 @@
   {
     "version": "1.3.0-alpha-8.0",
     "date": "2026-05-01",
-    "description": "Journey fixes — cup step 7 credits round-1 losers, broken render loop blocking post-cup CTA, isTest template/scheduler guards, faster cup pace for e2e"
+    "description": "Journey fixes \u2014 cup step 7 credits round-1 losers, broken render loop blocking post-cup CTA, isTest template/scheduler guards, faster cup pace for e2e"
   },
   {
     "version": "1.3.0-alpha-4.0",
     "date": "2026-04-27",
-    "description": "Table fixes — slug redesign, seat-release on every COMPLETED transition, Safari pagehide graceful close, table.released telemetry"
+    "description": "Table fixes \u2014 slug redesign, seat-release on every COMPLETED transition, Safari pagehide graceful close, table.released telemetry"
   },
   {
     "version": "1.3.0-alpha-3.0",
@@ -162,7 +202,7 @@
   {
     "version": "1.3.0-alpha-1.34",
     "date": "2026-04-24",
-    "description": "Tournament service reliability — always-on machine + prod-bringup secrets documented"
+    "description": "Tournament service reliability \u2014 always-on machine + prod-bringup secrets documented"
   },
   {
     "version": "1.3.0-alpha-1.33",
@@ -207,12 +247,12 @@
   {
     "version": "1.3.0-alpha-1.24",
     "date": "2026-04-22",
-    "description": "Symmetric seat pods — avatars straddle panel rim"
+    "description": "Symmetric seat pods \u2014 avatars straddle panel rim"
   },
   {
     "version": "1.3.0-alpha-1.23",
     "date": "2026-04-22",
-    "description": "Landing build fix — ship v1.20–v1.22 UI changes"
+    "description": "Landing build fix \u2014 ship v1.20\u2013v1.22 UI changes"
   },
   {
     "version": "1.3.0-alpha-1.22",
@@ -382,7 +422,7 @@
   {
     "version": "1.6.7",
     "date": "2026-04-05",
-    "description": "Complete Phase 1 credits schema — add emailedAt to UserNotification"
+    "description": "Complete Phase 1 credits schema \u2014 add emailedAt to UserNotification"
   },
   {
     "version": "1.6.6",
@@ -407,7 +447,7 @@
   {
     "version": "1.6.1",
     "date": "2026-04-05",
-    "description": "Mobile FAQ viewing fix — removed inline max-width from guide images so the CSS rule applies correctly on iOS Safari"
+    "description": "Mobile FAQ viewing fix \u2014 removed inline max-width from guide images so the CSS rule applies correctly on iOS Safari"
   },
   {
     "version": "1.6.0",
@@ -457,7 +497,7 @@
   {
     "version": "1.2.2",
     "date": "2026-04-03",
-    "description": "Fix OAuth nameConfirmed timing bug — move social account check to /sync"
+    "description": "Fix OAuth nameConfirmed timing bug \u2014 move social account check to /sync"
   },
   {
     "version": "1.2.1",
@@ -512,6 +552,6 @@
   {
     "version": "1.0.0",
     "date": "2026-03-29",
-    "description": "Initial release — competitive Tic-Tac-Toe with ELO ratings, PvP rooms, AI opponents, Gym bot training, puzzles, and leaderboard"
+    "description": "Initial release \u2014 competitive Tic-Tac-Toe with ELO ratings, PvP rooms, AI opponents, Gym bot training, puzzles, and leaderboard"
   }
 ]

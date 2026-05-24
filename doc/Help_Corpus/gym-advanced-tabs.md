@@ -77,9 +77,9 @@ The JSON export looks roughly like:
 
 ```json
 {
-  "skill": "user_abc:xo:q-learning:v3",
+  "skill": "user_abc:tic-tac-toe:q-learning:v3",
   "algorithm": "q-learning",
-  "game": "xo",
+  "game": "tic-tac-toe",
   "version": 3,
   "weights": { /* algorithm-specific */ },
   "hyperparameters": {

@@ -23,7 +23,7 @@
  *   })
  */
 import { useEffect, useRef } from 'react'
-import { setSseSession, onSseSessionChange } from './rtSession.js'
+import { setSseSession, onSseSessionChange, getSseSession } from './rtSession.js'
 
 const STORAGE_KEY = 'aiarena_tier2_last_event_id'
 
@@ -55,17 +55,39 @@ const _listeners = new Map()
 // instead of minting a fresh one. Cleared after the next openStream call —
 // claim is a one-shot per stream open. (Future_Ideas PlayVsBot CTA item 3.)
 let _pendingClaimSessionId = null
+// Tracks the last id we've initiated a claim for. Dedupes the (common)
+// case where StrictMode or a parent re-render fires claimSseSession twice
+// for the same playBundle: without this, the second call would trigger a
+// second reopen *after* openStream had already consumed
+// `_pendingClaimSessionId`, so the second connection would mint a fresh
+// id and overwrite the cached one we just claimed — putting the singleton
+// (and every subsequent rt POST) on a sessionId the server has no seat
+// for.
+let _lastClaimAttempt = null
 
 /**
  * Stage an SSE session id to be claimed by the next openStream() call. Used
  * by the PlayPage vs-community-bot bootstrap when the server pre-allocated a
- * session inside POST /play/bot. No-op if a stream is already open (the id
- * already-claimed-or-minted on that connection wins).
+ * session inside POST /play/bot.
+ *
+ * If the shared singleton is already open on a different sessionId — which
+ * is the common case because AppLayout's always-on useEventStream opens
+ * the connection at app boot, before /play/bot returns — trigger a warm
+ * reopen so the new EventSource claims the pre-allocated id via
+ * `?sseSession=<id>`. Without this, the move POSTs that follow attach the
+ * minted-on-boot sessionId, whose seat doesn't match the table's
+ * `guest:<preAllocatedId>` seat → 403 NOT_A_PLAYER.
+ *
+ * No-op if the cached sessionId already matches the requested one, or if
+ * a claim for this id has already been initiated.
  */
 export function claimSseSession(sessionId) {
-  if (_es) return        // existing connection already has a session
   if (typeof sessionId !== 'string' || !sessionId) return
+  if (getSseSession() === sessionId) return
+  if (_lastClaimAttempt === sessionId) return
+  _lastClaimAttempt = sessionId
   _pendingClaimSessionId = sessionId
+  if (_es) reopenSharedStream()
 }
 
 function dispatchToCallers(eventType, payload, eventId) {

@@ -139,7 +139,7 @@ describe('POST /api/v1/tables/demo', () => {
     expect(res.body).not.toHaveProperty('displayName')
     expect(db.table.create).toHaveBeenCalledWith(expect.objectContaining({
       data: expect.objectContaining({
-        gameId:       'xo',
+        gameId:       'tic-tac-toe',
         slug:         'slug0001',
         createdById:  'ba_user_1',
         isPrivate:    true,

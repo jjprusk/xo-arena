@@ -130,7 +130,7 @@ describe('POST /api/v1/bots/:id/train-guided', () => {
   it('creates a Q-Learning skill, calls startTraining, and returns sessionId + skillId + channelPrefix', async () => {
     db.botSkill.findFirst.mockResolvedValue(null)              // no existing skill
     mlSvc.createModel.mockResolvedValue({ id: 'sk_new' })
-    db.botSkill.update.mockResolvedValue({ id: 'sk_new', botId: 'bot_42', gameId: 'xo' })
+    db.botSkill.update.mockResolvedValue({ id: 'sk_new', botId: 'bot_42', gameId: 'tic-tac-toe' })
     db.trainingSession.findFirst.mockResolvedValue(null)       // no running session
     mlSvc.startTraining.mockResolvedValue({ id: 'sess_99', status: 'RUNNING' })
 
@@ -140,7 +140,7 @@ describe('POST /api/v1/bots/:id/train-guided', () => {
     expect(res.body).toEqual({
       sessionId:     'sess_99',
       skillId:       'sk_new',
-      channelPrefix: 'ml:session:sess_99:',
+      channelPrefix: 'training:sess_99:',
       reused:        false,
     })
     expect(mlSvc.createModel).toHaveBeenCalledWith(expect.objectContaining({
@@ -178,7 +178,7 @@ describe('POST /api/v1/bots/:id/train-guided', () => {
     expect(res.body).toEqual({
       sessionId:     'sess_inflight',
       skillId:       'sk_old',
-      channelPrefix: 'ml:session:sess_inflight:',
+      channelPrefix: 'training:sess_inflight:',
       reused:        true,
     })
     expect(mlSvc.startTraining).not.toHaveBeenCalled()

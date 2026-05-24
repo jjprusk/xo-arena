@@ -38,6 +38,8 @@ import { formatTableLabel } from '../lib/tableLabel.js'
 import { resolveSkillForGame } from './skillService.js'
 import { getWinner, isBoardFull, WIN_LINES } from '@xo-arena/ai'
 import logger from '../logger.js'
+import { GAME_IDS } from '../constants/games.js'
+import { assignColors } from './matchColors.js'
 
 /**
  * Build a fresh previewState blob for a new table. Mirrors
@@ -338,6 +340,40 @@ export async function rematchGame({ io, tableId }) {
   ps.winLine = null
   ps.moves = []
   ps.round = (ps.round || 1) + 1
+
+  // A2.5 — tournament series alternate colors deterministically via
+  // matchColors using `tournamentMatchId` as the seed. Best-of-3+ runs
+  // game 3 as a random-color tiebreaker; the announcement event is the
+  // caller's concern (A2.7). Casual + ranked rematches keep the existing
+  // currentTurn flip and pre-baked marks above.
+  if (
+    table.tournamentMatchId &&
+    Array.isArray(table.seats) &&
+    table.seats[0]?.userId &&
+    table.seats[1]?.userId
+  ) {
+    const seat1Id = table.seats[0].userId
+    const seat2Id = table.seats[1].userId
+    const isBo3Plus = (table.bestOfN ?? 1) >= 3
+    const colors = assignColors({
+      seed:             table.tournamentMatchId,
+      player1Id:        seat1Id,
+      player2Id:        seat2Id,
+      sequence:         ps.round,
+      randomTiebreaker: ps.round === 3 && isBo3Plus,
+    })
+    const newMarks = { [colors.firstMoverId]: 'X', [colors.secondMoverId]: 'O' }
+    ps.marks       = newMarks
+    if (table.isHvb) ps.botMark = newMarks[seat2Id] ?? null
+    // X always moves first in TTT; override the toggle above so the
+    // freshly seeded first-mover is the side on move.
+    ps.currentTurn = 'X'
+    // Surface the game-3 random call as a flag the caller can broadcast
+    // (A2.7 turns this into a `match.game3.tiebreaker` realtime event).
+    if (ps.round === 3 && isBo3Plus) ps.tiebreaker = true
+    else                              delete ps.tiebreaker
+  }
+
   logger.info({ tableId, tournamentMatchId: table.tournamentMatchId, isHvb: table.isHvb, round: ps.round, scores: ps.scores }, 'rematch starting new game')
 
   const updated = await db.table.update({
@@ -353,6 +389,25 @@ export async function rematchGame({ io, tableId }) {
   }
   if (io) io.to(`table:${tableId}`).emit('game:start', startPayload)
   appendToStream(`table:${tableId}:state`, { kind: 'start', ...startPayload }, { userId: '*' }).catch(() => {})
+
+  // A2.7 — game-3 tournament tiebreaker announcement. The flag is set by
+  // the tournament branch above when sequence==3 + bestOfN>=3; the realtime
+  // event lets the client surface a banner ("Game 3 — random colors") so
+  // players know game-3 is independently drawn rather than continuing the
+  // swap pattern.
+  if (ps.tiebreaker && table.tournamentMatchId) {
+    appendToStream(
+      `table:${tableId}:state`,
+      {
+        kind:              'match.game3.tiebreaker',
+        tournamentMatchId: table.tournamentMatchId,
+        sequence:          3,
+        firstMoverMark:    ps.currentTurn,
+        marks:             ps.marks,
+      },
+      { userId: '*' },
+    ).catch(() => {})
+  }
 
   if (table.isHvb && ps.currentTurn === ps.botMark) {
     const { dispatchBotMove } = await getSocketHandlerHelpers()
@@ -383,7 +438,7 @@ export async function createPvpTable({ user, seatId, spectatorAllowed = true, ga
   const isGuest = !user?.betterAuthId
   const table = await createTableTracked({
     data: {
-      gameId:       'xo',
+      gameId:       GAME_IDS.TIC_TAC_TOE,
       slug,
       createdById:  user?.betterAuthId ?? 'anonymous',
       minPlayers:   2,
@@ -422,13 +477,116 @@ export async function createPvpTable({ user, seatId, spectatorAllowed = true, ga
  * Returns `{ ok, action, ...details }` where `action` is `'rejoined' |
  * 'rematched' | 'created'` so the caller can log/branch.
  */
+/**
+ * Reset the ranked HvB table for game N+1 of a BO2 match. The board is
+ * cleared, scores stay (so the UI can render "1-0" between games),
+ * `previewState.marks` swaps so each player gets X exactly once, and
+ * `botMark` flips accordingly.
+ *
+ * Idempotent if the table was already advanced — checks `previewState.round`
+ * against `nextSequence` and no-ops if the table is already there. Returns
+ * the updated previewState so the caller can echo it back to the client.
+ *
+ * @param {object} args
+ * @param {string} args.matchId        Match.id this table is bound to
+ * @param {{ sequence: number, firstMoverId: string, secondMoverId: string,
+ *           p1IsFirstMover: boolean }} args.nextSpawn
+ * @returns {Promise<{ table: object, previewState: object } | null>}
+ *   null if no table with the matchId was found.
+ */
+export async function rematchRankedTableInPlace({ matchId, nextSpawn }) {
+  if (!matchId)   throw new Error('rematchRankedTableInPlace: matchId required')
+  if (!nextSpawn) throw new Error('rematchRankedTableInPlace: nextSpawn required')
+
+  const table = await db.table.findFirst({ where: { matchId } })
+  if (!table) return null
+
+  const ps   = { ...(table.previewState || {}) }
+  const seats = Array.isArray(table.seats) ? table.seats : []
+  const humanSeatId = seats[0]?.userId ?? null
+  const botSeatId   = seats[1]?.userId ?? null
+  if (!humanSeatId || !botSeatId) return null
+
+  // The orchestrator returned domain User.ids for first/second mover. The
+  // seat IDs are betterAuthId for the human and (betterAuthId ?? User.id)
+  // for the bot. We pass `humanIsFirstMover` through Match meta in the
+  // route, so here we re-derive by re-running the same orchestrator call —
+  // but cheaper to compute from the prior game's marks: if the human had X
+  // last game, this game they get O.
+  const prevHumanMark = ps.marks?.[humanSeatId] ?? 'X'
+  const humanMark     = prevHumanMark === 'X' ? 'O' : 'X'
+  const botMark       = humanMark === 'X' ? 'O' : 'X'
+
+  ps.board        = Array(9).fill(null)
+  ps.currentTurn  = 'X'
+  ps.winner       = null
+  ps.winLine      = null
+  ps.moves        = []
+  ps.round        = nextSpawn.sequence
+  ps.marks        = { [humanSeatId]: humanMark, [botSeatId]: botMark }
+  ps.botMark      = botMark
+
+  const updated = await db.table.update({
+    where: { id: table.id },
+    data:  { status: 'ACTIVE', previewState: ps },
+  })
+
+  // Push the fresh board to subscribers so the client flips out of
+  // phase=finished and renders game N+1. Without this the client stays
+  // pinned to the prior game's terminal state and the only way out is a
+  // manual rematch click — which defeats the in-place rematch.
+  //
+  // Must `await` (not fire-and-forget) — when the bot draws X for game 2
+  // we dispatch its opening move below, and that path will emit its own
+  // `state.moved`. If `state.start` hadn't reached Redis first, the two
+  // events could land out of order and the client's currentTurn would
+  // snap back to 'X' (the start event's value) after the moved event
+  // updated it to 'O', leaving the user stuck on "Opponent's turn".
+  await appendToStream(
+    `table:${updated.id}:state`,
+    {
+      kind:        'start',
+      board:       ps.board,
+      currentTurn: ps.currentTurn,
+      scores:      ps.scores ?? { X: 0, O: 0 },
+      round:       ps.round,
+      // Carry the freshly-swapped marks so subscribers can refresh their
+      // local mapping. Without this the client still thinks the human
+      // plays the prior game's mark, and the bot's first move in game N+1
+      // gets rendered as if the human had played it.
+      marks:       ps.marks,
+      botMark:     ps.botMark ?? null,
+    },
+    { userId: '*' },
+  ).catch(() => {})
+
+  // If the bot drew X for this game it has to move first — without this
+  // the board renders with currentTurn='X' but the bot never plays, so
+  // the human (now playing O) can't make their first move and the game
+  // stalls. Mirrors rematchGame's dispatch on tournament rematches.
+  if (ps.currentTurn === botMark) {
+    const { dispatchBotMove } = await getSocketHandlerHelpers()
+    dispatchBotMove(updated, null).catch((err) =>
+      logger.warn({ err }, 'Failed to dispatch bot opening move on ranked rematch')
+    )
+  }
+
+  return { table: updated, previewState: ps, humanMark, botMark }
+}
+
 export async function createHvbTable({
   user,
   seatId,
-  gameId            = 'xo',
+  gameId            = GAME_IDS.TIC_TAC_TOE,
   botUserId,
   spectatorAllowed  = true,
   tournamentMatchId = null,
+  // A2.4 — ranked-match context. When set, the table is stamped with
+  // `matchId` and the mark assignment honors `humanIsFirstMover` (X always
+  // moves first in TTT, so the first-mover gets 'X'). Mutually exclusive
+  // with tournamentMatchId in practice — the ranked-bot route is the only
+  // caller, and it never sets tournamentMatchId.
+  rankedMatch       = null, // { id: string, humanIsFirstMover: boolean }
 }) {
   // Phase 3.8.5.2 — picker payload carries only botId. The skill is
   // resolved server-side from (botId, gameId) below; any client-supplied
@@ -533,7 +691,15 @@ export async function createHvbTable({
   if (!botUserRow) return { ok: false, code: 'BOT_NOT_FOUND', message: 'Bot not found' }
 
   const botSeatId = botUserRow.betterAuthId ?? botUserRow.id
-  const marks = { [seatId]: 'X', [botSeatId]: 'O' }
+  // X always moves first in TTT. Ranked play swaps marks across the two
+  // games of a BO2 so each player takes 'X' exactly once — the orchestrator
+  // tells us which side gets it for this game.
+  const humanGetsX = rankedMatch ? !!rankedMatch.humanIsFirstMover : true
+  const marks = humanGetsX
+    ? { [seatId]: 'X', [botSeatId]: 'O' }
+    : { [seatId]: 'O', [botSeatId]: 'X' }
+  const humanMark = humanGetsX ? 'X' : 'O'
+  const botMark   = humanGetsX ? 'O' : 'X'
 
   // Resolve the game-specific skill server-side so the wrong-game skill
   // can never be used (e.g. an XO skill running in a Connect4 game).
@@ -623,13 +789,14 @@ export async function createHvbTable({
       botSkillId:        resolvedSkillId,
       tournamentId:      tourIdForTable,
       tournamentMatchId: tourMatchIdForTable,
+      matchId:           rankedMatch?.id ?? null,
       isTournament:      !!tourMatchIdForTable,
-      bestOfN:           tourBestOfN,
+      bestOfN:           rankedMatch ? 2 : tourBestOfN,
       seats: [
         { userId: seatId,    status: 'occupied', displayName: user?.displayName ?? 'Guest' },
         { userId: botSeatId, status: 'occupied', displayName: botSeatDisplayName },
       ],
-      previewState: makePreviewState({ marks, botMark: 'O' }),
+      previewState: makePreviewState({ marks, botMark }),
     },
   })
 
@@ -640,7 +807,7 @@ export async function createHvbTable({
     table,
     slug:        table.slug,
     label:       formatTableLabel(table, seatId),
-    mark:        'X',
+    mark:        humanMark,
     board:       ps.board,
     currentTurn: ps.currentTurn,
   }
@@ -685,7 +852,7 @@ async function buildExtras(hostSeat, guestSeat, guestUserDomainId) {
     }
     if (!userRow) return { displayName, elo: null, isBot: false, ownerBaId: null }
     if (!displayName) displayName = userRow.displayName ?? null
-    const eloRow = await db.gameElo.findUnique({ where: { userId_gameId: { userId: userRow.id, gameId: 'xo' } } })
+    const eloRow = await db.gameElo.findUnique({ where: { userId_gameId: { userId: userRow.id, gameId: GAME_IDS.TIC_TAC_TOE } } })
     let ownerBaId = null
     if (userRow.isBot && userRow.botOwnerId) {
       const owner = await db.user.findUnique({

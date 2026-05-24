@@ -65,7 +65,7 @@ export async function createGuestTable(request, token, backendUrl = 'http://loca
   const res = await request.post(`${backendUrl}/api/v1/tables`, {
     headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
     data: {
-      gameId: 'xo',
+      gameId: 'tic-tac-toe',
       minPlayers: 2,
       maxPlayers: 2,
       isPrivate: false,
@@ -74,6 +74,22 @@ export async function createGuestTable(request, token, backendUrl = 'http://loca
   if (!res.ok()) throw new Error(`Create table failed: ${res.status()} ${await res.text()}`)
   const { table } = await res.json()
   return { slug: table.slug, tableId: table.id, inviteUrl: `/play?join=${table.slug}` }
+}
+
+/**
+ * Deprecated. The `/play` auto-room flow this helper used was removed in
+ * Phase 3.4 along with the readonly invite input it scraped. The stress
+ * suite (`stress.spec.js`, manual-only, excluded from CI) still imports
+ * this symbol — keep the export so module resolution succeeds during
+ * Playwright test discovery, but throw at call time so any actual stress
+ * run fails fast with a clear migration pointer.
+ */
+export function getInviteUrl() {
+  throw new Error(
+    'getInviteUrl() was removed when /play auto-room creation was deleted. ' +
+    'Use createGuestTable(request, token) instead — it returns an inviteUrl ' +
+    'of the same shape (/play?join=<slug>) but requires an authenticated host.'
+  )
 }
 
 /**

@@ -5,8 +5,8 @@
  * Training runs as a background setImmediate loop, yielding every
  * BATCH_SIZE episodes so the event loop stays responsive. Progress
  * is fanned out over both transports: legacy Socket.io to the
- * `ml:session:{id}` room, and the SSE+POST stream on the matching
- * channel prefix `ml:session:{id}:`. Phase 4 of the realtime migration
+ * `training:{id}` room, and the SSE+POST stream on the matching
+ * channel prefix `training:{id}:`. Phase 4 of the realtime migration
  * (doc/Realtime_Migration_Plan.md) lets clients pick their transport
  * via the `realtime.ml.via` flag.
  */
@@ -28,6 +28,55 @@ import logger from '../logger.js'
 import { completeStep as completeJourneyStep } from './journeyService.js'
 import { grantDiscoveryReward } from './discoveryRewardsService.js'
 import { appendToStream } from '../lib/eventStream.js'
+import { resolvePreset } from '../config/trainingPresets.js'
+import { hasRole } from '../utils/roles.js'
+import { runEvalBatch, recordEvalMetrics, DEFAULT_EVAL_BUDGET } from '../lib/evalCurves.js'
+import {
+  requestPause as _busRequestPause,
+  requestCancel as _busRequestCancel,
+  isPaused as _busIsPaused,
+  isCancelled as _busIsCancelled,
+  clearPause as _busClearPause,
+  clearCancel as _busClearCancel,
+} from '../lib/signalBus.js'
+
+/**
+ * A3a.6 — count this user's currently-active training sessions and compare
+ * to the per-user cap. Active = status PENDING or RUNNING (the queued and
+ * approval-pending rows still consume the user's allotment so they can't
+ * stack up an unbounded backlog). Cap defaults to 1; admins get an override
+ * via `ml.maxActiveSessionsForAdmin` (0 = unlimited).
+ *
+ * Throws if the user is at or above their cap. No-op when ownerBaId is
+ * null (admin-seeded skills with no owner).
+ */
+async function _enforceUserConcurrencyCap(ownerBaId) {
+  if (!ownerBaId) return
+  const owner = await db.user.findUnique({
+    where:  { betterAuthId: ownerBaId },
+    select: { id: true, userRoles: { select: { role: true } } },
+  })
+  if (!owner) return  // user gone — let the create fail loudly downstream if needed
+
+  const isAdmin = hasRole(owner, 'ADMIN')
+  const [defaultCap, adminCap] = await Promise.all([
+    getSystemConfig('ml.maxActiveSessionsPerUser', 1),
+    getSystemConfig('ml.maxActiveSessionsForAdmin', 0),
+  ])
+  const cap = isAdmin && adminCap > 0 ? adminCap : defaultCap
+  if (cap <= 0) return  // 0 = unlimited
+
+  const activeCount = await db.trainingSession.count({
+    where: {
+      status: { in: ['PENDING', 'RUNNING'] },
+      model:  { createdBy: ownerBaId },
+    },
+  })
+
+  if (activeCount >= cap) {
+    throw new Error(`Training limit: you already have ${activeCount} active session${activeCount !== 1 ? 's' : ''} (max ${cap})`)
+  }
+}
 
 // ─── In-memory caches ───────────────────────────────────────────────────────
 
@@ -66,8 +115,9 @@ export { LRUMap }
 /** modelId → engine instance (loaded on first move, invalidated after training) */
 const engineCache = new LRUMap(20)
 
-/** sessionId → true  (signals background loop to stop) */
-const cancelledSessions = new Set()
+// A3b.2b — pause/cancel signals route through signalBus.js so they cross
+// process boundaries when the worker path is on. The local Sets that
+// used to live here are now an in-memory backend inside signalBus.
 
 // ─── Training queue ──────────────────────────────────────────────────────────
 /** Queue of pending training requests: [{ modelId, sessionId, opts }, ...] */
@@ -680,9 +730,28 @@ export async function importModel(data) {
 
 // ─── Training ────────────────────────────────────────────────────────────────
 
-export async function startTraining(modelId, { mode, iterations, config = {} }) {
+export async function startTraining(modelId, { mode, iterations, config = {}, preset = null }) {
   const model = await getModel(modelId)
   if (!model) throw new Error('Model not found')
+
+  // A3a.4 — if a preset is named, resolve it to iterations + ETA and let
+  // it override the iterations arg. Persisted on the session row so the
+  // approval queue (A3a.5) and the UI can see what the user actually asked
+  // for. Unknown (algorithm, preset) combinations throw early.
+  let expectedDurationMs = null
+  if (preset) {
+    const resolved = resolvePreset({
+      gameId:    model.gameId,
+      algorithm: model.algorithm,
+      preset,
+    })
+    if (!resolved) {
+      throw new Error(`Unknown preset '${preset}' for ${model.algorithm} on ${model.gameId}`)
+    }
+    iterations        = resolved.iterations
+    expectedDurationMs = resolved.expectedDurationMs
+  }
+
   if (iterations < 1 || iterations > 100_000) throw new Error('iterations must be 1–100,000')
 
   // Enforce admin-configurable limits
@@ -711,24 +780,157 @@ export async function startTraining(modelId, { mode, iterations, config = {} }) 
     }
   }
 
+  // A3a.6 — per-user concurrency cap.
+  await _enforceUserConcurrencyCap(model.createdBy ?? null)
+
+  // A3a.5 — ETA-threshold gate. Sessions whose preset-resolved runtime
+  // exceeds `ml.approvalThresholdMs` (default 4hr) create as PENDING with
+  // `approvalStatus = 'NEEDED'` and do NOT start the training loop. An
+  // admin acts via /admin/training/:id/{approve,deny}; on approve the loop
+  // is started via `startApprovedSession`. Sessions with no
+  // `expectedDurationMs` (legacy iterations-direct callers) are never gated.
+  const thresholdMs = await getSystemConfig('ml.approvalThresholdMs', 4 * 60 * 60 * 1000)
+  if (expectedDurationMs !== null && expectedDurationMs >= thresholdMs) {
+    const session = await db.trainingSession.create({
+      data: {
+        modelId, mode, iterations,
+        status:              'PENDING',
+        config, preset, expectedDurationMs,
+        approvalStatus:      'NEEDED',
+        approvalRequestedAt: new Date(),
+      },
+    })
+    logger.info(
+      { modelId, sessionId: session.id, preset, expectedDurationMs, thresholdMs },
+      'Training session awaiting admin approval'
+    )
+    return session
+  }
+
   if (model.status === 'TRAINING') {
     // Queue the session instead of throwing 409
     const session = await db.trainingSession.create({
-      data: { modelId, mode, iterations, status: 'PENDING', config },
+      data: { modelId, mode, iterations, status: 'PENDING', config, preset, expectedDurationMs },
     })
     trainingQueue.push({ modelId, sessionId: session.id, opts: { mode, iterations, config } })
     logger.info({ modelId, sessionId: session.id }, 'Training queued')
     return session
   }
 
+  // A3b.2b — dispatch routing. With `ml.useWorker` true, mint the session
+  // tagged with `dispatch:'worker'` and enqueue a `training:start` job
+  // instead of running the loop in-process. The flag is read fresh every
+  // call so a SystemConfig flip is the kill switch — no deploy required
+  // to roll back. Default off keeps existing setImmediate behavior intact.
+  const useWorker = await getSystemConfig('ml.useWorker', false)
+  const dispatch  = useWorker ? 'worker' : 'in-process'
+
   const session = await db.trainingSession.create({
-    data: { modelId, mode, iterations, status: 'RUNNING', config },
+    data: {
+      modelId, mode, iterations,
+      status: 'RUNNING',
+      config: { ...config, dispatch },
+      preset,
+      expectedDurationMs,
+    },
   })
   await db.botSkill.update({ where: { id: modelId }, data: { status: 'TRAINING' } })
 
-  // Fire-and-forget background loop
-  setImmediate(() => _runTraining(model, session, { mode, iterations, config }))
+  if (useWorker) {
+    const { enqueueTrainingStart } = await import('../queue/trainingQueue.js')
+    await enqueueTrainingStart(session.id)
+    logger.info({ modelId, sessionId: session.id }, 'training session dispatched to worker')
+  } else {
+    setImmediate(() => _runTraining(model, session, { mode, iterations, config: session.config }))
+  }
   return session
+}
+
+/**
+ * A3a.5 — admin acts on a pending-approval session.
+ *
+ * Approves a session that was held by the ETA gate, marks approvedBy +
+ * approvedAt, and starts the training loop (queuing if the model is busy).
+ * Returns the updated session.
+ *
+ * Throws if the session is not in PENDING + NEEDED state (so a re-approve
+ * or a post-deny approve fails fast).
+ */
+export async function approveSession(sessionId, approvedByUserId) {
+  const session = await db.trainingSession.findUnique({ where: { id: sessionId } })
+  if (!session) throw new Error('Session not found')
+  if (session.approvalStatus !== 'NEEDED') {
+    throw new Error(`Session not awaiting approval (approvalStatus=${session.approvalStatus ?? 'null'})`)
+  }
+  if (session.status !== 'PENDING') {
+    throw new Error(`Session is in status ${session.status}, expected PENDING`)
+  }
+
+  const model = await getModel(session.modelId)
+  if (!model) throw new Error('Model not found')
+
+  await db.trainingSession.update({
+    where: { id: sessionId },
+    data:  {
+      approvalStatus: 'APPROVED',
+      approvedAt:     new Date(),
+      approvedById:   approvedByUserId ?? null,
+    },
+  })
+
+  // Same queue-or-run decision as startTraining post-gate.
+  if (model.status === 'TRAINING') {
+    trainingQueue.push({
+      modelId:   session.modelId,
+      sessionId: session.id,
+      opts:      { mode: session.mode, iterations: session.iterations, config: session.config },
+    })
+    logger.info({ sessionId, approvedByUserId }, 'Approved session queued (model busy)')
+  } else {
+    await db.trainingSession.update({
+      where: { id: sessionId },
+      data:  { status: 'RUNNING', startedAt: new Date() },
+    })
+    await db.botSkill.update({ where: { id: session.modelId }, data: { status: 'TRAINING' } })
+    const refreshed = { ...session, status: 'RUNNING', approvalStatus: 'APPROVED' }
+    setImmediate(() => _runTraining(model, refreshed, {
+      mode:       session.mode,
+      iterations: session.iterations,
+      config:     session.config,
+    }))
+    logger.info({ sessionId, approvedByUserId }, 'Approved session started')
+  }
+
+  return db.trainingSession.findUnique({ where: { id: sessionId } })
+}
+
+/** A3a.5 — admin denies a pending-approval session; marks it CANCELLED terminally. */
+export async function denySession(sessionId, deniedByUserId, reason = null) {
+  const session = await db.trainingSession.findUnique({ where: { id: sessionId } })
+  if (!session) throw new Error('Session not found')
+  if (session.approvalStatus !== 'NEEDED') {
+    throw new Error(`Session not awaiting approval (approvalStatus=${session.approvalStatus ?? 'null'})`)
+  }
+
+  return db.trainingSession.update({
+    where: { id: sessionId },
+    data:  {
+      approvalStatus: 'DENIED',
+      approvedAt:     new Date(),
+      approvedById:   deniedByUserId ?? null,
+      status:         'CANCELLED',
+      completedAt:    new Date(),
+      summary:        reason ? { deniedReason: reason } : undefined,
+    },
+  })
+}
+
+/** A3a.5 — list sessions awaiting admin approval, newest-first. */
+export async function listPendingApprovals() {
+  return db.trainingSession.findMany({
+    where:   { approvalStatus: 'NEEDED' },
+    orderBy: { approvalRequestedAt: 'desc' },
+  })
 }
 
 /** Process the next session in the queue, if any. */
@@ -756,8 +958,206 @@ async function _processNextInQueue() {
   }
 }
 
+/**
+ * A3a.9 — boot-time orphan recovery.
+ *
+ * A `TrainingSession.status = 'RUNNING'` row whose process is gone (crash,
+ * fresh deploy, OOM kill) needs to either resume from its latest
+ * checkpoint or be marked FAILED so the model doesn't stay locked in
+ * `BotSkill.status = 'TRAINING'` forever.
+ *
+ * Called once at backend startup from `index.js`. Returns the per-session
+ * action taken so tests / logs can assert on it. Failures don't throw —
+ * each session is handled independently.
+ */
+export async function resumeOrphanedSessions() {
+  // Skip sessions the user explicitly paused — pausedAt set means they
+  // *want* it stopped; the orphan resumer must not undo that.
+  // A3b.2b — also skip sessions dispatched to the xo-training worker:
+  // their recovery is owned by BullMQ's stalled-job + heartbeat mechanism,
+  // not the backend boot scan. If both fired they'd race for the model
+  // lock and one would land on a half-applied checkpoint. We can't filter
+  // `config.dispatch` in the Prisma query (JSON field on SQLite test
+  // backends), so we filter in JS post-fetch.
+  const orphansRaw = await db.trainingSession.findMany({
+    where:   { status: 'RUNNING', pausedAt: null },
+    include: { model: true },
+  })
+  const orphans = orphansRaw.filter(s => (s.config?.dispatch ?? 'in-process') !== 'worker')
+  if (orphans.length === 0) return []
+
+  logger.info({ count: orphans.length }, 'resuming orphaned training sessions')
+
+  const results = []
+  for (const session of orphans) {
+    try {
+      const checkpoint = await db.trainingCheckpoint.findFirst({
+        where:   { sessionId: session.id },
+        orderBy: { episodeNum: 'desc' },
+      })
+
+      if (!checkpoint) {
+        // No checkpoint to resume from — mark FAILED so the model unlocks.
+        await db.trainingSession.update({
+          where: { id: session.id },
+          data:  { status: 'FAILED', completedAt: new Date(),
+                   summary: { resumeError: 'no checkpoint available' } },
+        })
+        await db.botSkill.update({
+          where: { id: session.modelId },
+          data:  { status: 'IDLE' },
+        }).catch(() => {})
+        results.push({ sessionId: session.id, action: 'failed_no_checkpoint' })
+        logger.warn({ sessionId: session.id }, 'orphan with no checkpoint marked FAILED')
+        continue
+      }
+
+      // Reload pre-checkpoint counters from TrainingEpisode rows so the final
+      // summary reflects the whole session, not just the resume window.
+      // (Best-effort; if the count query fails, summary will under-report.)
+      // We just need the model + options to restart training from the
+      // checkpoint episode.
+      setImmediate(() => _runTraining(session.model, session, {
+        mode:         session.mode,
+        iterations:   session.iterations,
+        config:       session.config,
+        startEpisode: checkpoint.episodeNum,
+        resumedEngineState: {
+          weights: checkpoint.weights,
+          epsilon: checkpoint.runtimeState?.epsilon ?? null,
+        },
+      }))
+      results.push({ sessionId: session.id, action: 'resumed', from: checkpoint.episodeNum })
+      logger.info({ sessionId: session.id, from: checkpoint.episodeNum }, 'orphan resumed from checkpoint')
+    } catch (err) {
+      logger.error({ err, sessionId: session.id }, 'orphan resume failed')
+      results.push({ sessionId: session.id, action: 'error', error: err.message })
+    }
+  }
+  return results
+}
+
+/**
+ * A3b.2a — run an existing TrainingSession from a queue job.
+ *
+ * The worker handler (`backend/src/queue/jobs/trainingStart.js`) calls
+ * this with a sessionId after picking the job off the BullMQ queue. We
+ * resolve the session + model + latest checkpoint (so a re-enqueued job
+ * resumes from where the previous attempt left off, matching the
+ * setImmediate path's crash-recovery behavior).
+ *
+ * The caller is expected to have already created the TrainingSession
+ * row (status RUNNING) and flipped the BotSkill to TRAINING — this
+ * function just executes the loop. That mirrors what startTraining()
+ * does today before the setImmediate; A3b.2b lifts the create+enqueue
+ * pair into startTraining itself behind a SystemConfig flag.
+ */
+export async function _runTrainingForQueueJob(sessionId) {
+  const session = await db.trainingSession.findUnique({
+    where:   { id: sessionId },
+    include: { model: true },
+  })
+  if (!session) throw new Error(`Session not found: ${sessionId}`)
+  if (!session.model) throw new Error(`Model not found for session: ${sessionId}`)
+
+  const checkpoint = await db.trainingCheckpoint.findFirst({
+    where:   { sessionId },
+    orderBy: { episodeNum: 'desc' },
+  })
+
+  await _runTraining(session.model, session, {
+    mode:         session.mode,
+    iterations:   session.iterations,
+    config:       session.config,
+    startEpisode: checkpoint?.episodeNum ?? 0,
+    resumedEngineState: checkpoint ? {
+      weights: checkpoint.weights,
+      epsilon: checkpoint.runtimeState?.epsilon ?? null,
+    } : null,
+  })
+
+  return { completed: true, resumedFrom: checkpoint?.episodeNum ?? 0 }
+}
+
+/**
+ * A3a.10 — request a graceful pause. Adds the session to the pausedSessions
+ * signal Set; the training loop's next tick force-writes a checkpoint and
+ * transitions the row to PENDING + pausedAt. Returns immediately — the loop
+ * does the heavy lifting async. Throws if the session isn't currently
+ * RUNNING (or if it's already paused).
+ */
+export async function pauseSession(sessionId) {
+  const s = await db.trainingSession.findUnique({ where: { id: sessionId } })
+  if (!s) throw new Error('Session not found')
+  if (s.status !== 'RUNNING') throw new Error(`Session is in status ${s.status}, expected RUNNING`)
+  if (s.pausedAt)             throw new Error('Session is already paused')
+  _busRequestPause(sessionId)
+  return s
+}
+
+/**
+ * A3a.10 — resume a paused session. Clears pausedAt, finds the latest
+ * checkpoint, and restarts `_runTraining` from that point with the
+ * checkpoint's weights + runtime state. If the model is busy, queues the
+ * resume instead of stepping on the in-flight session.
+ */
+export async function resumeSession(sessionId) {
+  const session = await db.trainingSession.findUnique({
+    where:   { id: sessionId },
+    include: { model: true },
+  })
+  if (!session) throw new Error('Session not found')
+  if (!session.pausedAt) throw new Error('Session is not paused')
+
+  const checkpoint = await db.trainingCheckpoint.findFirst({
+    where:   { sessionId },
+    orderBy: { episodeNum: 'desc' },
+  })
+  if (!checkpoint) throw new Error('Cannot resume: no checkpoint available')
+
+  // Clear the pause + signal Set; flip the session row to RUNNING so the
+  // owner-view shows the right state immediately.
+  _busClearPause(sessionId)
+  await db.trainingSession.update({
+    where: { id: sessionId },
+    data:  { pausedAt: null, status: 'RUNNING' },
+  })
+
+  if (session.model.status === 'TRAINING') {
+    // Model is busy — queue the resume instead of stepping on it.
+    trainingQueue.push({
+      modelId:   session.modelId,
+      sessionId,
+      opts: {
+        mode: session.mode, iterations: session.iterations, config: session.config,
+        startEpisode: checkpoint.episodeNum,
+        resumedEngineState: {
+          weights: checkpoint.weights,
+          epsilon: checkpoint.runtimeState?.epsilon ?? null,
+        },
+      },
+    })
+    logger.info({ sessionId }, 'resume queued (model busy)')
+  } else {
+    await db.botSkill.update({ where: { id: session.modelId }, data: { status: 'TRAINING' } })
+    setImmediate(() => _runTraining(session.model, session, {
+      mode:         session.mode,
+      iterations:   session.iterations,
+      config:       session.config,
+      startEpisode: checkpoint.episodeNum,
+      resumedEngineState: {
+        weights: checkpoint.weights,
+        epsilon: checkpoint.runtimeState?.epsilon ?? null,
+      },
+    }))
+    logger.info({ sessionId, from: checkpoint.episodeNum }, 'session resumed')
+  }
+
+  return db.trainingSession.findUnique({ where: { id: sessionId } })
+}
+
 export async function cancelSession(sessionId) {
-  cancelledSessions.add(sessionId)
+  _busRequestCancel(sessionId)
   // DB update happens inside the loop when it detects cancellation;
   // if session already completed, update it here as fallback
   const s = await db.trainingSession.findUnique({ where: { id: sessionId } })
@@ -775,9 +1175,25 @@ export async function cancelSession(sessionId) {
  * Returns the session + current model weights so the frontend can initialise the engine.
  * The frontend calls finishTrainingFromFrontend() when done.
  */
-export async function startFrontendSession(modelId, { mode, iterations, config = {} }) {
+export async function startFrontendSession(modelId, { mode, iterations, config = {}, preset = null }) {
   const model = await getModel(modelId)
   if (!model) throw new Error('Model not found')
+
+  // A3a.4 — same preset resolution as startTraining.
+  let expectedDurationMs = null
+  if (preset) {
+    const resolved = resolvePreset({
+      gameId:    model.gameId,
+      algorithm: model.algorithm,
+      preset,
+    })
+    if (!resolved) {
+      throw new Error(`Unknown preset '${preset}' for ${model.algorithm} on ${model.gameId}`)
+    }
+    iterations        = resolved.iterations
+    expectedDurationMs = resolved.expectedDurationMs
+  }
+
   if (iterations < 1 || iterations > 100_000) throw new Error('iterations must be 1–100,000')
 
   const [maxEpisodes, maxConcurrent] = await Promise.all([
@@ -804,8 +1220,16 @@ export async function startFrontendSession(modelId, { mode, iterations, config =
   }
   if (model.status === 'TRAINING') throw new Error('Model is already training')
 
+  // A3a.6 — per-user concurrency cap.
+  await _enforceUserConcurrencyCap(model.createdBy ?? null)
+
   const session = await db.trainingSession.create({
-    data: { modelId, mode, iterations, status: 'RUNNING', config: { ...config, frontend: true } },
+    data: {
+      modelId, mode, iterations,
+      status: 'RUNNING',
+      config: { ...config, frontend: true },
+      preset, expectedDurationMs,
+    },
   })
   await db.botSkill.update({ where: { id: modelId }, data: { status: 'TRAINING' } })
   logger.info({ modelId, sessionId: session.id }, 'Frontend training session started')
@@ -936,8 +1360,9 @@ export async function finishTrainingFromFrontend(sessionId, { weights, stats, it
 
 // ─── Training loop (private) ─────────────────────────────────────────────────
 
-const BATCH_SIZE     = 50   // episodes per DB batch insert
-const CHECKPOINT_GAP = 1000 // save checkpoint every N episodes
+const BATCH_SIZE     = 50    // episodes per DB batch insert
+const CHECKPOINT_GAP = 1000  // save checkpoint every N episodes
+const EVAL_GAP       = 1000  // A3a.7: write a TrainingMetric eval point every N episodes
 
 /** Instantiate the correct engine based on algorithm name. */
 function _buildEngine(modelConfig, algorithm) {
@@ -1267,7 +1692,7 @@ function _runEpisodeForAlgorithm(engine, mlMark, opponentFn, algorithm) {
 
 const CURRICULUM_LEVELS = ['novice', 'intermediate', 'advanced', 'master']
 
-async function _runTraining(model, session, { mode, iterations, config }) {
+async function _runTraining(model, session, { mode, iterations, config, startEpisode = 0, resumedEngineState = null }) {
   const { id: sessionId, modelId } = { id: session.id, modelId: model.id }
 
   // Determine algorithm from config or model
@@ -1297,7 +1722,13 @@ async function _runTraining(model, session, { mode, iterations, config }) {
   }
 
   const engine = _buildEngine(sessionEngineConfig, algorithm)
-  engine.loadQTable(sessionQtable)
+  // A3a.9 — resume path: weights come from the latest checkpoint, not from
+  // the model row. The runtime state ({ epsilon, ... }) is also restored so
+  // exploration continues smoothly.
+  engine.loadQTable(resumedEngineState?.weights ?? sessionQtable)
+  if (resumedEngineState?.epsilon != null) {
+    engine.epsilon = resumedEngineState.epsilon
+  }
 
   // Build opponent function
   let difficulty = config.difficulty || 'novice'
@@ -1325,17 +1756,64 @@ async function _runTraining(model, session, { mode, iterations, config }) {
   let actualEpisodes = 0
 
   try {
-    for (let i = 0; i < iterations; i++) {
+    if (startEpisode > 0) {
+      logger.info({ sessionId, modelId, startEpisode, iterations }, 'training resumed from checkpoint')
+    }
+    for (let i = startEpisode; i < iterations; i++) {
       // Cooperative cancellation check
-      if (cancelledSessions.has(sessionId)) {
-        cancelledSessions.delete(sessionId)
+      if (_busIsCancelled(sessionId)) {
+        _busClearCancel(sessionId)
         await _finishSession(sessionId, modelId, engine, actualEpisodes, 'CANCELLED', { wins, losses, draws, totalQDelta })
+        return
+      }
+
+      // A3a.10 — cooperative pause. Force a checkpoint at the current
+      // episode so resume picks up exactly here (no replay), flush any
+      // pending episode batch, transition the session to PENDING + pausedAt,
+      // and unlock the model. Exits the loop without _finishSession so the
+      // session stays terminal-free; resumeSession() restarts it later.
+      if (_busIsPaused(sessionId)) {
+        _busClearPause(sessionId)
+        const episodeNum = i
+        try {
+          if (episodeBatch.length > 0) {
+            await db.trainingEpisode.createMany({ data: episodeBatch })
+            episodeBatch.length = 0
+          }
+          await db.trainingCheckpoint.upsert({
+            where:  { sessionId_episodeNum: { sessionId, episodeNum } },
+            create: {
+              sessionId, episodeNum,
+              weights:      engine.toJSON(),
+              runtimeState: { epsilon: engine.epsilon },
+            },
+            update: {
+              weights:      engine.toJSON(),
+              runtimeState: { epsilon: engine.epsilon },
+            },
+          })
+          await db.trainingSession.update({
+            where: { id: sessionId },
+            data:  { status: 'PENDING', pausedAt: new Date(), checkpointEpisode: episodeNum },
+          })
+          await db.botSkill.update({ where: { id: modelId }, data: { status: 'IDLE' } })
+          _emit(`training:${sessionId}`, 'training:paused', { sessionId, episode: episodeNum })
+        } catch (err) {
+          logger.error({ err, sessionId, episodeNum }, 'pause checkpoint failed; session may be stuck')
+        }
+        _processNextInQueue()
         return
       }
 
       const t0 = Date.now()
       const result = _runEpisodeForAlgorithm(engine, mlMark, opponentFn, algorithm)
       const durationMs = Date.now() - t0
+      // QA harness hook: slow the loop so crash-recovery tests have time to
+      // restart the backend mid-run. Honoured only when explicitly set in
+      // config; zero perf cost otherwise. See `um training-recovery`.
+      if (config._qaDelayMs > 0) {
+        await new Promise(r => setTimeout(r, config._qaDelayMs))
+      }
       actualEpisodes++
       if (mlMarkConfig === 'alternating') mlMark = mlMark === 'X' ? 'O' : 'X'
 
@@ -1362,7 +1840,7 @@ async function _runTraining(model, session, { mode, iterations, config }) {
             curriculumLevel++
             difficulty = CURRICULUM_LEVELS[curriculumLevel]
             outcomeWindow.length = 0  // reset window
-            _emit(`ml:session:${sessionId}`, 'ml:curriculum_advance', {
+            _emit(`training:${sessionId}`, 'training:curriculum_advance', {
               sessionId, level: curriculumLevel, difficulty, episode: i + 1,
             })
             logger.info({ sessionId, difficulty }, 'Curriculum advanced')
@@ -1385,7 +1863,7 @@ async function _runTraining(model, session, { mode, iterations, config }) {
             await db.trainingEpisode.createMany({ data: episodeBatch })
             episodeBatch.length = 0
           }
-          _emit(`ml:session:${sessionId}`, 'ml:early_stop', { sessionId, episode: i + 1, bestWinRate })
+          _emit(`training:${sessionId}`, 'training:early_stop', { sessionId, episode: i + 1, bestWinRate })
           logger.info({ sessionId, episode: i + 1, bestWinRate }, 'Early stopping triggered')
           await _finishSession(sessionId, modelId, engine, actualEpisodes, 'COMPLETED', { wins, losses, draws, totalQDelta }, { earlyStop: true, stoppedAt: i + 1 })
           return
@@ -1398,17 +1876,60 @@ async function _runTraining(model, session, { mode, iterations, config }) {
         episodeBatch.length = 0
       }
 
-      // Checkpoint
+      // Checkpoint — two distinct artefacts:
+      //   • MLCheckpoint:       per-MODEL rolling history (kept for backward compat)
+      //   • TrainingCheckpoint: per-SESSION resume point (A3a.9; lets a crashed
+      //                         worker pick up where it left off on next boot)
       if ((i + 1) % CHECKPOINT_GAP === 0) {
+        const episodeNum = i + 1
         await db.mLCheckpoint.create({
-          data: { modelId, episodeNum: model.totalEpisodes + i + 1, weights: engine.toJSON(), epsilon: engine.epsilon },
+          data: { modelId, episodeNum: model.totalEpisodes + episodeNum, weights: engine.toJSON(), epsilon: engine.epsilon },
         })
+        // Idempotent: unique on (sessionId, episodeNum) so a re-issued checkpoint
+        // after resume on the same slot is rejected — that's the intended guard.
+        await db.trainingCheckpoint.upsert({
+          where:  { sessionId_episodeNum: { sessionId, episodeNum } },
+          create: {
+            sessionId, episodeNum,
+            weights:      engine.toJSON(),
+            runtimeState: { epsilon: engine.epsilon },
+          },
+          update: {},
+        }).catch((err) => logger.warn({ err, sessionId, episodeNum }, 'TrainingCheckpoint write failed'))
+        await db.trainingSession.update({
+          where: { id: sessionId },
+          data:  { checkpointEpisode: episodeNum },
+        }).catch((err) => logger.warn({ err, sessionId, episodeNum }, 'checkpointEpisode pointer update failed'))
+      }
+
+      // A3a.7 — multi-curve eval. Every EVAL_GAP episodes, play a small
+      // batch of games against [primary, easy, medium] minimax tiers and
+      // persist the W/D/L tallies as TrainingMetric rows. Eval is
+      // fire-and-forget — a transient failure must never abort training.
+      if ((i + 1) % EVAL_GAP === 0) {
+        const episodeNum = i + 1
+        try {
+          const records = runEvalBatch({
+            modelMove:        (board) => engine.chooseAction(board, false),
+            makeOpponentMove: (opponentId) => {
+              const [, difficulty] = opponentId.split(':')
+              return (board, player) => minimaxMove(board, difficulty, player)
+            },
+            algorithm,
+            episodeNum,
+          })
+          recordEvalMetrics(db, sessionId, records).catch((err) =>
+            logger.warn({ err, sessionId, episodeNum }, 'eval metric persist failed')
+          )
+        } catch (err) {
+          logger.warn({ err, sessionId, episodeNum }, 'eval batch failed')
+        }
       }
 
       // Progress broadcast + event-loop yield
       if ((i + 1) % PROGRESS_INTERVAL === 0 || i === iterations - 1) {
         const done = i + 1
-        _emit(`ml:session:${sessionId}`, 'ml:progress', {
+        _emit(`training:${sessionId}`, 'training:progress', {
           sessionId, episode: done, totalEpisodes: iterations,
           winRate:  done > 0 ? wins  / done : 0,
           lossRate: done > 0 ? losses / done : 0,
@@ -1427,7 +1948,7 @@ async function _runTraining(model, session, { mode, iterations, config }) {
     logger.error({ err, sessionId, modelId }, 'Training failed')
     await db.botSkill.update({ where: { id: modelId }, data: { status: 'IDLE' } })
     await db.trainingSession.update({ where: { id: sessionId }, data: { status: 'FAILED', completedAt: new Date() } })
-    _emit(`ml:session:${sessionId}`, 'ml:error', { sessionId, error: err.message })
+    _emit(`training:${sessionId}`, 'training:error', { sessionId, error: err.message })
     _processNextInQueue()
   }
 }
@@ -1470,7 +1991,7 @@ async function _finishSession(sessionId, modelId, engine, iterations, status, { 
 
   if (status === 'COMPLETED') await repointBotPrimarySkill(modelId)
 
-  _emit(`ml:session:${sessionId}`, status === 'COMPLETED' ? 'ml:complete' : 'ml:cancelled', { sessionId, summary })
+  _emit(`training:${sessionId}`, status === 'COMPLETED' ? 'training:complete' : 'training:cancelled', { sessionId, summary })
   logger.info({ sessionId, modelId, status, ...summary }, 'Training finished')
 
   // Start next queued session if any
@@ -1723,14 +2244,14 @@ export async function ensembleMove(modelIds, method, weights, board, mark) {
 /**
  * Dual-emit a training event over both transports.
  *
- * `scope` is the legacy Socket.io room name (e.g. `ml:session:abc`); `topic`
- * is the per-event suffix (e.g. `ml:progress`). For SSE we publish on
+ * `scope` is the legacy Socket.io room name (e.g. `training:abc`); `topic`
+ * is the per-event suffix (e.g. `training:progress`). For SSE we publish on
  * `<scope>:<event-suffix>` so a client can subscribe to a single prefix
- * (`ml:session:abc:`) and receive every event for that session.
+ * (`training:abc:`) and receive every event for that session.
  */
 function _emit(scope, event, data) {
   // SSE channel name = `<scope>:<topic>` so a client can subscribe to a
-  // single prefix (e.g. `ml:session:abc:`) and receive every event for
+  // single prefix (e.g. `training:abc:`) and receive every event for
   // that scope. Strip the leading `ml:` from the event name.
   const topic = event.startsWith('ml:') ? event.slice(3) : event
   appendToStream(`${scope}:${topic}`, data, { userId: '*' }).catch(() => {})

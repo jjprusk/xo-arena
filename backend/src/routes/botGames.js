@@ -10,6 +10,7 @@
 
 import { Router } from 'express'
 import { nanoid } from 'nanoid'
+import { GAME_IDS } from '../constants/games.js'
 import { requireAuth } from '../middleware/auth.js'
 import { botGameRunner } from '../realtime/botGameRunner.js'
 import { hasRole } from '../utils/roles.js'
@@ -131,7 +132,7 @@ router.post('/practice', requireAuth, async (req, res, next) => {
       try {
         table = await createTableTracked({
           data: {
-            gameId:       'xo',
+            gameId:       GAME_IDS.TIC_TAC_TOE,
             slug,
             createdById:  req.auth.userId,
             minPlayers:   2,

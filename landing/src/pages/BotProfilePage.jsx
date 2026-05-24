@@ -344,7 +344,19 @@ export default function BotProfilePage() {
                 ? 'Test your bot from the human side — sit at the other seat and play.'
                 : 'Take your shot. One click and the table opens.'}
             </p>
-            <ChallengeButton botUserId={bot.id} source="bot-profile" />
+            <div className="flex items-center gap-2">
+              <ChallengeButton botUserId={bot.id} source="bot-profile" />
+              {session?.user?.id && (
+                <Link
+                  to="/play?action=ranked-bot"
+                  className="btn btn-secondary btn-sm whitespace-nowrap"
+                  data-cta="play-ranked-bot"
+                  data-source="bot-profile"
+                >
+                  Play ranked
+                </Link>
+              )}
+            </div>
           </div>
         </section>
       )}

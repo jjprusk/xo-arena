@@ -1,0 +1,285 @@
+{
+  "timestamp": "2026-05-21T21:03:23.159Z",
+  "env": "local",
+  "totals": {
+    "raw": 3985242,
+    "gzip": 2028383,
+    "brotli": 1880551
+  },
+  "perType": {
+    "js": {
+      "raw": 2161435,
+      "gzip": 600128,
+      "brotli": 486925,
+      "count": 16
+    },
+    "css": {
+      "raw": 63790,
+      "gzip": 12547,
+      "brotli": 10692,
+      "count": 1
+    },
+    "other": {
+      "raw": 618355,
+      "gzip": 276407,
+      "brotli": 243903,
+      "count": 9
+    },
+    "img": {
+      "raw": 1141662,
+      "gzip": 1139301,
+      "brotli": 1139031,
+      "count": 5
+    }
+  },
+  "assets": [
+    {
+      "name": "assets/main.supported-E2mKOLWD.js",
+      "stem": "main.supported.js",
+      "type": "js",
+      "raw": 1676288,
+      "gzip": 447543,
+      "brotli": 353046
+    },
+    {
+      "name": "colosseum-bg.jpg",
+      "stem": "colosseum-bg.jpg",
+      "type": "img",
+      "raw": 909102,
+      "gzip": null,
+      "brotli": null
+    },
+    {
+      "name": "bot-training-guide.pdf",
+      "stem": "bot.pdf",
+      "type": "other",
+      "raw": 480739,
+      "gzip": 196408,
+      "brotli": 175298
+    },
+    {
+      "name": "assets/vendor-react-BUH3BlNM.js",
+      "stem": "vendor.js",
+      "type": "js",
+      "raw": 256537,
+      "gzip": 81968,
+      "brotli": 71156
+    },
+    {
+      "name": "colosseum-desktop.webp",
+      "stem": "colosseum-desktop.webp",
+      "type": "img",
+      "raw": 178384,
+      "gzip": null,
+      "brotli": null
+    },
+    {
+      "name": "assets/main-B1bueayY.css",
+      "stem": "main.css",
+      "type": "css",
+      "raw": 63790,
+      "gzip": 12547,
+      "brotli": 10692
+    },
+    {
+      "name": "assets/TrainTab-DqUAi1MS.js",
+      "stem": "TrainTab.js",
+      "type": "js",
+      "raw": 51403,
+      "gzip": 13011,
+      "brotli": 11680
+    },
+    {
+      "name": "colosseum-mobile.webp",
+      "stem": "colosseum-mobile.webp",
+      "type": "img",
+      "raw": 50852,
+      "gzip": null,
+      "brotli": null
+    },
+    {
+      "name": "assets/ExplainabilityTab-CyZE8qEH.js",
+      "stem": "ExplainabilityTab.js",
+      "type": "js",
+      "raw": 42244,
+      "gzip": 12747,
+      "brotli": 11338
+    },
+    {
+      "name": "assets/game-xo-CTLIU5ht.js",
+      "stem": "game.js",
+      "type": "js",
+      "raw": 40204,
+      "gzip": 12821,
+      "brotli": 11424
+    },
+    {
+      "name": "bot-training-guide.md",
+      "stem": "bot.md",
+      "type": "other",
+      "raw": 32740,
+      "gzip": 10986,
+      "brotli": 9156
+    },
+    {
+      "name": "sounds/win.wav",
+      "stem": "win.wav",
+      "type": "other",
+      "raw": 26504,
+      "gzip": 24694,
+      "brotli": 21440
+    },
+    {
+      "name": "assets/SessionsTab-Bw1229JI.js",
+      "stem": "SessionsTab.js",
+      "type": "js",
+      "raw": 26386,
+      "gzip": 8143,
+      "brotli": 7356
+    },
+    {
+      "name": "sounds/forfeit.wav",
+      "stem": "forfeit.wav",
+      "type": "other",
+      "raw": 22094,
+      "gzip": 14354,
+      "brotli": 12581
+    },
+    {
+      "name": "sounds/draw.wav",
+      "stem": "draw.wav",
+      "type": "other",
+      "raw": 17684,
+      "gzip": 16623,
+      "brotli": 14555
+    },
+    {
+      "name": "changelog.json",
+      "stem": "changelog.json",
+      "type": "other",
+      "raw": 17332,
+      "gzip": 4533,
+      "brotli": 3670
+    },
+    {
+      "name": "assets/EvaluationTab-CH9niKr1.js",
+      "stem": "EvaluationTab.js",
+      "type": "js",
+      "raw": 16989,
+      "gzip": 4849,
+      "brotli": 4290
+    },
+    {
+      "name": "faq.md",
+      "stem": "faq.md",
+      "type": "other",
+      "raw": 10214,
+      "gzip": 4268,
+      "brotli": 3402
+    },
+    {
+      "name": "assets/RulesTab-CA1aGwEP.js",
+      "stem": "RulesTab.js",
+      "type": "js",
+      "raw": 9502,
+      "gzip": 2873,
+      "brotli": 2542
+    },
+    {
+      "name": "sw.js",
+      "stem": "sw.js",
+      "type": "js",
+      "raw": 9257,
+      "gzip": 3407,
+      "brotli": 2817
+    },
+    {
+      "name": "index.html",
+      "stem": "index.html",
+      "type": "other",
+      "raw": 7476,
+      "gzip": 2245,
+      "brotli": 1756
+    },
+    {
+      "name": "assets/Legend-sgFy2xwE.js",
+      "stem": "Legend.js",
+      "type": "js",
+      "raw": 7392,
+      "gzip": 2486,
+      "brotli": 2230
+    },
+    {
+      "name": "assets/CartesianGrid-BcSxYr2J.js",
+      "stem": "CartesianGrid.js",
+      "type": "js",
+      "raw": 6447,
+      "gzip": 2264,
+      "brotli": 1996
+    },
+    {
+      "name": "assets/AnalyticsTab-UzbDe9oK.js",
+      "stem": "AnalyticsTab.js",
+      "type": "js",
+      "raw": 5935,
+      "gzip": 2101,
+      "brotli": 1868
+    },
+    {
+      "name": "assets/game-pong-CWn8xWiv.js",
+      "stem": "game.js",
+      "type": "js",
+      "raw": 4696,
+      "gzip": 2177,
+      "brotli": 1969
+    },
+    {
+      "name": "assets/index-JDdyfp3S.js",
+      "stem": "index.js",
+      "type": "js",
+      "raw": 3669,
+      "gzip": 1729,
+      "brotli": 1481
+    },
+    {
+      "name": "sounds/move.wav",
+      "stem": "move.wav",
+      "type": "other",
+      "raw": 3572,
+      "gzip": 2296,
+      "brotli": 2045
+    },
+    {
+      "name": "colosseum.svg",
+      "stem": "colosseum.svg",
+      "type": "img",
+      "raw": 3099,
+      "gzip": 764,
+      "brotli": 530
+    },
+    {
+      "name": "assets/CheckpointsTab-CV0DL45z.js",
+      "stem": "CheckpointsTab.js",
+      "type": "js",
+      "raw": 2392,
+      "gzip": 1064,
+      "brotli": 919
+    },
+    {
+      "name": "assets/ExportTab-DOBitxhr.js",
+      "stem": "ExportTab.js",
+      "type": "js",
+      "raw": 2094,
+      "gzip": 945,
+      "brotli": 813
+    },
+    {
+      "name": "favicon.svg",
+      "stem": "favicon.svg",
+      "type": "img",
+      "raw": 225,
+      "gzip": 199,
+      "brotli": 163
+    }
+  ]
+}

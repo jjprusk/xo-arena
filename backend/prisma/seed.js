@@ -11,6 +11,7 @@
 
 import db from '@xo-arena/db'
 import { fileURLToPath } from 'url'
+import { GAME_IDS } from '../src/constants/games.js'
 
 // ─── System config defaults ────────────────────────────────────────────────
 
@@ -162,12 +163,12 @@ async function main() {
         where:  { id: bot.botModelId },
         update: {
           botId:  userRow.id,
-          gameId: 'xo',
+          gameId: GAME_IDS.TIC_TAC_TOE,
         },
         create: {
           id:          bot.botModelId,
           botId:       userRow.id,
-          gameId:      'xo',
+          gameId:      GAME_IDS.TIC_TAC_TOE,
           name:        `${bot.displayName} XO`,
           description: `Built-in ${bot.tier} minimax skill for XO.`,
           algorithm:   'minimax',

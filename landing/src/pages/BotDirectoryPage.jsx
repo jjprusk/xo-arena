@@ -19,7 +19,7 @@ import BotFilterBar from '../components/bots/BotFilterBar.jsx'
 import ChallengeButton from '../components/bots/ChallengeButton.jsx'
 import QuickMatchButton from '../components/bots/QuickMatchButton.jsx'
 
-const DEFAULT_GAME_ID = 'xo'
+const DEFAULT_GAME_ID = 'tic-tac-toe'
 
 function paramsToFilters(sp) {
   const owner   = sp.get('owner')
@@ -152,12 +152,27 @@ export default function BotDirectoryPage() {
                         </span>
                         <span className="min-w-0">
                           <span className="flex items-center gap-1.5">
-                            <span
-                              className="text-sm font-semibold truncate max-w-[180px]"
-                              style={{ color: 'var(--text-primary)' }}
-                              title={b.displayName}
-                            >
-                              {b.displayName ?? '—'}
+                            <span className="relative group/name min-w-0">
+                              <span
+                                className="text-sm font-semibold truncate max-w-[180px] block"
+                                style={{ color: 'var(--text-primary)' }}
+                                title={b.displayName}
+                              >
+                                {b.displayName ?? '—'}
+                              </span>
+                              {b.displayName && (
+                                <span
+                                  className="pointer-events-none absolute left-0 top-full mt-1 z-20 hidden group-hover/name:block whitespace-nowrap rounded-md px-2 py-1 text-xs font-medium shadow-lg"
+                                  style={{
+                                    backgroundColor: 'var(--color-slate-900, #0f172a)',
+                                    color:           'var(--color-slate-50, #f8fafc)',
+                                    maxWidth:        '20rem',
+                                  }}
+                                  role="tooltip"
+                                >
+                                  {b.displayName}
+                                </span>
+                              )}
                             </span>
                             {b.botProvisional && (
                               <span

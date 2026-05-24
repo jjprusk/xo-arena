@@ -36,7 +36,7 @@ function useSseIdleWarning({ enabled, channel, onWarn }) {
  * interact with auth, transport, or platform internals directly.
  *
  * @param {object} options
- * @param {string}  options.gameId         - e.g. 'xo'
+ * @param {string}  options.gameId         - e.g. 'tic-tac-toe'
  * @param {string|null} options.joinSlug   - room slug to join; null = create new room
  * @param {string|null} options.tournamentMatchId
  * @param {string|null} options.tournamentId
@@ -71,6 +71,10 @@ export function useGameSDK({
   const [kicked, setKicked]         = useState(false)
   const [seriesResult, setSeriesResult] = useState(null)
   const [opponentLeft, setOpponentLeft] = useState(false)
+  // A2.7 — ranked best-of-N progress. Null when this is not a ranked match.
+  // Shape: { matchId, format, sequence, p1Wins, p2Wins, drawGames, complete,
+  //          winnerId, tiebreaker }
+  const [matchState, setMatchState] = useState(null)
   // Once the initial create/join POST returns, we record the canonical Table.id
   // so useEventStream below can subscribe to `table:<id>:state|lifecycle|reaction`.
   const [tableId, setTableId] = useState(null)
@@ -427,6 +431,22 @@ export function useGameSDK({
             currentTurn: playBundle.currentTurn,
           })
           if (playBundle.tableId) setTableId(playBundle.tableId)
+          // A2.7c — seed the ranked-match indicator from the bundle so the
+          // banner renders on the first paint without waiting for the
+          // match.started SSE round-trip.
+          if (playBundle.match) {
+            setMatchState({
+              matchId:    playBundle.match.id,
+              format:     playBundle.match.format,
+              sequence:   playBundle.match.sequence ?? 1,
+              p1Wins:     0,
+              p2Wins:     0,
+              drawGames:  0,
+              complete:   false,
+              winnerId:   null,
+              tiebreaker: false,
+            })
+          }
           return
         }
 
@@ -559,6 +579,19 @@ export function useGameSDK({
         if (kind === 'start') {
           boardRef.current = payload.board
           setPhase('playing')
+          // If the server swapped marks for this game (ranked BO N+1,
+          // tournament rematch with mark rotation), pick up the new
+          // mapping so subsequent moves render under the correct seat.
+          if (payload.marks && typeof payload.marks === 'object') {
+            marksRef.current = { ...payload.marks }
+            const myId = currentUserRef.current?.id
+            const myMark = myId ? payload.marks[myId] ?? null : null
+            settingsRef.current = { ...settingsRef.current, myMark }
+            setSession(prev => prev ? {
+              ...prev,
+              settings: { ...settingsRef.current, marks: { ...marksRef.current } },
+            } : prev)
+          }
           const event = {
             playerId:  null,
             move:      null,
@@ -597,6 +630,59 @@ export function useGameSDK({
           }
           lastMoveEventRef.current = event
           moveHandlersRef.current.forEach(h => h(event))
+          return
+        }
+        // A2.7c — ranked match lifecycle events fan out on the same
+        // `table:<id>:state` channel as game-level events. Surface them
+        // through matchState so MatchProgressBanner + MatchCompletePanel
+        // can drive their own renders without listening directly to SSE.
+        if (kind === 'match.started') {
+          setMatchState({
+            matchId:    payload.matchId,
+            format:     payload.format,
+            sequence:   payload.sequence ?? 1,
+            p1Wins:     0,
+            p2Wins:     0,
+            drawGames:  0,
+            complete:   false,
+            winnerId:   null,
+            tiebreaker: false,
+          })
+          return
+        }
+        if (kind === 'match.gameComplete') {
+          setMatchState(prev => ({
+            ...(prev ?? {}),
+            matchId:   payload.matchId,
+            p1Wins:    payload.p1Wins    ?? prev?.p1Wins    ?? 0,
+            p2Wins:    payload.p2Wins    ?? prev?.p2Wins    ?? 0,
+            drawGames: payload.drawGames ?? prev?.drawGames ?? 0,
+            // If the match isn't complete the server has already minted
+            // the next game on this same table — bump sequence so the
+            // banner reads "Game N+1 of …".
+            sequence:  payload.complete ? (prev?.sequence ?? payload.sequence) : (payload.nextSequence ?? prev?.sequence ?? payload.sequence),
+            complete:  !!payload.complete,
+          }))
+          return
+        }
+        if (kind === 'match.completed') {
+          setMatchState(prev => ({
+            ...(prev ?? {}),
+            matchId:   payload.matchId,
+            winnerId:  payload.winnerId ?? null,
+            p1Wins:    payload.p1Wins    ?? prev?.p1Wins    ?? 0,
+            p2Wins:    payload.p2Wins    ?? prev?.p2Wins    ?? 0,
+            drawGames: payload.drawGames ?? prev?.drawGames ?? 0,
+            complete:  true,
+          }))
+          return
+        }
+        if (kind === 'match.game3.tiebreaker') {
+          setMatchState(prev => ({
+            ...(prev ?? {}),
+            sequence:   3,
+            tiebreaker: true,
+          }))
           return
         }
         if (kind === 'forfeit') {
@@ -706,5 +792,5 @@ export function useGameSDK({
     },
   })
 
-  return { session, sdk, phase, abandoned, kicked, seriesResult, opponentLeft }
+  return { session, sdk, phase, abandoned, kicked, seriesResult, opponentLeft, matchState }
 }

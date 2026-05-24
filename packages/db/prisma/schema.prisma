@@ -58,6 +58,9 @@ model User {
   gamesAsPlayer1         Game[]                   @relation("Player1Games")
   gamesAsPlayer2         Game[]                   @relation("Player2Games")
   gamesWon               Game[]                   @relation("WinnerGames")
+  matchesAsPlayer1       Match[]                  @relation("Player1Matches")
+  matchesAsPlayer2       Match[]                  @relation("Player2Matches")
+  matchesWon             Match[]                  @relation("WinnerMatches")
   notifPreferences       NotificationPreference[]
   classification         PlayerClassification?
   tournamentParticipants TournamentParticipant[]
@@ -69,6 +72,7 @@ model User {
   templateSeedBotConfigs TournamentTemplateSeedBot[]
   researchNotes          TrainingSessionNote[]
   researchEntries        ResearchLogEntry[]
+  approvedTrainingSessions TrainingSession[]  @relation("ApprovedTrainingSessions")
   helpDocsOwned          HelpDoc[]                 @relation("HelpDocOwner")
 
   @@map("users")
@@ -174,6 +178,13 @@ model Game {
   appId              String           @default("xo-arena")
   tournamentId       String?
   tournamentMatchId  String?
+  /// Ranked match this game belongs to. NULL for casual single-game play and
+  /// for tournament games (those use `tournamentMatchId`). Set by the ranked
+  /// orchestrator when minting game N of a best-of-2 match.
+  matchId            String?
+  /// 1-indexed position within the match (1 or 2 for ranked BO2). NULL when
+  /// `matchId` is NULL.
+  matchSequence      Int?
   isTournament       Boolean          @default(false)
   /// True when the game is a user-initiated spar match (bot vs system bot,
   /// outside any tournament). Preserved for 30 days per §5.2 retention policy;
@@ -185,6 +196,7 @@ model Game {
   player2            User?            @relation("Player2Games", fields: [player2Id], references: [id])
   tournament         Tournament?      @relation(fields: [tournamentId], references: [id])
   tournamentMatch    TournamentMatch? @relation(fields: [tournamentMatchId], references: [id])
+  match              Match?           @relation(fields: [matchId], references: [id])
   winner             User?            @relation("WinnerGames", fields: [winnerId], references: [id])
   moves              Move[]
 
@@ -195,6 +207,7 @@ model Game {
   @@index([player1Id])
   @@index([player2Id])
   @@index([tournamentId])
+  @@index([matchId])
   @@index([isSpar])
   @@map("games")
 }
@@ -245,7 +258,7 @@ model BotSkill {
   createdBy      String?
   maxEpisodes    Int                 @default(100000)
   botId          String?             @map("bot_id")
-  gameId         String              @default("xo") @map("game_id")
+  gameId         String              @default("tic-tac-toe") @map("game_id")
   benchmarks     MLBenchmarkResult[]
   checkpoints    MLCheckpoint[]
   eloHistory     MLEloHistory[]
@@ -282,12 +295,80 @@ model TrainingSession {
   summary     Json?
   startedAt   DateTime          @default(now())
   completedAt DateTime?
+  /// A3a — preset label: 'quick' / 'standard' / 'deep'. Null for
+  /// manually-configured / legacy sessions.
+  preset      String?
+  /// A3a — estimated runtime computed at session creation (used for the
+  /// admin-approval ETA gate and for surfacing time-to-finish in the UI).
+  expectedDurationMs   Int?
+  /// A3a — admin-approval flow for sessions whose `expectedDurationMs`
+  /// exceeds the threshold (4hr today). 'NEEDED' until an admin acts;
+  /// 'APPROVED' or 'DENIED' on decision. Null means no approval required.
+  approvalStatus       String?
+  approvalRequestedAt  DateTime?
+  approvedAt           DateTime?
+  approvedById         String?
+  approvedBy           User?     @relation("ApprovedTrainingSessions", fields: [approvedById], references: [id])
+  /// A3a — Resume button. Set when the user pauses; cleared on resume.
+  pausedAt    DateTime?
+  /// A3a — episodeNum of the latest persisted checkpoint. The worker reads
+  /// this on startup to know where to resume from. Null until the first
+  /// checkpoint commits.
+  checkpointEpisode    Int?
   episodes    TrainingEpisode[]
   notes       TrainingSessionNote[]
+  checkpoints TrainingCheckpoint[]
+  metrics     TrainingMetric[]
   model       BotSkill          @relation(fields: [modelId], references: [id], onDelete: Cascade)
 
   @@index([modelId])
+  @@index([approvalStatus])
   @@map("training_sessions")
+}
+
+/// A3a — checkpoint-based recovery. Persisted every N episodes during a
+/// training run; on worker crash, the next worker reads the latest
+/// checkpoint for the session and resumes from there. `weights` carries
+/// the algorithm-specific weight blob (Q-table for Q-learning, network
+/// state for DQN, AlphaZero policy/value, etc.) at that point.
+model TrainingCheckpoint {
+  id         String          @id @default(cuid())
+  sessionId  String
+  episodeNum Int
+  weights    Json
+  /// Algorithm-specific runtime state needed to resume (epsilon, replay
+  /// buffer pointer, MCTS tree fingerprint, etc.). Distinct from
+  /// `weights` so the network blob doesn't bloat with bookkeeping.
+  runtimeState Json?
+  createdAt  DateTime        @default(now())
+  session    TrainingSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@unique([sessionId, episodeNum])
+  @@index([sessionId])
+  @@map("training_checkpoints")
+}
+
+/// A3a — time-series eval points for the stacked W/D/L curves. One row per
+/// eval call per opponent curve. `opponentLabel` is a free-form string
+/// ('primary' for the algorithm-appropriate primary opponent, 'easy' /
+/// 'medium' / 'master' for the side curves). The frontend renders one
+/// stacked area per label.
+model TrainingMetric {
+  id            String          @id @default(cuid())
+  sessionId     String
+  episodeNum    Int
+  opponentLabel String
+  wins          Int             @default(0)
+  draws         Int             @default(0)
+  losses        Int             @default(0)
+  /// Optional: when the eval split first-mover vs second-mover (Master
+  /// curve, AlphaZero phase B). Null for unsplit curves.
+  asFirstMover  Boolean?
+  createdAt     DateTime        @default(now())
+  session       TrainingSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@index([sessionId, opponentLabel, episodeNum])
+  @@map("training_metrics")
 }
 
 model TrainingEpisode {
@@ -756,6 +837,49 @@ model TournamentRound {
   @@map("tournament_rounds")
 }
 
+/// Ranked match — best-of-N container for casual-vs-ranked play, separate
+/// from `TournamentMatch` which models bracket play. Tournament games use
+/// `Game.tournamentMatchId`; ranked-match games use `Game.matchId`.
+///
+/// Lifecycle: PENDING (FORMING — both players set, no games yet) →
+/// IN_PROGRESS (game 1 minted) → COMPLETED (winner decided or all games
+/// played). CANCELLED on forfeit before game 1. Reuses the `MatchStatus`
+/// enum so PENDING here == FORMING in plan-doc parlance.
+///
+/// `seed` is a deterministic string (UUID-ish) used by the color assigner
+/// so reconnects/replays render the same colors. Game 1 color derives from
+/// the seed; game 2 swaps; tournament game 3 (on `TournamentMatch`) uses a
+/// fresh random call that gets announced to both clients.
+model Match {
+  id           String      @id @default(cuid())
+  /// Game slug — "tic-tac-toe", "connect-four", etc.
+  gameId       String      @map("game_id")
+  format       MatchFormat @default(RANKED_BO2)
+  status       MatchStatus @default(PENDING)
+  player1Id    String      @map("player1_id")
+  player2Id    String      @map("player2_id")
+  winnerId     String?     @map("winner_id")
+  p1Wins       Int         @default(0) @map("p1_wins")
+  p2Wins       Int         @default(0) @map("p2_wins")
+  drawGames    Int         @default(0) @map("draw_games")
+  /// Deterministic seed for color assignment. Set at INSERT.
+  seed         String
+  startedAt    DateTime?   @map("started_at")
+  completedAt  DateTime?   @map("completed_at")
+  createdAt    DateTime    @default(now()) @map("created_at")
+
+  games        Game[]
+  player1      User        @relation("Player1Matches", fields: [player1Id], references: [id])
+  player2      User        @relation("Player2Matches", fields: [player2Id], references: [id])
+  winner       User?       @relation("WinnerMatches", fields: [winnerId], references: [id])
+
+  @@index([gameId])
+  @@index([status])
+  @@index([player1Id])
+  @@index([player2Id])
+  @@map("matches")
+}
+
 model TournamentMatch {
   id             String          @id @default(cuid())
   tournamentId   String
@@ -923,6 +1047,10 @@ model Table {
   tournamentMatchId String?
   tournamentId      String?
   bestOfN           Int?
+  /// A2 — ranked-match context. NULL for casual + tournament tables.
+  /// When set, game-end on this table calls `advanceMatchAfterGame`; the
+  /// table is reused for game 2 via rematch-in-place with swapped colors.
+  matchId           String?
   /// Phase 3.4 — bot context (null for PvP tables).
   isHvb             Boolean     @default(false)
   botUserId         String?
@@ -946,6 +1074,7 @@ model Table {
   @@index([createdById])
   @@index([isTournament])
   @@index([tournamentMatchId])
+  @@index([matchId])
   @@index([botUserId])
   @@index([isDemo])
   @@map("tables")
@@ -1319,6 +1448,10 @@ enum MatchStatus {
   IN_PROGRESS
   COMPLETED
   CANCELLED
+}
+
+enum MatchFormat {
+  RANKED_BO2
 }
 
 enum RoundStatus {

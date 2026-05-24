@@ -20,7 +20,13 @@ app.use(compression())
 app.get('/landing-version', (_req, res) => res.json({ version: LANDING_VERSION }))
 
 // ── Tournament service endpoints (must come before the /api catch-all) ──────
-const tournamentPaths = [
+// Both flat (legacy) and prefix (A1.4 game-as-prefix) shapes route here. The
+// prefix shape lives under /api/games/:slug/... so we use a custom filter
+// rather than listing every concrete slug.
+const TOURNAMENT_PREFIX_SUBPATHS = new Set([
+  'tournaments', 'matches', 'classification', 'recurring', 'bot-matches',
+])
+const tournamentFlatPaths = [
   '/api/tournaments',
   '/api/matches',
   '/api/classification',
@@ -30,7 +36,18 @@ const tournamentPaths = [
 app.use(createProxyMiddleware({
   target: TOURNAMENT_URL,
   changeOrigin: true,
-  pathFilter: tournamentPaths,
+  pathFilter: (path) => {
+    // Flat shape: /api/<subpath>/...
+    if (tournamentFlatPaths.some((p) => path === p || path.startsWith(`${p}/`))) {
+      return true
+    }
+    // Prefix shape: /api/games/:slug/<subpath>/...
+    const match = path.match(/^\/api\/games\/[^/]+\/([^/]+)(\/|$)/)
+    if (match && TOURNAMENT_PREFIX_SUBPATHS.has(match[1])) {
+      return true
+    }
+    return false
+  },
 }))
 
 // ── Backend: auth, user API, WebSockets ──────────────────────────────────────

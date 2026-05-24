@@ -21,7 +21,7 @@ import { rtFetch } from '../../lib/rtSession.js'
 import { getToken } from '../../lib/getToken.js'
 
 export default function QuickMatchButton({
-  gameId    = 'xo',
+  gameId    = 'tic-tac-toe',
   eloWindow = 100,
   label     = 'Quick Match',
   source    = 'quick-match',

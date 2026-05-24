@@ -32,7 +32,7 @@ describe('normalizeBusNotification', () => {
 
   it('still surfaces stakeholder-scoped player.joined as a table toast', () => {
     const out = normalizeBusNotification('player.joined', {
-      tableId: 't1', gameId: 'xo', actorDisplayName: 'Alice', seatIndex: 0,
+      tableId: 't1', gameId: 'tic-tac-toe', actorDisplayName: 'Alice', seatIndex: 0,
     })
     expect(out).toMatchObject({
       uiType: 'table', type: 'table',

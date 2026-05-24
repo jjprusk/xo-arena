@@ -210,6 +210,16 @@ export default function HomePage() {
           >
             Challenge any bot
           </Link>
+          {user && (
+            <Link
+              to="/play?action=ranked-bot"
+              className="btn btn-secondary btn-sm w-full"
+              aria-label="Play ranked best-of-2 vs a bot"
+              data-cta="play-ranked-bot"
+            >
+              Play ranked (Best of 2)
+            </Link>
+          )}
         </div>
 
         {/* Sub-line beneath the CTAs reinforcing the unique value prop */}

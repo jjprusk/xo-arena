@@ -61,14 +61,14 @@ export default function TrainTab({ model, sessions, onSessionsChange, onComplete
   const [watchedSessionId, setWatchedSessionId] = useState(null)
 
   useEventStream({
-    channels:   watchedSessionId ? [`ml:session:${watchedSessionId}:`] : [],
+    channels:   watchedSessionId ? [`training:${watchedSessionId}:`] : [],
     eventTypes: watchedSessionId
       ? [
-          `ml:session:${watchedSessionId}:progress`,
-          `ml:session:${watchedSessionId}:curriculum_advance`,
-          `ml:session:${watchedSessionId}:complete`,
-          `ml:session:${watchedSessionId}:cancelled`,
-          `ml:session:${watchedSessionId}:error`,
+          `training:${watchedSessionId}:progress`,
+          `training:${watchedSessionId}:curriculum_advance`,
+          `training:${watchedSessionId}:complete`,
+          `training:${watchedSessionId}:cancelled`,
+          `training:${watchedSessionId}:error`,
         ]
       : [],
     enabled: !!watchedSessionId,

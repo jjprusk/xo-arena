@@ -88,13 +88,18 @@ test.describe('PvAI game flow', () => {
     await startPvAIGame(page, { difficulty: 'easy', mark: 'X' })
     await expect(boardLocator(page)).toBeVisible()
 
-    await page.getByRole('button', { name: 'Forfeit' }).click()
-    await expect(page.getByRole('heading', { name: 'Forfeit game?' })).toBeVisible()
-    await page.getByRole('button', { name: 'Forfeit' }).last().click()
+    // The in-game cleanup control is labeled "Leave Table" platform-wide
+    // (post-Phase-3.4); the mid-game confirm dialog is titled "Leave the
+    // table?" and confirms with "Leave". Server-side this is still the
+    // forfeit code path — the opponent (bot) is declared the winner.
+    await page.getByRole('button', { name: 'Leave Table' }).click()
+    await expect(page.getByRole('heading', { name: 'Leave the table?' })).toBeVisible()
+    await page.getByRole('button', { name: 'Leave', exact: true }).click()
 
-    // Post-forfeit: the server marks the opponent (bot) as the winner;
-    // the GameComponent renders "Opponent wins!" instead of the legacy
-    // "Forfeited." banner removed in Phase 3.4.
-    await expect(page.getByText(/Opponent wins!?/i)).toBeVisible()
+    // After confirming Leave, the page navigates away from /play to the
+    // referrer (default: home). The server-side game record is finalized
+    // as a bot win; the user lands somewhere with no board on screen.
+    await expect(page).not.toHaveURL(/\/play/, { timeout: 10_000 })
+    await expect(page.getByRole('generic', { name: 'Tic-tac-toe board' })).toBeHidden()
   })
 })

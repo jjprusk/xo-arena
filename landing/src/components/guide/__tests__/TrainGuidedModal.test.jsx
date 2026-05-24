@@ -54,11 +54,11 @@ beforeEach(() => {
 })
 
 describe('TrainGuidedModal', () => {
-  it('subscribes to the correct ml:session:<id>:* event types after the POST', async () => {
+  it('subscribes to the correct training:<id>:* event types after the POST', async () => {
     api.bots.trainGuided.mockResolvedValue({
       sessionId:     'sess_abc',
       skillId:       'skl_1',
-      channelPrefix: 'ml:session:sess_abc:',
+      channelPrefix: 'training:sess_abc:',
     })
 
     render(<TrainGuidedModal botId="bot_1" botName="Sparky" onClose={() => {}} onComplete={() => {}} />)
@@ -66,29 +66,29 @@ describe('TrainGuidedModal', () => {
     await waitFor(() => expect(eventStreamRegistry.latest?.enabled).toBe(true))
 
     const sub = eventStreamRegistry.latest
-    expect(sub.channels).toEqual(['ml:session:sess_abc:'])
+    expect(sub.channels).toEqual(['training:sess_abc:'])
     // The eventTypes list is what the channel-prefix subscription is paired
     // with — the static EventSource listener registration. A regression here
     // (e.g. forgetting to suffix one of the kinds) would silently break the
     // modal because the browser drops named events without listeners.
     expect(sub.eventTypes).toEqual([
-      'ml:session:sess_abc:progress',
-      'ml:session:sess_abc:complete',
-      'ml:session:sess_abc:error',
-      'ml:session:sess_abc:cancelled',
-      'ml:session:sess_abc:early_stop',
+      'training:sess_abc:progress',
+      'training:sess_abc:complete',
+      'training:sess_abc:error',
+      'training:sess_abc:cancelled',
+      'training:sess_abc:early_stop',
     ])
   })
 
   it('updates progress UI on :progress events (win-rate sparkline + stat tiles)', async () => {
     api.bots.trainGuided.mockResolvedValue({
-      sessionId: 'sess_abc', skillId: 'skl_1', channelPrefix: 'ml:session:sess_abc:',
+      sessionId: 'sess_abc', skillId: 'skl_1', channelPrefix: 'training:sess_abc:',
     })
     render(<TrainGuidedModal botId="bot_1" botName="Sparky" onClose={() => {}} onComplete={() => {}} />)
     await waitFor(() => expect(eventStreamRegistry.latest?.enabled).toBe(true))
 
     // First progress tick — episode 1500 of 30000.
-    dispatch('ml:session:sess_abc:progress', {
+    dispatch('training:sess_abc:progress', {
       sessionId: 'sess_abc',
       episode: 1500, totalEpisodes: 30000,
       winRate: 0.42, lossRate: 0.30, drawRate: 0.28,
@@ -104,7 +104,7 @@ describe('TrainGuidedModal', () => {
     expect(screen.getByText('0.650')).toBeInTheDocument() // ε
 
     // Second tick — climb visible.
-    dispatch('ml:session:sess_abc:progress', {
+    dispatch('training:sess_abc:progress', {
       sessionId: 'sess_abc',
       episode: 15000, totalEpisodes: 30000,
       winRate: 0.71, lossRate: 0.12, drawRate: 0.17,
@@ -116,14 +116,14 @@ describe('TrainGuidedModal', () => {
 
   it('on :complete, POSTs /finalize and transitions to done', async () => {
     api.bots.trainGuided.mockResolvedValue({
-      sessionId: 'sess_abc', skillId: 'skl_1', channelPrefix: 'ml:session:sess_abc:',
+      sessionId: 'sess_abc', skillId: 'skl_1', channelPrefix: 'training:sess_abc:',
     })
     api.bots.trainGuidedFinalize.mockResolvedValue({ bot: { id: 'bot_1', botModelType: 'qlearning' } })
     const onComplete = vi.fn()
     render(<TrainGuidedModal botId="bot_1" botName="Sparky" onClose={() => {}} onComplete={onComplete} />)
     await waitFor(() => expect(eventStreamRegistry.latest?.enabled).toBe(true))
 
-    dispatch('ml:session:sess_abc:complete', { sessionId: 'sess_abc', summary: { wins: 21000, losses: 5000, draws: 4000 } })
+    dispatch('training:sess_abc:complete', { sessionId: 'sess_abc', summary: { wins: 21000, losses: 5000, draws: 4000 } })
 
     // The finalize POST should fire (even before the 2.5s celebration timer
     // expires) and the modal should reach the 'done' status.
@@ -146,12 +146,12 @@ describe('TrainGuidedModal', () => {
 
   it('shows the error state if a :error event arrives mid-training', async () => {
     api.bots.trainGuided.mockResolvedValue({
-      sessionId: 'sess_abc', skillId: 'skl_1', channelPrefix: 'ml:session:sess_abc:',
+      sessionId: 'sess_abc', skillId: 'skl_1', channelPrefix: 'training:sess_abc:',
     })
     render(<TrainGuidedModal botId="bot_1" botName="Sparky" onClose={() => {}} onComplete={() => {}} />)
     await waitFor(() => expect(eventStreamRegistry.latest?.enabled).toBe(true))
 
-    dispatch('ml:session:sess_abc:error', { sessionId: 'sess_abc', error: 'Engine crashed' })
+    dispatch('training:sess_abc:error', { sessionId: 'sess_abc', error: 'Engine crashed' })
     await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent(/Engine crashed/))
   })
 
@@ -178,19 +178,19 @@ describe('TrainGuidedModal', () => {
 
   it('two :complete events in a row finalize exactly once (SSE replay-safe)', async () => {
     api.bots.trainGuided.mockResolvedValue({
-      sessionId: 'sess_abc', skillId: 'skl_1', channelPrefix: 'ml:session:sess_abc:',
+      sessionId: 'sess_abc', skillId: 'skl_1', channelPrefix: 'training:sess_abc:',
     })
     api.bots.trainGuidedFinalize.mockResolvedValue({ bot: { id: 'bot_1', botModelType: 'qlearning' } })
     render(<TrainGuidedModal botId="bot_1" botName="Sparky" onClose={() => {}} onComplete={() => {}} />)
     await waitFor(() => expect(eventStreamRegistry.latest?.enabled).toBe(true))
 
     // First :complete kicks off finalize.
-    dispatch('ml:session:sess_abc:complete', { sessionId: 'sess_abc', summary: {} })
+    dispatch('training:sess_abc:complete', { sessionId: 'sess_abc', summary: {} })
     await waitFor(() => expect(api.bots.trainGuidedFinalize).toHaveBeenCalledTimes(1))
 
     // Second :complete (e.g. SSE redeliver after a brief disconnect) MUST NOT
     // re-fire the finalize — finalizeStartedRef is the single guard.
-    dispatch('ml:session:sess_abc:complete', { sessionId: 'sess_abc', summary: {} })
+    dispatch('training:sess_abc:complete', { sessionId: 'sess_abc', summary: {} })
     // Wait a beat for any spurious finalize to flush.
     await new Promise(r => setTimeout(r, 20))
     expect(api.bots.trainGuidedFinalize).toHaveBeenCalledTimes(1)
@@ -198,17 +198,17 @@ describe('TrainGuidedModal', () => {
 
   it('a stray :progress arriving after :complete does NOT re-trigger finalize', async () => {
     api.bots.trainGuided.mockResolvedValue({
-      sessionId: 'sess_abc', skillId: 'skl_1', channelPrefix: 'ml:session:sess_abc:',
+      sessionId: 'sess_abc', skillId: 'skl_1', channelPrefix: 'training:sess_abc:',
     })
     api.bots.trainGuidedFinalize.mockResolvedValue({ bot: { id: 'bot_1', botModelType: 'qlearning' } })
     render(<TrainGuidedModal botId="bot_1" botName="Sparky" onClose={() => {}} onComplete={() => {}} />)
     await waitFor(() => expect(eventStreamRegistry.latest?.enabled).toBe(true))
 
-    dispatch('ml:session:sess_abc:complete', { sessionId: 'sess_abc', summary: {} })
+    dispatch('training:sess_abc:complete', { sessionId: 'sess_abc', summary: {} })
     // Late progress event — possible if the worker emits one final tick after
     // signalling completion. Must not bounce status back to 'training' or
     // re-fire finalize.
-    dispatch('ml:session:sess_abc:progress', {
+    dispatch('training:sess_abc:progress', {
       sessionId: 'sess_abc', episode: 30000, totalEpisodes: 30000,
       winRate: 0.71, lossRate: 0.12, drawRate: 0.17, epsilon: 0.05,
     })
@@ -220,7 +220,7 @@ describe('TrainGuidedModal', () => {
 
   it('StrictMode does not cause finalize to fire twice on :complete (regression guard)', async () => {
     api.bots.trainGuided.mockResolvedValue({
-      sessionId: 'sess_abc', skillId: 'skl_1', channelPrefix: 'ml:session:sess_abc:',
+      sessionId: 'sess_abc', skillId: 'skl_1', channelPrefix: 'training:sess_abc:',
     })
     api.bots.trainGuidedFinalize.mockResolvedValue({ bot: { id: 'bot_1', botModelType: 'qlearning' } })
 
@@ -231,7 +231,7 @@ describe('TrainGuidedModal', () => {
     )
     await waitFor(() => expect(eventStreamRegistry.latest?.enabled).toBe(true), { timeout: 2_000 })
 
-    dispatch('ml:session:sess_abc:complete', { sessionId: 'sess_abc', summary: {} })
+    dispatch('training:sess_abc:complete', { sessionId: 'sess_abc', summary: {} })
     await waitFor(() => expect(api.bots.trainGuidedFinalize).toHaveBeenCalledTimes(1))
 
     // Wait long enough for any re-mount-driven duplicate to surface.
@@ -247,13 +247,13 @@ describe('TrainGuidedModal', () => {
     // fields. The existing test asserts this once for happy path; here we
     // pin it under the same guarantees that protect against double-fire.
     api.bots.trainGuided.mockResolvedValue({
-      sessionId: 'sess_xyz', skillId: 'skl_42', channelPrefix: 'ml:session:sess_xyz:',
+      sessionId: 'sess_xyz', skillId: 'skl_42', channelPrefix: 'training:sess_xyz:',
     })
     api.bots.trainGuidedFinalize.mockResolvedValue({ bot: { id: 'bot_1', botModelType: 'qlearning' } })
     render(<TrainGuidedModal botId="bot_1" botName="Sparky" onClose={() => {}} onComplete={() => {}} />)
     await waitFor(() => expect(eventStreamRegistry.latest?.enabled).toBe(true))
 
-    dispatch('ml:session:sess_xyz:complete', { sessionId: 'sess_xyz', summary: { wins: 21000 } })
+    dispatch('training:sess_xyz:complete', { sessionId: 'sess_xyz', summary: { wins: 21000 } })
 
     await waitFor(() => expect(api.bots.trainGuidedFinalize).toHaveBeenCalled())
     const [botId, body, token] = api.bots.trainGuidedFinalize.mock.calls[0]
@@ -270,7 +270,7 @@ describe('TrainGuidedModal', () => {
     // cause this assertion to fail (because the first run's cancelled=true
     // would skip the setState and eventStream would never enable).
     api.bots.trainGuided.mockResolvedValue({
-      sessionId: 'sess_abc', skillId: 'skl_1', channelPrefix: 'ml:session:sess_abc:',
+      sessionId: 'sess_abc', skillId: 'skl_1', channelPrefix: 'training:sess_abc:',
     })
     render(
       <StrictMode>
@@ -279,6 +279,6 @@ describe('TrainGuidedModal', () => {
     )
 
     await waitFor(() => expect(eventStreamRegistry.latest?.enabled).toBe(true), { timeout: 2_000 })
-    expect(eventStreamRegistry.latest?.channels).toEqual(['ml:session:sess_abc:'])
+    expect(eventStreamRegistry.latest?.channels).toEqual(['training:sess_abc:'])
   })
 })
