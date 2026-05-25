@@ -45,6 +45,84 @@ After any schema or migration change, run `docker compose run --rm backend npx p
 
 `/dev`, `/stage`, and `/promote` are slash commands the **user** invokes. Claude does not run pushes or deploys autonomously, even when CI is green. Wait for explicit invocation.
 
+## Slash command configuration
+
+The `/dev`, `/stage`, and `/promote` skills are project-agnostic and read
+this section to discover per-project paths, URLs, and commands. When
+porting these skills to another project, copy this whole section into
+that project's `CLAUDE.md` and update the values. A skill that can't
+find this section in `CLAUDE.md` must stop and tell the user to add one.
+
+### Branches
+- dev branch:     `dev`
+- staging branch: `staging`
+- main branch:    `main`
+
+### Version files
+Files to update when bumping the semver string at `"version": "<x>"`.
+- backend/package.json
+- landing/package.json
+- package.json
+
+### Changelog
+- path:   `landing/public/changelog.json`
+- shape:  JSON array; prepend `{ version, date: "YYYY-MM-DD", description }` at index 0.
+
+### npm install after package.json changes (`/dev`)
+Run `npm install` in each of these directories if their `package.json`
+changed in the commit:
+- backend
+- landing
+
+### Vendored package sync (`/dev`)
+Sources that must be copied into per-app `packages/` subdirs before
+staging. Skip entries whose source isn't in the changeset.
+Format: `<source> → <dest1>, <dest2>, ...`
+- packages/xo → frontend/packages/xo, landing/packages/xo
+- packages/ai → backend/packages/ai
+- packages/db → backend/packages/db
+
+### Local service restart on version bump (`/stage`)
+- `docker compose restart backend`
+
+### Deployed environment URLs
+For smoke tests + version polling.
+
+#### Staging
+- frontend:   https://xo-frontend-staging.fly.dev
+- landing:    https://xo-landing-staging.fly.dev
+- backend:    https://xo-backend-staging.fly.dev
+- tournament: https://xo-tournament-staging.fly.dev
+
+#### Production
+- frontend:   https://xo-frontend-prod.fly.dev
+- landing:    https://xo-landing-prod.fly.dev
+- backend:    https://xo-backend-prod.fly.dev
+- tournament: https://xo-tournament-prod.fly.dev
+
+### Smoke command
+Runs from repo root. Substitute the `<env>` URLs from the environment
+section above. The suite polls `/api/version` until the new version is
+live, then asserts key surfaces respond.
+```
+cd e2e && BASE_URL=<frontend> LANDING_URL=<landing> BACKEND_URL=<backend> TOURNAMENT_URL=<tournament> npx playwright test smoke --project=chromium
+```
+
+### Perf tooling
+- rebaseline: `perf/perf-rebaseline.sh <env>` — writes timestamped JSONs to `perf/baselines/`
+- summarize:  `node perf/perf-summarize.js` — regenerates `doc/Performance_Trend.md`
+- trend doc:  `doc/Performance_Trend.md`
+- PDF render (run from `doc/`):
+  ```
+  pandoc Performance_Trend.md -o Performance_Trend.pdf --pdf-engine=xelatex -V mainfont="Times New Roman" -V monofont="Menlo" -V geometry:margin=0.5in --toc --toc-depth=2 -H pdf_header.tex
+  ```
+- baseline globs to stage in the perf commit:
+  `perf/baselines/*-<env>-*.json perf/baselines/bundle-composition-local-*.json doc/Performance_Trend.md doc/Performance_Trend.pdf`
+
+### CI gate
+- GitHub Actions workflow name to wait for: `CI`
+- Poll via `gh run list --branch <branch> --limit 5 --json status,conclusion,headSha`
+
 Production lives on Fly.io (apps: `xo-backend-prod`, `xo-landing-prod`, `xo-tournament-prod`, `xo-db-prod`). See `doc/Prod_Bringup_Runbook.md` for one-time bringup, and `doc/Guide_Operations.md` for ops procedures.
 
 ## Conventions
