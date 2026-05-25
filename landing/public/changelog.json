@@ -1,5 +1,10 @@
 [
   {
+    "version": "1.4.0-alpha-5.19",
+    "date": "2026-05-24",
+    "description": "CI hardening + Phase A audit. Adds xo-training-{staging,prod} deploy step to deploy-staging.yml + deploy-prod.yml so the worker app never silently drifts again (root-caused 5/24 — AZ dispatch fix on 5.18 landed on the API but not the worker, which was 3 days stale). Also: corpus sweep closed Phase A exit #5 (gameId='xo' → 'tic-tac-toe' in Platform_Implementation_Plan.md; gym-train-tab.md now flags A3b.8 presets-as-default); audit log records #1/#2/#3/#4/#5 ticked, #6 (V1 acceptance) pending post-promote prod walkthrough."
+  },
+  {
     "version": "1.4.0-alpha-5.18",
     "date": "2026-05-24",
     "description": "Worker algo-dispatch fix + A3b sprint close (11/11) + A4 multi-skill bot UI (7/7). Fix: mlService normalized only legacy enum form (ALPHA_ZERO/MONTE_CARLO); flat-form strings silently ran QLearning on the worker — latent since A3b.2b cutover. Adds `um training-worker verify` one-shot to exercise all 5 algos with per-engine signature assertions."
