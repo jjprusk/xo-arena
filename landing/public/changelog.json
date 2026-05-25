@@ -1,5 +1,10 @@
 [
   {
+    "version": "1.4.0-alpha-5.20",
+    "date": "2026-05-25",
+    "description": "Phase B kickoff: Connect Four package (B1, 7/7) + C4 React UI (B2 chunk 1). Adds `packages/game-connect-four/` — engine + serializer + meta + botInterface + Easy/Medium/Hard/Master minimax bots + master solver (alpha-beta + transposition table + threat parity heuristic), 89/89 tests. Adds the C4 React GameComponent + BoardPreview, 22 new landing tests (568/568). Strict SDK conformance — `GameMeta` gained optional `matchFormat` + `masterStrategy` fields with matching dev-guide rows. Backend/landing platform-side dispatch to actually serve `/games/connect-four` is NOT yet wired — pending direction from the Phase A audit."
+  },
+  {
     "version": "1.4.0-alpha-5.19",
     "date": "2026-05-24",
     "description": "CI hardening + Phase A audit. Adds xo-training-{staging,prod} deploy step to deploy-staging.yml + deploy-prod.yml so the worker app never silently drifts again (root-caused 5/24 — AZ dispatch fix on 5.18 landed on the API but not the worker, which was 3 days stale). Also: corpus sweep closed Phase A exit #5 (gameId='xo' → 'tic-tac-toe' in Platform_Implementation_Plan.md; gym-train-tab.md now flags A3b.8 presets-as-default); audit log records #1/#2/#3/#4/#5 ticked, #6 (V1 acceptance) pending post-promote prod walkthrough."

@@ -379,6 +379,60 @@ export interface GameMeta {
    * tournament series completion unless the game opts in.
    */
   tournamentMovesElo?: boolean
+
+  /**
+   * Per-context match length, in games. The platform uses this when
+   * creating ranked/tournament/master matches so each game can pick a
+   * format that gives a meaningful skill signal without dragging on.
+   *
+   * Keys are the match contexts the platform supports:
+   *   - 'ranked'     — public ranked matchmaking (always rated)
+   *   - 'tournament' — bracket / Cup play (rated iff tournamentMovesElo)
+   *   - 'master'     — challenges against the game's Master tier
+   *                    (paired with a master-tier BotPersona that should
+   *                    set offLadder: true on solved games)
+   *
+   * Values are best-of-N format names:
+   *   - 'bo1' → single game
+   *   - 'bo2' → two games with alternating colors, scored as a match
+   *   - 'bo3' → three games (last is a tiebreaker)
+   *
+   * Defaults applied by the platform when a key is missing:
+   *   ranked     → 'bo2'   (a single game gives almost no signal in TTT)
+   *   tournament → 'bo3'
+   *   master     → 'bo2'
+   *
+   * Casual table play always stays at single-game (best-of-1) regardless
+   * of this field — declaring it doesn't change casual behavior.
+   */
+  matchFormat?: {
+    ranked?: 'bo1' | 'bo2' | 'bo3'
+    tournament?: 'bo1' | 'bo2' | 'bo3'
+    master?: 'bo1' | 'bo2' | 'bo3'
+  }
+
+  /**
+   * How this game's Master tier (`difficulty: 'master'`) plays.
+   *
+   *   'solver'  — the bot has a perfect-play strategy (solved game; e.g.
+   *               Connect Four's "first-player-wins under optimal play"
+   *               is implemented via full-depth minimax + known opening
+   *               theory). Pair the Master BotPersona with
+   *               `offLadder: true` so structural losses against the
+   *               solver don't move ELO.
+   *   'minimax' — depth-limited minimax tuned to the strongest tractable
+   *               level for this game. Used when the game isn't solved
+   *               at full depth (e.g. Chess, Go).
+   *   'trained' — strongest in-house trained model (e.g. AlphaZero
+   *               weights checkpointed at the most-trained skill level).
+   *               Used for games where neither a solver nor minimax can
+   *               reach Master-tier strength.
+   *
+   * Optional — omit if the game has no Master tier. The platform reads
+   * this to decide whether to render the "Master Challenge" surface and
+   * to label the bot appropriately in match summaries.
+   */
+  masterStrategy?: 'solver' | 'minimax' | 'trained'
 }
 
 // ---------------------------------------------------------------------------

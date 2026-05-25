@@ -23,8 +23,8 @@
 | A3b — Training worker process cutover + training UI | complete | 11/11 | Sequenced as 11 PR-sized chunks. **Shipped:** A3b.1 spike (BullMQ + xo-training worker round-trip + Dockerfile lockfile fix); A3b.2a (worker can run the real training loop via `training:start` jobs in shadow mode — `_runTrainingForQueueJob` + QA endpoint + 4 unit tests; backend `setImmediate` path is unchanged); A3b.2b (flag-gated cutover — `startTraining` enqueues when `ml.useWorker=true`; cross-process pause/cancel via new `signalBus.js`; orphan resumer skips worker-dispatched sessions; 11 new unit tests + local smoke proved end-to-end pause across processes); A3b.3 (BullMQ knobs are SystemConfig-driven — `ml.workerConcurrency` + `ml.workerJobsPerSecond` read at worker boot; cap-trip rejects regardless of dispatch flag; +8 unit tests); A3b.4 (graceful SIGTERM coordinates with the loop via signalBus; per-process activeSessions registry; `attempts:3` + 30s/60s/120s exponential backoff on `training:start`; new admin `GET /training/dead-letter` enriches failed jobs with their TrainingSession summary; +15 unit tests); A3b.5 (observability: `queueMetrics` + per-worker `process.resourceUsage()` sampler writing to Redis with TTL + `trainingHealthMonitor` evaluating edge-triggered `queueStalled` / `deadLetter` alerts every 60s + new admin `GET /health/training`; +20 unit tests); A3b.6 (infra: `xo-training-staging` Fly app deployed + `ml.useWorker=true`; 1-hour 10-user × mixed-algo soak shipped 144 sessions, 138 COMPLETED in DB, 0 FAILED in DB, 0 DL entries, 0 alerts, no worker restart — A3b.4 retry quietly resumed 8 transient errors to COMPLETED; ready for `/promote`); A3b.10 (per-(game, algorithm) runtime matrix via new `trainingRuntime.js` resolver + `GET /ml/runtime` endpoint + TrainTab "Training in background" affordance; legacy `ml.useWorker` honored as fallback; +21 unit tests); A3b.7 (stacked W/D/L viz: new `GET /sessions/:id/metrics` + `StackedCurvesChart` recharts component grouped by opponentLabel; saturation fade after 3 consecutive 100%-win eval points; wired into TrainTab live + post-session; +13 unit tests); A3b.8 (no-knobs disclosure: presets-only default surface via new `GET /ml/presets` + `useFeatures` hook + SystemConfig `features.trainingAdvancedKnobs` flag; admins always see Advanced; +13 unit tests); A3b.9 (Master split stub: pure `splitByFirstMover` helper + per-half sub-charts in `StackedCurvesChart`; no-op on TTT, automatically lights up when C4 writes split metrics; +7 unit tests). **A3b done — moves to Phase A exit checklist next.** |
 | A4 — Multi-skill bot UI + auto-clone | complete | 7/7 | All seven plan items shipped in one sprint. **Skills section on BotProfilePage** lists every `BotSkill` row with per-game ELO + last-trained timestamps and a **Primary** badge on the one tracking `User.botModelId` (data sourced from a now-enriched `GET /bots/:id` with `lastTrainedAt` derived from the newest COMPLETED `TrainingSession`). **Add-skill flow** opens `AddSkillModal` from the section header (owner-only); the modal gained an optional "Clone hyperparams from" dropdown that posts `cloneFromSkillId` to the existing `POST /bots/:id/skills`, which copies the source skill's `config` blob verbatim (bogus id falls back to defaults rather than 404). **Rename preserves skills** — verified via a `PATCH /bots/:id` test that asserts no `botSkill.delete` / `deleteMany` ever fires; skills are FK'd by `botId` and carry through any `User` column mutation. **Picker disambiguation**: `BotCard` accepts a `pickerGameId` prop and appends `" (Game Label)"` to the displayed name when the bot has skills in ≥2 games; single-game bots stay un-suffixed; `TablesPage` wires `filters.gameId ?? gameId` through to the select-variant picker. **Profile → Gym deep-link**: each per-skill card renders a `Train in Gym →` link to `/gym?bot=<id>&gameId=<gameId>`, which `GymPage` already auto-resolves to `(botId, skillId)` via the existing `?bot=&gameId=` handler. **Pre-C4 validation** acknowledged — with only TTT live, the UI surface is lightly populated by design; Phase B adds the second game and the breadth lights up automatically. **Tests**: 4 backend (lastTrainedAt enrichment, cloneFromSkillId happy path, cloneFromSkillId bogus-id fallback, cloneFromSkillId validation) + 1 backend rename-keeps-skills + 4 BotCard picker-disambiguation + 6 BotProfilePage skills-section = **15 new** (backend 2302/2302 green; landing 546/546). |
 | **Phase B — Connect 4 build** | | | |
-| B1 — `packages/game-connect-four/` package | blocked on A1+A3 | 0/7 | Engine, Master solver, no UI. |
-| B2 — C4 play surface (desktop + mobile) | blocked on B1 | 0/9 | 6×7 board, mobile column-input (tap-to-preview, tap-to-confirm). |
+| B1 — `packages/game-connect-four/` package | complete | 7/7 | All seven items shipped across three commits on dev (`df5f69f` → `4ee2487` → `401756f`). **Engine** (`logic.js`): 6×7 row-major board, drop-with-gravity, win detection across all four directions (24 horizontal + 21 vertical + 12 ↘ + 12 ↙ = 69 win lines), draw + legal-move enumeration. **Serializer** (`serializer.js`): compact 42-char board string + optional `\|<turn>` for whole-game state — bot-friendly stable key for tabular learners. **SDK extension**: `GameMeta` gains optional `matchFormat` (per-context bo1/bo2/bo3) and `masterStrategy` (`solver`/`minimax`/`trained`) with matching rows in `Game_SDK_Developer_Guide.md`. **Meta** (`meta.js`): id `connect-four`, `inputMode: 'column'`, `layout.preferredWidth: 'wide'`, `tournamentMovesElo: true`, `matchFormat: {ranked:'bo2', tournament:'bo3', master:'bo2'}`, `masterStrategy: 'solver'`, 4 built-in personas (Pebble/Granite/Basalt/Obsidian) with Obsidian as offLadder master. **Minimax** (`minimax.js`): alpha-beta + center-first ordering (`CENTER_ORDER = [3,2,4,1,5,0,6]`) + line-scoring evaluator (4 = WIN_SCORE, 3+open = +100, 2+open = +10, 1+open = +1, dead = 0); `bestMove(board, mark, depth)` for difficulty-mapped depths (easy=2, medium=4, hard=6). **Bot interface** (`botInterface.js`): SDK-contract BotInterface; minimax dispatch + ML-persona fallback (B4 will wire real engines); `train()` throws "not yet implemented" loud rather than silent. **Master solver** (`master.js`): iterative deepening to depth 10 + transposition table (exact/lower/upper flags) + threat-parity bonus (claim-even strategy: Y prefers odd-from-bottom threats, R prefers even) + hardcoded center-opening shortcut for the empty board. Honest scope note: this is "strong-as-perfect-from-a-human's-perspective" at depth 10, not a true endgame-database solver — the right place to drop in a Boucher database later. **Tests**: 89/89 passing across 5 files (`logic`, `serializer`, `minimax`, `botInterface`, `master`) — geometry constants, win-line enumeration (verifies 24+21+12+12 breakdown), drop semantics, all four win directions, draw detection with a careful `(2r+c) mod 4` fixture that avoids the diagonal-parity trap, evaluator sign-symmetry, tactical decisions (opens center, completes wins, blocks vertical threats with unique answer), TT idempotency, and a Master-vs-medium-minimax adversarial game where Master must not lose as Yellow. **Real bugs caught by tests during dev**: (1) minimax depth-bias had wrong sign — `WIN_SCORE - depth` made deep wins score HIGHER than shallow wins (depth counts DOWN to leaves), so the bot wandered past immediate wins; fixed to `+depth` on magnitude with explicit perspective sign flip. (2) `deserializeMove(null)` slipped through because `Number(null) === 0` passed the range check; tightened to reject non-number/non-string-with-content. **B2 is now unblocked.** |
+| B2 — C4 play surface (desktop + mobile) | unblocked | 0/9 | 6×7 board, mobile column-input (tap-to-preview, tap-to-confirm). |
 | B3 — C4 ranked + tournament | blocked on A2+B2 | 0/5 | Reuses match infra from A2; no new ELO code. |
 | B4 — C4 training, all five algorithms | blocked on A3+B1 | 0/8 | Rule-Based / Minimax / MCTS / DQN / AlphaZero. |
 | B5 — Master tier + Master Challenge | blocked on B1+B2 | 0/11 | Perfect-play solver, off-ladder, best-of-2 Challenge format. |
@@ -35,7 +35,7 @@
 | C4 — Accessibility + mobile polish | not started | 0/3 | Keyboard nav, screen-reader labels, gesture conflicts. |
 | C5 — Observability sweep | not started | 0/2 | C4 dashboards + alert thresholds. |
 | C6 — Legacy slug cleanup | blocked on B exit | 0/3 | Drop `LEGACY_SLUG_MAP`, add 301 redirects from `/xo*`, scrub residual `xo` literals. |
-| **Total** | | **21/114** | |
+| **Total** | | **28/114** | |
 
 Update this table as sprints land. Each `- [ ]` flipped to `- [x]` in the body should be reflected in the `Items` column.
 
@@ -176,13 +176,82 @@ with the run date in `Audit log`, and Phase A is closed.
   - Update the run-status table at the top of `V1_Acceptance.md` with the new run date and pass/fail per stage; commit on dev.
   - Any FAIL: file as a P1 against the offending sprint and re-run that stage only after the fix lands. Don't block Phase B on a single isolated regression — flag and triage.
 
+#### What's left for you to do — ordered checklist to unblock Phase B
+
+As of the v1.4.0-alpha-5.19 prod promote (2026-05-25), three of six exit
+criteria are fully closed and three are 🟡 — held by work that requires
+a human at a browser. Phase B sprint **B1** (`packages/game-connect-four/`
+scaffold + engine + solver + tests) has no dependency on these three and
+can start in parallel; sprint **B2** (UI) cannot start until the audits
+close. The fastest path to "Phase A done, all of Phase B unblocked":
+
+1. **Sign in on prod** at `https://xo-landing-prod.fly.dev`.
+2. **Play one casual TTT bot game.** Tables → *Play vs Bot* → Easy minimax. Confirm the game completes and your ELO doesn't change (casual is `offLadder=true`). *Validates #1 casual-bot surface.*
+3. **Play one casual TTT PvP game.** Tables → *Create table* in one tab; open an incognito window, sign in as a second account, join. Play a game to completion. *Validates #1 casual-PvP surface.*
+4. **Play one ranked TTT BO2 match.** Tables → *Ranked* → match through to completion (two games + tiebreak if needed). This is the most important step: it's the only way to **populate the prod `Match` table** so criterion #2 (match-level ELO) becomes verifiable. *Validates #1 ranked surface and unblocks #2.*
+5. **Join a TTT Cup.** Cups → next Daily/Weekly → join → play through your bracket matches. *Validates #1 tournament surface.*
+6. **Ping me** ("audit done") when steps 2–5 are complete. I'll:
+   - Re-run the prod ELO script — should now find the matches from step 4 and confirm BO2 delta signs/magnitudes are correct → closes **#2**.
+   - Re-grep prod backend logs for the run window → confirms **#1** clean.
+   - Mark **#1**, **#2** ✅ in the audit log.
+7. **Walk `doc/V1_Acceptance.md` stages 1–10 against prod.** ~30–45 min, your own pace. Most stages overlap with steps 2–5 above so a lot is already covered. Update the run-status table at the top of `V1_Acceptance.md` and commit on `dev`. *Closes #6.*
+8. **Audit ✅ across the board.** Phase A is done; Phase B sprint **B2** (Connect 4 UI) and beyond are formally unblocked.
+
+If you want to start Phase B engineering tonight: **B1 is safe to begin
+immediately** — it's a pure `packages/game-connect-four/` package (engine,
+serializer, master solver, unit tests) with zero platform touch. The
+audit work above can run in parallel without blocking B1.
+
 #### Audit log
 
-Add one row per audit run. Keep the latest at the top.
+Status grid (latest at top) — full per-run notes are in the subsections
+below. Symbols: ✅ closed, 🟡 partial, ⚠ regression flagged, — not run.
 
-| Date | Build | Auditor | #1 routes | #2 ELO | #3 training | #4 multi-skill | #5 corpus | #6 V1 script | Notes |
-|------|-------|---------|:---------:|:------:|:-----------:|:--------------:|:---------:|:------------:|:------|
-| 2026-05-24 | v1.4.0-alpha-5.18 (staging) | Claude+Joe | 🟡 | 🟡 | ✅ | ✅ | ✅ | — | Worker dispatch fix verified via `um training-worker verify`; A4 sprint shipped; corpus sweep clean for user-facing help — two stale `gameId='xo'` refs in `Platform_Implementation_Plan.md` updated to `'tic-tac-toe'`, `gym-train-tab.md` gained a presets-as-default note (A3b.8 alignment). **#1**: 9 landing routes + 5 backend API routes all 200; main bundle has 0 `/xo` route refs and 0 `gameId='xo'` (only `game-xo-*.js` chunk filename survives, tracked under C6); recent backend logs: 0 404s; smoke 12/12 — passes the automatable parts, manual gameplay walkthrough deferred to prod. **#2**: leaderboard top 20 ordering sane (Sterling > Magnus > Copper > Rusty matches minimax tier strength); 61 UserEloHistory rows show correct sign + magnitude on bot-vs-bot games; **zero `Match` rows on staging — match-level (BO2) ELO untested with real traffic**, needs prod data post-promote to close. Awaiting prod promote for #1/#2 manual e2e + #6. |
+| Date       | Build                      | #1 | #2 | #3 | #4 | #5 | #6 |
+|------------|----------------------------|:--:|:--:|:--:|:--:|:--:|:--:|
+| 2026-05-25 | v1.4.0-alpha-5.19 prod     | 🟡 | 🟡 | ✅ | ✅ | ✅ | 🟡 |
+| 2026-05-24 | v1.4.0-alpha-5.18 staging  | 🟡 | 🟡 | ✅ | ✅ | ✅ | —  |
+
+##### 2026-05-25 — v1.4.0-alpha-5.19 prod (Claude+Joe)
+
+Promoted alongside the CI hardening that redeploys `xo-training-prod`;
+worker app confirmed on v5.19 with the `replace(/_/g, '')` fix (no manual
+deploy needed — the new CI step fired automatically).
+
+- **#1 routes** 🟡 — 13 prod routes all 200; main bundle 0 `/xo` route
+  refs and 0 functional `gameId='xo'` (one match in `changelog.json`
+  describing the corpus fix is a self-reference, not code); 0 404s in
+  recent backend logs; smoke 12/12.
+- **#2 ELO** 🟡 — leaderboard ordering sane (provisional flags correct on
+  low-game bots; bot-copper 1198 / bot-rusty 1184 plausible vs default
+  1200); **zero `Match` rows on prod** — match-level BO2 ELO infra
+  deployed but untested by real users, will close after a few real ranked
+  matches happen organically.
+- **#3 worker training** ✅ — dispatch fix code verified live on
+  `xo-training-prod` (`/app/backend/src/services/mlService.js`
+  `_buildEngine` has the normalization).
+- **#6 V1 acceptance** 🟡 — stages 1–10 require manual browser walkthrough
+  (sign-in, play through bots, join cups) — pending Joe. Stage 11
+  (hardening) already passed 2026-05-02.
+
+##### 2026-05-24 — v1.4.0-alpha-5.18 staging (Claude+Joe)
+
+Worker dispatch fix verified via `um training-worker verify`; A4 sprint
+shipped; corpus sweep clean for user-facing help — two stale `gameId='xo'`
+refs in `Platform_Implementation_Plan.md` updated to `'tic-tac-toe'`,
+`gym-train-tab.md` gained a presets-as-default note (A3b.8 alignment).
+
+- **#1 routes** 🟡 — 9 landing routes + 5 backend API routes all 200; main
+  bundle has 0 `/xo` route refs and 0 `gameId='xo'` (only `game-xo-*.js`
+  chunk filename survives, tracked under C6); recent backend logs: 0
+  404s; smoke 12/12 — passes the automatable parts, manual gameplay
+  walkthrough deferred to prod.
+- **#2 ELO** 🟡 — leaderboard top 20 ordering sane (Sterling > Magnus >
+  Copper > Rusty matches minimax tier strength); 61 UserEloHistory rows
+  show correct sign + magnitude on bot-vs-bot games; **zero `Match` rows
+  on staging** — match-level (BO2) ELO untested with real traffic, needs
+  prod data post-promote to close.
+- Awaiting prod promote for #1/#2 manual e2e + #6.
 
 ---
 
@@ -193,19 +262,20 @@ Add one row per audit run. Keep the latest at the top.
 > extended (with `Game_SDK_Developer_Guide.md` updated), and the sprint
 > resumes — game logic never leaks into the platform.
 
-### B1 — `packages/game-connect-four/` package
+### B1 — `packages/game-connect-four/` package — **complete (7/7)**
 
 **Goal:** A standalone, SDK-conformant game package. Engine + bot interface + tests, no UI yet.
 
-- [ ] Package scaffold: `packages/game-connect-four/` with the same shape as `packages/game-xo/`.
-- [ ] Engine: 6×7 board, gravity mechanic, win detection (horizontal/vertical/both diagonals), draw detection (board-full), legal-move enumeration (top-of-column).
-- [ ] State serialization: compact format suitable for replay storage and bot weight inputs.
-- [ ] `meta` export: `id: 'connect-four'`, `inputMode: 'column'`, `matchFormat: { ranked: 'bo2', tournament: 'bo3', master: 'bo2' }`, `masterStrategy: 'solver'`, `builtInBots: [easy, medium, hard, master]`.
-- [ ] `botInterface`:
-  - Built-in minimax tiers (Easy depth-2, Medium depth-4, Hard depth-6 to depth-8, Master = the solver).
-  - Training hooks for the five algorithms (delegating to the shared `@xo-arena/ai` engines where game-agnostic; new code only where C4 specifics matter).
-- [ ] Master solver: perfect-play minimax with full-depth search and the known solved-game heuristics (center-first opening, threat parity). Off-ladder.
-- [ ] Unit tests: engine correctness (win/draw/illegal-move), serialization round-trip, minimax depth correctness, solver vs known opening lines.
+Shipped on dev across four commits: `df5f69f` (scaffold + engine + serializer + 42 tests), `4ee2487` (SDK extension + meta + minimax bots + 35 tests), `401756f` (master solver + 12 tests), `10315b1` (plan-table update). Final test count: **89/89 passing** across 5 files. **B2 unblocked.**
+
+- [x] **Package scaffold** — `packages/game-connect-four/` matches `packages/game-xo/` shape: `package.json` (workspace + `@callidity/sdk` peer), `.npmrc`, `src/` with logic, serializer, meta, botInterface, minimax, master, and `__tests__/`.
+- [x] **Engine** (`logic.js`) — row-major 6×7 board, drop-with-gravity (immutable updates, returns row + index), four-direction win detection across all 69 enumerated `WIN_LINES` (24 horizontal + 21 vertical + 12 ↘ + 12 ↙ — counts verified by test), draw detection, legal-move enumeration via top-of-column check, `gameStatus` terminal classifier.
+- [x] **State serialization** (`serializer.js`) — compact 42-char board string + optional `|<turn>` suffix; debug-friendly (`.`/`Y`/`R` chars) and stable as a Q-table key for tabular learners. Round-trip safe with thrown errors on wrong length / invalid chars.
+- [x] **`meta` export** (`meta.js`) — `id: 'connect-four'`, `inputMode: 'column'`, `layout: { preferredWidth: 'wide', aspectRatio: '7/6' }`, `tournamentMovesElo: true`, `matchFormat: { ranked: 'bo2', tournament: 'bo3', master: 'bo2' }`, `masterStrategy: 'solver'`, 4 built-in personas (Pebble easy / Granite medium / Basalt hard / Obsidian master with `offLadder: true`). Required the SDK extension below.
+- [x] **SDK extension** — `packages/sdk/src/index.d.ts` `GameMeta` gains optional `matchFormat` (per-context bo1/bo2/bo3) + `masterStrategy` (`'solver' | 'minimax' | 'trained'`); `doc/Game_SDK_Developer_Guide.md` gets matching rows in the meta field table. Per the plan's "SDK gap → extend SDK first, then resume" policy.
+- [x] **`botInterface`** (`botInterface.js`) — SDK-contract BotInterface. `makeMove` dispatches minimax personas to `minimax.bestMove` (easy=2, medium=4, hard=6) and the master persona to `master.bestMove`; ML personas fall back to a random legal move (B4 will wire real per-algorithm engines once `@xo-arena/ai` is extended for C4's 42-cell state + 7-column action space). `getTrainingConfig` returns the standard hyperparameter schema with C4-appropriate defaults (`defaultEpisodes: 20_000`, higher `discountFactor` since C4 wins are typically several moves from the decisive threat). `train()` throws "B4 not implemented" loud rather than silently returning empty weights. `serializeState` + `deserializeMove` pass through to the package's own serializer.
+- [x] **Master solver** (`master.js`) — alpha-beta search with a transposition table (exact/lower/upper bound flags per stored entry); iterative deepening from depth 1 to `DEFAULT_MASTER_DEPTH` (10) so shallower passes warm the TT for the deepest search; `masterEvaluate` adds a threat-parity bonus on top of the minimax line score (Yellow prefers odd-row-from-bottom threats, Red prefers even — the claim-even strategy from C4 theory); hardcoded opening shortcut returns col 3 instantly on the empty board (provably optimal first move in solved Connect Four). Honest scope note in the file header: this is "strong-as-perfect-from-a-human's-perspective" at depth 10, not a true endgame-database solver — the right module to drop a Boucher database into later.
+- [x] **Unit tests** — 89/89 passing across 5 files (`logic.test.js` 28, `serializer.test.js` 14, `minimax.test.js` 16, `botInterface.test.js` 19, `master.test.js` 12). Coverage includes geometry constants, win-line enumeration (asserts the 24+21+12+12 breakdown), drop semantics (gravity / immutability / out-of-bounds rejection / invalid marks), all four win directions in isolation + a "dirty board" with a win amid noise, draw detection with a careful `(2r+c) mod 4` fixture that avoids the diagonal-parity trap (a checkerboard draw test fails because diagonals share parity → 4-in-a-row), evaluator sign-symmetry, tactical decisions (opens center, completes wins, blocks vertical threats with a unique answer), TT idempotency, and a Master-at-depth-6 vs medium-minimax adversarial game where Master plays Yellow and must not lose (20s timeout budget). **Two real bugs caught by tests during development:** (1) minimax depth-bias had the wrong sign — `WIN_SCORE - depth` made deep wins outscore immediate wins because `depth` counts DOWN to leaves; fixed to `+depth` on magnitude with explicit perspective flip. (2) `deserializeMove(null)` slipped through because `Number(null) === 0` passed the range check; tightened to reject non-number / non-string-with-content input.
 
 ### B2 — C4 play surface (desktop + mobile)
 
