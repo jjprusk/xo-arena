@@ -46,8 +46,13 @@ export default function AddSkillModal({ bot, onClose, onAdded }) {
 
   const [gameId, setGameId]       = useState(availableGames[0]?.id ?? '')
   const [algorithm, setAlgorithm] = useState('qlearning')
+  // A4.2 — optional hyperparam clone. Empty string = no clone (use
+  // defaults). The bot's existing skills are listed so users can copy
+  // tuning work from a sibling skill in another game.
+  const [cloneFromSkillId, setCloneFromSkillId] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [error, setError]           = useState(null)
+  const siblingSkills = bot?.skills ?? []
 
   // Re-pin the gameId default if the bot prop swaps under us (rare —
   // happens only if the parent reuses the modal across two bots).
@@ -65,7 +70,9 @@ export default function AddSkillModal({ bot, onClose, onAdded }) {
     setError(null)
     try {
       const token = await getToken()
-      const { skill } = await api.bots.skills.add(bot.id, { gameId, algorithm }, token)
+      const body = { gameId, algorithm }
+      if (cloneFromSkillId) body.cloneFromSkillId = cloneFromSkillId
+      const { skill } = await api.bots.skills.add(bot.id, body, token)
       onAdded?.(skill)
       onClose?.()
     } catch (err) {
@@ -133,6 +140,28 @@ export default function AddSkillModal({ bot, onClose, onAdded }) {
                   ))}
                 </select>
               </label>
+
+              {siblingSkills.length > 0 && (
+                <label className="space-y-1 block">
+                  <span className="text-xs font-medium" style={{ color: 'var(--text-secondary)' }}>
+                    Clone hyperparams from <span style={{ color: 'var(--text-muted)' }}>(optional)</span>
+                  </span>
+                  <select
+                    value={cloneFromSkillId}
+                    onChange={e => setCloneFromSkillId(e.target.value)}
+                    className="w-full px-3 py-1.5 rounded-lg border text-sm focus:outline-none"
+                    style={{ backgroundColor: 'var(--bg-base)', borderColor: 'var(--border-default)', color: 'var(--text-primary)' }}
+                    data-testid="add-skill-clone-from"
+                  >
+                    <option value="">Start from defaults</option>
+                    {siblingSkills.map(s => (
+                      <option key={s.id} value={s.id}>
+                        {(s.name ?? `${s.algorithm} · ${s.gameId}`)} — {s.algorithm}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              )}
             </>
           )}
 

@@ -135,6 +135,22 @@ app.get('/api/v1/config/aivai', async (_req, res) => {
   }
 })
 
+// A3b.8 — public per-feature flag table. v1 ships one flag
+// (`features.trainingAdvancedKnobs`) that toggles whether the
+// gym TrainTab's Advanced disclosure is visible to non-admins.
+// Admins always see Advanced regardless. Reads from SystemConfig
+// so an admin can flip it without a redeploy. Fails-open to
+// `false` so a SystemConfig outage hides the knobs (safer
+// default than accidentally exposing them).
+app.get('/api/v1/config/features', async (_req, res) => {
+  try {
+    const trainingAdvancedKnobs = await getSystemConfig('features.trainingAdvancedKnobs', false)
+    res.json({ trainingAdvancedKnobs: !!trainingAdvancedKnobs })
+  } catch {
+    res.json({ trainingAdvancedKnobs: false })
+  }
+})
+
 app.get('/api/v1/config/session-idle', async (_req, res) => {
   try {
     const [idleWarnMinutes, idleGraceMinutes] = await Promise.all([

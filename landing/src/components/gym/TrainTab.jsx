@@ -8,12 +8,15 @@ import {
 import { api } from '../../lib/api.js'
 import { getToken } from '../../lib/getToken.js'
 import { useEventStream } from '../../lib/useEventStream.js'
+import { useOptimisticSession } from '../../lib/useOptimisticSession.js'
+import { useFeatures } from '../../lib/useFeatures.js'
 import { runTrainingSession } from '../../services/trainingService.js'
 import { useGymStore } from '../../store/gymStore.js'
 import {
   MODES, DIFFICULTIES, ALGORITHMS, normalizeAlgorithm,
   Card, SectionLabel, Btn, StatusBadge, Spinner, MiniStat, ChartPanel, tooltipStyle,
 } from './gymShared.jsx'
+import StackedCurvesChart from './StackedCurvesChart.jsx'
 
 const ITERATIONS_MIN = 100
 const ITERATIONS_MAX = 100_000
@@ -53,6 +56,44 @@ export default function TrainTab({ model, sessions, onSessionsChange, onComplete
   const [progress, setProgress]             = useState(null)
   const [chartData, setChartData]           = useState([])
   const [curriculumDifficulty, setCurriculumDifficulty] = useState(null)
+  // A3b.10 — true when the runtime resolver routes this (game, algo) to
+  // 'worker' or 'backend-in-process'. We show a "Training in background —
+  // you can close this tab" affordance because the loop is no longer
+  // bound to this browser session (worker survives tab close, in-process
+  // backend survives navigation as long as the backend stays up).
+  const [backgroundMode, setBackgroundMode] = useState(false)
+  // A3b.8 — no-knobs disclosure. Default v1 surface is presets-only
+  // (Quick / Standard / Deep); the full knob set is hidden behind an
+  // Advanced gate visible only to admins or to users whose env has
+  // `features.trainingAdvancedKnobs` flipped on in SystemConfig.
+  const { data: session }       = useOptimisticSession()
+  const { features }            = useFeatures()
+  const isAdmin                 = session?.user?.role === 'admin'
+  const showAdvanced            = isAdmin || !!features.trainingAdvancedKnobs
+  const [preset, setPreset]     = useState('quick')
+  const [presetOptions, setPresetOptions] = useState([])
+  // Fetch the preset table for this (game, algorithm). The endpoint
+  // returns { name, iterations, expectedDurationMs } per preset; we
+  // use it to seed both the picker labels and the default iterations.
+  useEffect(() => {
+    let cancelled = false
+    api.ml.getPresets(model.gameId, algorithm)
+      .then(r => {
+        if (cancelled) return
+        const opts = r?.presets ?? []
+        setPresetOptions(opts)
+        // Seed iterations from the selected preset on first load so the
+        // hidden slider has a sensible value when advanced is closed.
+        const match = opts.find(p => p.name === preset) ?? opts[0]
+        if (match) {
+          setIterations(match.iterations)
+          if (!opts.find(p => p.name === preset)) setPreset(match.name)
+        }
+      })
+      .catch(() => { /* preset endpoint failure → keep default iterations */ })
+    return () => { cancelled = true }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [model.gameId, algorithm])
   const cleanupRef   = useRef(null)
   const cancelRef    = useRef(false)
   // Set by the resume-watch effect when a backend-driven session is running.
@@ -162,7 +203,24 @@ export default function TrainTab({ model, sessions, onSessionsChange, onComplete
       setProgress(null)
       setChartData([])
       setCurriculumDifficulty(null)
+      setBackgroundMode(false)
     })
+
+    // A3b.10 — consult the runtime matrix BEFORE deciding the request
+    // shape. TTT q-learning/sarsa/monte_carlo stays in the browser
+    // (fastest path, no server cycles). DQN/AlphaZero and all Connect 4
+    // algorithms get pushed to the worker so the loop survives tab close.
+    // Lookup failures fall back to the legacy frontend path so a
+    // backend hiccup never blocks the user from training.
+    let runtime = 'frontend'
+    try {
+      const r = await api.ml.getRuntime(model.gameId, algorithm)
+      if (r?.runtime === 'worker' || r?.runtime === 'backend-in-process') runtime = r.runtime
+      else if (r?.runtime === 'frontend') runtime = 'frontend'
+    } catch {
+      // Resolver unreachable — fall through to frontend. Better to train
+      // in the browser than to refuse with a confusing error.
+    }
 
     const token = await getToken()
     const cfg = {
@@ -175,7 +233,51 @@ export default function TrainTab({ model, sessions, onSessionsChange, onComplete
       ...(algorithm === 'ALPHA_ZERO' ? { numSimulations: azSimulations, cPuct: azCPuct, temperature: azTemperature } : {}),
     }
     try {
-      // Create session on backend and get current model weights for engine init
+      // A3b.10 — backend-driven runtimes ('worker' / 'backend-in-process')
+      // mint the session on the server and skip the local episode loop
+      // entirely. The existing SSE subscription (watchedSessionId) picks
+      // up progress events the backend / worker publishes to
+      // training:<sessionId>:progress.
+      if (runtime !== 'frontend') {
+        const { session } = await api.ml.train(model.id, { mode, iterations, config: cfg }, token)
+        flushSync(() => {
+          onSessionsChange(prev => [session, ...prev])
+          setSessionId(session.id)
+          setWatchedSessionId(session.id)
+          setBackgroundMode(true)
+          if (curriculum && mode === 'VS_MINIMAX') setCurriculumDifficulty('novice')
+        })
+        // Hook up SSE callbacks. The watcher consumes the same progress
+        // payload shape as the frontend loop's onProgress, so we just
+        // mirror that branch's transform here.
+        handlersRef.current = {
+          onProgress: (data) => {
+            flushSync(() => {
+              setProgress({ ...data, sessionId: session.id })
+              setChartData(prev => [...prev, {
+                ep: data.episode,
+                winRate:  Math.round(data.winRate  * 100),
+                lossRate: Math.round(data.lossRate * 100),
+                drawRate: Math.round(data.drawRate * 100),
+                recentWinRate:  Math.round((data.recentWinRate  ?? data.winRate)  * 100),
+                recentLossRate: Math.round((data.recentLossRate ?? data.lossRate) * 100),
+                recentDrawRate: Math.round((data.recentDrawRate ?? data.drawRate) * 100),
+                epsilon: parseFloat((data.epsilon * 100).toFixed(1)),
+                qDelta: data.avgQDelta,
+              }])
+            })
+          },
+          onCurriculumAdvance: ({ difficulty: newDiff }) => setCurriculumDifficulty(newDiff),
+          onComplete:  () => { stopRunning(); setWatchedSessionId(null); onComplete() },
+          onCancelled: () => { stopRunning(); setWatchedSessionId(null); onComplete() },
+          onError:     (payload) => { stopRunning(); setWatchedSessionId(null); alert(payload?.message ?? 'Training failed') },
+        }
+        return
+      }
+
+      // Frontend runtime — existing in-browser loop. Create the session
+      // (frontend:true), fetch current weights, run episodes locally,
+      // then post the final weights via finishSession.
       const { session, model: modelState } = await api.ml.train(model.id, { mode, iterations, config: cfg, frontend: true }, token)
 
       flushSync(() => {
@@ -233,8 +335,26 @@ export default function TrainTab({ model, sessions, onSessionsChange, onComplete
     }
   }
 
+  // A3b.8 — preset selection writes through to iterations so the kickoff
+  // sends the right episode count whether the advanced slider is visible
+  // or hidden.
+  function selectPreset(name) {
+    setPreset(name)
+    const opt = presetOptions.find(p => p.name === name)
+    if (opt) setIterations(opt.iterations)
+  }
+
   async function handleCancel() {
-    // Signal the training loop to stop; handleStart will call finishSession with CANCELLED
+    // A3b.10 — backend-driven sessions can't be cancelled by flipping a
+    // local ref (the loop runs in another process). Issue an explicit
+    // cancel request; the SSE 'cancelled' event will tear down state.
+    if (backgroundMode && sessionId) {
+      try { await api.ml.cancelSession(sessionId, await getToken()) } catch {}
+      return
+    }
+    // Frontend path — signal the local loop to stop; handleStart's
+    // runTrainingSession reads cancelRef on each episode and bails out,
+    // then calls finishSession with CANCELLED.
     cancelRef.current = true
   }
 
@@ -259,8 +379,9 @@ export default function TrainTab({ model, sessions, onSessionsChange, onComplete
               </select>
             </div>
 
-            {/* VS_MINIMAX options: difficulty + play as */}
-            {mode === 'VS_MINIMAX' && (
+            {/* VS_MINIMAX options: difficulty + play as. Behind the A3b.8
+                advanced gate — v1 presets-only surface hides these. */}
+            {showAdvanced && mode === 'VS_MINIMAX' && (
               <div className="flex gap-4">
                 <div className="flex-1">
                   <label className="text-sm font-medium block mb-2" style={{ color: 'var(--text-secondary)' }}>
@@ -302,8 +423,59 @@ export default function TrainTab({ model, sessions, onSessionsChange, onComplete
                 </div>
               )})()}</div>
 
+            {/* A3b.8 — preset picker. Default v1 surface — always visible.
+                Picking a preset writes through to iterations so the
+                kickoff sends the right episode count whether the
+                advanced slider is rendered or not. */}
+            {presetOptions.length > 0 && (
+              <div data-testid="train-preset-picker">
+                <label className="text-sm font-medium block mb-2" style={{ color: 'var(--text-secondary)' }}>Preset</label>
+                <div className="flex gap-2 flex-wrap">
+                  {presetOptions.map(p => {
+                    const minutes = Math.round((p.expectedDurationMs ?? 0) / 60000)
+                    const eta = minutes < 1
+                      ? '<1 min'
+                      : minutes < 60
+                        ? `~${minutes} min`
+                        : `~${Math.round(minutes / 60)} hr`
+                    return (
+                      <button
+                        key={p.name}
+                        type="button"
+                        data-testid={`train-preset-${p.name}`}
+                        onClick={() => selectPreset(p.name)}
+                        className={`flex-1 min-w-[120px] py-3 rounded-lg text-sm font-semibold border-2 transition-colors ${preset === p.name ? 'border-[var(--color-blue-600)] bg-[var(--color-blue-50)] text-[var(--color-blue-600)]' : 'border-[var(--border-default)]'}`}
+                      >
+                        <div className="capitalize">{p.name}</div>
+                        <div className="text-xs font-normal opacity-70 tabular-nums">{p.iterations.toLocaleString()} eps · {eta}</div>
+                      </button>
+                    )
+                  })}
+                </div>
+              </div>
+            )}
+
+            {/* A3b.8 — Advanced disclosure. v1 hides the full knob set
+                from regular users; only admins or users in an env with
+                `features.trainingAdvancedKnobs` see the rest of the
+                config (DQN/AlphaZero/epsilon/curriculum/iterations/
+                early-stop). Rendered as a single block-level gate so
+                the train button stays anchored at the bottom of the
+                card regardless. */}
+            {showAdvanced && (
+              <div
+                data-testid="train-advanced-section"
+                className="pt-3 border-t"
+                style={{ borderColor: 'var(--border-default)' }}
+              >
+                <p className="text-xs font-semibold uppercase tracking-widest mb-3" style={{ color: 'var(--text-muted)' }}>
+                  Advanced{!isAdmin && ' (flagged)'}
+                </p>
+              </div>
+            )}
+
             {/* DQN config fields */}
-            {algorithm === 'DQN' && (() => {
+            {showAdvanced && algorithm === 'DQN' && (() => {
               const storedShape = model.config?.networkShape ?? [32]
               const archChanged = JSON.stringify(dqnLayers) !== JSON.stringify(storedShape)
               const LAYER_SIZES = [8, 16, 32, 64, 128]
@@ -401,8 +573,8 @@ export default function TrainTab({ model, sessions, onSessionsChange, onComplete
               )
             })()}
 
-            {/* AlphaZero config fields */}
-            {algorithm === 'ALPHA_ZERO' && (
+            {/* AlphaZero config fields — advanced */}
+            {showAdvanced && algorithm === 'ALPHA_ZERO' && (
               <div className="space-y-3 p-3 rounded-lg border" style={{ borderColor: 'var(--border-default)', backgroundColor: 'var(--bg-base)' }}>
                 <p className="text-xs font-semibold uppercase tracking-widest" style={{ color: 'var(--text-muted)' }}>AlphaZero Configuration</p>
                 <div className="flex flex-wrap gap-4">
@@ -432,8 +604,8 @@ export default function TrainTab({ model, sessions, onSessionsChange, onComplete
             )}
 
 
-            {/* Epsilon config (all models except AlphaZero) */}
-            {algorithm !== 'ALPHA_ZERO' && (
+            {/* Epsilon config (all models except AlphaZero) — advanced */}
+            {showAdvanced && algorithm !== 'ALPHA_ZERO' && (
               <div className="space-y-3 p-3 rounded-lg border" style={{ borderColor: 'var(--border-default)', backgroundColor: 'var(--bg-base)' }}>
                 <p className="text-xs font-semibold uppercase tracking-widest" style={{ color: 'var(--text-muted)' }}>Exploration</p>
 
@@ -517,8 +689,8 @@ export default function TrainTab({ model, sessions, onSessionsChange, onComplete
               </div>
             )}
 
-            {/* Curriculum learning (VS_MINIMAX only — advances Easy→Medium→Hard) */}
-            {mode === 'VS_MINIMAX' && (
+            {/* Curriculum learning (VS_MINIMAX only — advances Easy→Medium→Hard) — advanced */}
+            {showAdvanced && mode === 'VS_MINIMAX' && (
               <div className="flex items-center gap-3">
                 <input type="checkbox" id="curriculum" checked={curriculum} onChange={e => setCurriculum(e.target.checked)}
                   className="accent-[var(--color-blue-600)]" />
@@ -528,8 +700,10 @@ export default function TrainTab({ model, sessions, onSessionsChange, onComplete
               </div>
             )}
 
-            {/* Iterations */}
-            {(() => {
+            {/* Iterations slider — advanced; the preset picker above
+                writes through to the same state so users get the right
+                episode count without seeing the slider. */}
+            {showAdvanced && (() => {
               const remaining = model.maxEpisodes > 0 ? model.maxEpisodes - model.totalEpisodes : Infinity
               const atLimit = remaining <= 0
               const sliderMax = remaining === Infinity ? ITERATIONS_MAX : Math.max(ITERATIONS_MIN, Math.min(ITERATIONS_MAX, remaining))
@@ -569,7 +743,8 @@ export default function TrainTab({ model, sessions, onSessionsChange, onComplete
               )
             })()}
 
-            {/* Early stopping */}
+            {/* Early stopping — advanced */}
+            {showAdvanced && (
             <div className="space-y-2">
               <div className="flex items-center gap-3">
                 <input type="checkbox" id="earlyStop" checked={earlyStopEnabled} onChange={e => setEarlyStop(e.target.checked)}
@@ -597,6 +772,7 @@ export default function TrainTab({ model, sessions, onSessionsChange, onComplete
                 </div>
               )}
             </div>
+            )}
 
             <Btn onClick={handleStart} disabled={running || (model.maxEpisodes > 0 && model.totalEpisodes >= model.maxEpisodes)}>
               {model.maxEpisodes > 0 && model.totalEpisodes >= model.maxEpisodes ? 'Episode limit reached' : 'Start Training'}
@@ -619,6 +795,27 @@ export default function TrainTab({ model, sessions, onSessionsChange, onComplete
             </div>
             <Btn onClick={handleCancel} variant="ghost">Cancel</Btn>
           </div>
+
+          {/* A3b.10 — background-mode affordance. Shown when the runtime
+              resolver routes this (game, algo) to worker or in-process,
+              meaning the loop is decoupled from this tab. */}
+          {backgroundMode && (
+            <div
+              role="status"
+              data-testid="train-background-banner"
+              className="mb-4 px-3 py-2 rounded-lg text-xs flex items-start gap-2"
+              style={{ backgroundColor: 'var(--bg-base)', borderLeft: '3px solid var(--color-blue-600)' }}
+            >
+              <span aria-hidden="true">⚡</span>
+              <div>
+                <strong style={{ color: 'var(--text-primary)' }}>Training in background.</strong>{' '}
+                <span style={{ color: 'var(--text-secondary)' }}>
+                  You can close this tab — progress streams from the server and the
+                  run continues. Come back anytime to see results.
+                </span>
+              </div>
+            </div>
+          )}
 
           {/* Progress bar */}
           <div className="flex items-center gap-2 mb-3">
@@ -673,6 +870,14 @@ export default function TrainTab({ model, sessions, onSessionsChange, onComplete
                   <Line isAnimationActive={false} type="monotone" dataKey="epsilon" stroke="var(--color-blue-600)" dot={false} name="ε %" strokeWidth={2} />
                 </LineChart>
               </ChartPanel>
+              {/* A3b.7 — multi-curve eval breakdown. Polls every 5s
+                  during live training so curves fill in as eval points
+                  land; the component itself renders nothing when no
+                  multi-curve data exists (legacy single-opponent
+                  sessions). */}
+              {sessionId && (
+                <StackedCurvesChart sessionId={sessionId} refreshMs={5_000} />
+              )}
             </div>
           )}
         </Card>
@@ -720,6 +925,11 @@ export default function TrainTab({ model, sessions, onSessionsChange, onComplete
                 <Line type="monotone" dataKey="qDelta" stroke="var(--color-blue-600)" dot={false} name="Avg ΔQ" strokeWidth={2} />
               </LineChart>
             </ChartPanel>
+            {/* A3b.7 — post-session stacked W/D/L per opponent curve.
+                No polling here — the session is done, eval points are
+                immutable. Renders nothing when the session has no
+                multi-curve metrics (single-opponent legacy sessions). */}
+            {sessionId && <StackedCurvesChart sessionId={sessionId} />}
           </div>
         </Card>
       )}

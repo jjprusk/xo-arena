@@ -671,6 +671,7 @@ export function CreateTableModal({ onClose, onCreated }) {
                     bot={b}
                     variant="select"
                     onSelect={pickBot}
+                    pickerGameId={filters.gameId ?? gameId}
                   />
                 ))}
               </div>

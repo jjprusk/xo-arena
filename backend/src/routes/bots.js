@@ -256,18 +256,31 @@ router.get('/:id', async (req, res, next) => {
       orderBy: { createdAt: 'asc' },
     })
 
-    const elos = skills.length === 0 ? [] : await db.gameElo.findMany({
-      where: {
-        userId: bot.id,
-        gameId: { in: skills.map((s) => s.gameId) },
-      },
-      select: { gameId: true, rating: true, gamesPlayed: true },
-    })
-    const elosByGame = new Map(elos.map((e) => [e.gameId, e]))
+    const [elos, lastSessions] = skills.length === 0 ? [[], []] : await Promise.all([
+      db.gameElo.findMany({
+        where: {
+          userId: bot.id,
+          gameId: { in: skills.map((s) => s.gameId) },
+        },
+        select: { gameId: true, rating: true, gamesPlayed: true },
+      }),
+      // A4.1 — per-skill "last trained" stamp. Pulled from the newest
+      // COMPLETED session per skill so the bot detail page can show a
+      // real date rather than `BotSkill.updatedAt` (which bumps on
+      // checkpoint writes mid-training too).
+      db.trainingSession.groupBy({
+        by: ['modelId'],
+        where: { modelId: { in: skills.map((s) => s.id) }, status: 'COMPLETED' },
+        _max: { completedAt: true },
+      }),
+    ])
+    const elosByGame   = new Map(elos.map((e) => [e.gameId, e]))
+    const trainedByMid = new Map(lastSessions.map((r) => [r.modelId, r._max.completedAt]))
 
     const enriched = skills.map((s) => ({
       ...s,
-      elo: elosByGame.get(s.gameId) ?? null,
+      elo:           elosByGame.get(s.gameId) ?? null,
+      lastTrainedAt: trainedByMid.get(s.id)    ?? null,
     }))
 
     res.json({ bot: { ...bot, skills: enriched } })
@@ -669,7 +682,7 @@ router.post('/:id/skills', requireAuth, async (req, res, next) => {
     if (!result) return
     const { bot } = result
 
-    const { gameId: rawGameId, algorithm, modelType } = req.body ?? {}
+    const { gameId: rawGameId, algorithm, modelType, cloneFromSkillId } = req.body ?? {}
     if (typeof rawGameId !== 'string' || !rawGameId.trim()) {
       return res.status(400).json({ error: 'gameId is required', code: 'INVALID_GAME_ID' })
     }
@@ -680,10 +693,29 @@ router.post('/:id/skills', requireAuth, async (req, res, next) => {
     if (modelType !== undefined && typeof modelType !== 'string') {
       return res.status(400).json({ error: 'modelType must be a string', code: 'INVALID_MODEL_TYPE' })
     }
+    if (cloneFromSkillId !== undefined && cloneFromSkillId !== null && typeof cloneFromSkillId !== 'string') {
+      return res.status(400).json({ error: 'cloneFromSkillId must be a string', code: 'INVALID_CLONE_SOURCE' })
+    }
 
     const existing = await db.botSkill.findFirst({ where: { botId: bot.id, gameId } })
     if (existing) {
       return res.status(200).json({ skill: existing, created: false })
+    }
+
+    // A4.2 — optional hyperparam clone. Only the same bot's skills are
+    // allowed as a source so you can't lift another owner's config; if
+    // the id is bogus we fall back to {} rather than 404 (the user
+    // explicitly opted in, and a soft fallback beats a confusing 404 on
+    // a UX that's mostly "pick a sensible default").
+    let initialConfig = {}
+    if (cloneFromSkillId) {
+      const source = await db.botSkill.findFirst({
+        where:  { id: cloneFromSkillId, botId: bot.id },
+        select: { config: true },
+      })
+      if (source?.config && typeof source.config === 'object') {
+        initialConfig = source.config
+      }
     }
 
     const skill = await db.botSkill.create({
@@ -692,7 +724,7 @@ router.post('/:id/skills', requireAuth, async (req, res, next) => {
         gameId,
         algorithm,
         name:      `${bot.displayName} ${gameId.toUpperCase()}`,
-        config:    {},
+        config:    initialConfig,
       },
     })
 

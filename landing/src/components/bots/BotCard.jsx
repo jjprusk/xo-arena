@@ -24,17 +24,35 @@ function ratingFromGameElo(bot) {
   return row?.rating != null ? Math.round(row.rating) : null
 }
 
+// A4.4 — picker disambiguation. When a multi-skill bot is rendered in a
+// picker that's already scoped to one game (`pickerGameId`), append the
+// game label so the user can tell which skill of "Sterling" they're
+// queueing. Single-game bots aren't suffixed — the parenthetical would
+// be noise when there's no other option to disambiguate against.
+const GAME_LABELS = {
+  'tic-tac-toe': 'Tic-tac-toe',
+  'connect-four': 'Connect 4',
+}
+function pickerSuffix(bot, pickerGameId) {
+  const playable = Array.isArray(bot?.playableGameIds) ? bot.playableGameIds : []
+  if (playable.length < 2 || !pickerGameId) return null
+  return GAME_LABELS[pickerGameId] ?? pickerGameId
+}
+
 export default function BotCard({
   bot,
   variant = 'list',
   actions = null,
   onSelect = null,
   ownerLabel = null,
+  pickerGameId = null,
 }) {
   if (!bot) return null
   const style = VARIANT_STYLES[variant] ?? VARIANT_STYLES.list
   const rating = ratingFromGameElo(bot)
-  const name = bot.displayName ?? '—'
+  const baseName = bot.displayName ?? '—'
+  const suffix = pickerSuffix(bot, pickerGameId)
+  const name = suffix ? `${baseName} (${suffix})` : baseName
   const isCommunity = !bot.botOwnerId
   const ownerText = ownerLabel ?? (isCommunity ? 'Community' : 'Player bot')
 
