@@ -19,8 +19,10 @@
 
 export * from './logic.js'
 export * from './serializer.js'
-export { meta }          from './meta.js'
-export { botInterface }  from './botInterface.js'
+export { meta }                          from './meta.js'
+export { botInterface }                  from './botInterface.js'
+export { default, initialGameState }     from './GameComponent.jsx'
+export { default as BoardPreview }       from './BoardPreview.jsx'
 // Master-tier solver is re-exported for direct programmatic use (e.g.
 // puzzle generation, training-vs-master eval). Most callers should go
 // through `botInterface.makeMove` with the master persona.
