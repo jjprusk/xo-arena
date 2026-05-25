@@ -151,12 +151,42 @@ PR-sized chunks:
 
 ### Phase A exit criteria
 
-- [ ] TTT plays identically end-to-end (casual + ranked + tournament) on the new routes and new slug.
-- [ ] TTT match-level ELO produces sensible movements for the existing user base.
-- [ ] All 5 TTT algorithms train through the worker process with W/D/L streaming, multi-curve eval, and checkpoint resume.
-- [ ] Multi-skill bot UI lets a user add, manage, and queue from multiple skills (limited to one game today).
-- [ ] Help corpus updated: any TTT-facing docs that reference the old slug, single-game ranked, or the old training UX are refreshed.
-- [ ] No open regressions on the V1 acceptance script.
+Four of six are closed by the A1–A4 sprints; the remaining four are
+verification-only and don't require new code. Run the audit steps below
+on the **first prod build after `/promote`**, mark each criterion `[x]`
+with the run date in `Audit log`, and Phase A is closed.
+
+- [ ] **TTT plays identically end-to-end (casual + ranked + tournament) on the new routes and new slug.**
+  - Spot-check on prod, signed-in:
+    - Casual TTT bot game (Tables → Play vs Bot → Easy minimax) — game completes, ELO unaffected (`offLadder=true`).
+    - Casual TTT PvP table (Tables → Create → invite + join from second browser/incognito) — game completes, ELO unaffected.
+    - Ranked TTT BO2 match (Tables → Ranked → match through two games) — match-level ELO recorded once at match end.
+    - Tournament TTT Cup (Cups → Daily/Weekly → join → play through bracket) — bracket advances, tournament ELO recorded.
+  - Verify no `/xo*` paths surface in nav, deep-links, or share links: `grep -rE "/xo[/?\"' ]" landing/src | grep -v test | grep -v node_modules`.
+  - Spot any 404s / "game not found" in `flyctl logs -a xo-backend-prod` for 10 min after the run.
+- [ ] **TTT match-level ELO produces sensible movements for the existing user base.**
+  - Pull the last 10 ranked TTT matches: `flyctl ssh console -a xo-backend-prod -C 'node /tmp/elo-spot-check.mjs'` (script: select `Match` where `gameId='tic-tac-toe'` and `status='COMPLETED'`, join `GameElo` deltas, print winner/loser ratings before/after).
+  - Sanity checks: winner Δ > 0, loser Δ < 0, |Δ| typically 8–32 per match, no Δ > 50 outside provisional bots.
+  - Pull the TTT leaderboard top 20: confirm ordering looks stable vs the same query from the prior promote (no rank inversions > 1 step that lack a corresponding match).
+- [x] **All 5 TTT algorithms train through the worker process with W/D/L streaming, multi-curve eval, and checkpoint resume.** ✅ closed 2026-05-24 — `um training-worker verify` against staging post-v1.4.0-alpha-5.18 passed 5/5 with correct per-engine signatures (qlearning/sarsa/montecarlo/dqn/alphazero); W/D/L streaming via A3b.7 `StackedCurvesChart`; multi-curve eval via A3a; checkpoint resume via A3a.9 + A3b.4 retry. Re-run the verifier against prod after promote: `QA_SECRET=<prod-secret> BACKEND_URL=https://xo-backend-prod.fly.dev node --experimental-transform-types --no-warnings backend/src/cli/um.js training-worker verify` — record the new sessionIds + duration in `Audit log`.
+- [x] **Multi-skill bot UI lets a user add, manage, and queue from multiple skills (limited to one game today).** ✅ closed 2026-05-24 — A4 sprint shipped end-to-end (BotProfilePage Skills section + AddSkillModal `cloneFromSkillId` + per-skill Gym deep-link + BotCard picker disambiguation + rename-preserves-skills test). 15 new tests; backend 2302/2302, landing 546/546.
+- [ ] **Help corpus updated: any TTT-facing docs that reference the old slug, single-game ranked, or the old training UX are refreshed.**
+  - Grep for stale slug refs: `grep -rE "\\bxo\\b|/xo/|game-xo|'xo'" doc/ landing/src/components/help/ landing/public/help/ 2>/dev/null | grep -v "package\\|test\\|tic-tac-toe\\|legacy\\|history" | head -40`. Triage: rename, redirect, or note-as-historical.
+  - Grep for old single-game ranked language: `grep -rEi "single ranked game|single-game ranked|one ranked game" doc/ landing/public/help/ 2>/dev/null`. Replace with BO2 / match-level wording from A2.
+  - Grep for old training UX (per-knob configuration): `grep -rEi "epsilon decay|hyperparam|raw knobs" landing/public/help/ doc/ 2>/dev/null | grep -v "ML_Training_Architecture\\|Implementation_Plan"`. Confirm presets-only surface (A3b.8) is the dominant framing in user-facing copy.
+  - Walk the in-app Help drawer on prod: open from Tables / Ranked / Cup / Train. Verify each panel renders content (no 404 / blank) and the copy matches current product.
+- [ ] **No open regressions on the V1 acceptance script.**
+  - Run `doc/V1_Acceptance.md` stages 1–10 against prod. Stage 0 is the prereqs (already met if `/promote` smoke is green). Stages 11.1–11.3 are automated and re-run cheaply.
+  - Update the run-status table at the top of `V1_Acceptance.md` with the new run date and pass/fail per stage; commit on dev.
+  - Any FAIL: file as a P1 against the offending sprint and re-run that stage only after the fix lands. Don't block Phase B on a single isolated regression — flag and triage.
+
+#### Audit log
+
+Add one row per audit run. Keep the latest at the top.
+
+| Date | Build | Auditor | #1 routes | #2 ELO | #3 training | #4 multi-skill | #5 corpus | #6 V1 script | Notes |
+|------|-------|---------|:---------:|:------:|:-----------:|:--------------:|:---------:|:------------:|:------|
+| 2026-05-24 | v1.4.0-alpha-5.18 (staging) | Claude+Joe | — | — | ✅ | ✅ | — | — | Worker dispatch fix verified via `um training-worker verify`; A4 sprint shipped. Awaiting prod promote for #1/#2/#5/#6. |
 
 ---
 
