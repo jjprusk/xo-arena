@@ -151,6 +151,9 @@ export const meta = {
 | `supportsTraining` | `boolean` | Enables Gym tab in the platform shell. |
 | `supportsPuzzles` | `boolean` | Enables Puzzles tab in the platform shell. |
 | `builtInBots` | `BotPersona[]` | Bot personalities bundled with the game. Empty array if `supportsBots` is false. |
+| `tournamentMovesElo` | `boolean?` | Defaults `false`. Set `true` for games where tournament results carry skill signal (Connect Four, etc.). Solved-game tournaments (TTT) should leave this off so the bracket's coinflip tiebreakers don't inject noise into the ladder. |
+| `matchFormat` | `{ ranked?, tournament?, master? }?` | Per-context best-of-N format. Values are `'bo1'` / `'bo2'` / `'bo3'`. Platform defaults: `ranked: 'bo2'`, `tournament: 'bo3'`, `master: 'bo2'`. Casual table play always stays `bo1` regardless. Declare this when your game wants a different match length than the defaults. |
+| `masterStrategy` | `'solver' \| 'minimax' \| 'trained'?` | How the game's Master-tier (`difficulty: 'master'`) bot plays. `'solver'` for solved games (Connect Four full-depth minimax + opening theory; pair the Master `BotPersona` with `offLadder: true`). `'minimax'` for games where full-depth is intractable. `'trained'` for games where the strongest available bot is a trained model. Omit if no Master tier. |
 
 ### Layout
 

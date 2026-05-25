@@ -2,17 +2,22 @@
 /**
  * @callidity/game-connect-four — Connect Four game package.
  *
- * Phase B1 ships engine + serializer only. Subsequent B-sprints add the
- * SDK contract surface:
- *   - B1.4 + B1.5 → meta export + botInterface (minimax tiers + training hooks)
- *   - B1.6        → master solver (perfect play, off-ladder)
- *   - B2         → GameComponent (UI) and BoardPreview
+ * SDK contract surface declared here. Phase B1 ships:
+ *   - engine (logic.js) + serializer (serializer.js) — chunk 1
+ *   - meta + botInterface (this file's exports) — chunk 2
+ *   - master solver (master.js) wired into the Master persona — chunk 3
  *
- * Engine logic stays in this package — the platform sees only the SDK
- * contract surface declared above. If platform code needs something C4-
- * specific, the SDK gets extended (per the policy in
- * `doc/Connect_Four_Implementation_Plan.md`).
+ * B2 adds the React `default` export (GameComponent) and `PreviewComponent`.
+ * Until then this package is headless — fully usable from a Node script,
+ * not yet renderable in the browser.
+ *
+ * Engine logic stays in this package; the platform sees only the SDK
+ * contract surface declared here. SDK extensions for C4 (matchFormat,
+ * masterStrategy) live in `packages/sdk/src/index.d.ts` per the plan's
+ * policy in `doc/Connect_Four_Implementation_Plan.md`.
  */
 
 export * from './logic.js'
 export * from './serializer.js'
+export { meta }          from './meta.js'
+export { botInterface }  from './botInterface.js'
