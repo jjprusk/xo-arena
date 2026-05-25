@@ -182,7 +182,7 @@ Add one row per audit run. Keep the latest at the top.
 
 | Date | Build | Auditor | #1 routes | #2 ELO | #3 training | #4 multi-skill | #5 corpus | #6 V1 script | Notes |
 |------|-------|---------|:---------:|:------:|:-----------:|:--------------:|:---------:|:------------:|:------|
-| 2026-05-24 | v1.4.0-alpha-5.18 (staging) | Claude+Joe | — | — | ✅ | ✅ | ✅ | — | Worker dispatch fix verified via `um training-worker verify`; A4 sprint shipped; corpus sweep clean for user-facing help — two stale `gameId='xo'` refs in `Platform_Implementation_Plan.md` updated to `'tic-tac-toe'`, `gym-train-tab.md` gained a presets-as-default note (A3b.8 alignment). Awaiting prod promote for #1/#2/#6. |
+| 2026-05-24 | v1.4.0-alpha-5.18 (staging) | Claude+Joe | 🟡 | 🟡 | ✅ | ✅ | ✅ | — | Worker dispatch fix verified via `um training-worker verify`; A4 sprint shipped; corpus sweep clean for user-facing help — two stale `gameId='xo'` refs in `Platform_Implementation_Plan.md` updated to `'tic-tac-toe'`, `gym-train-tab.md` gained a presets-as-default note (A3b.8 alignment). **#1**: 9 landing routes + 5 backend API routes all 200; main bundle has 0 `/xo` route refs and 0 `gameId='xo'` (only `game-xo-*.js` chunk filename survives, tracked under C6); recent backend logs: 0 404s; smoke 12/12 — passes the automatable parts, manual gameplay walkthrough deferred to prod. **#2**: leaderboard top 20 ordering sane (Sterling > Magnus > Copper > Rusty matches minimax tier strength); 61 UserEloHistory rows show correct sign + magnitude on bot-vs-bot games; **zero `Match` rows on staging — match-level (BO2) ELO untested with real traffic**, needs prod data post-promote to close. Awaiting prod promote for #1/#2 manual e2e + #6. |
 
 ---
 
