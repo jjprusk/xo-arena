@@ -11,9 +11,11 @@ admin_only: false
 
 The Train tab is the Gym's primary surface — where you actually launch training sessions. This doc covers every field, what it does, when to change it, and what the right value is per algorithm. If you've ever stared at the Train tab wondering "what do all these fields mean", read this.
 
+> **Where these fields are.** By default the Train tab shows only **presets** — Quick, Standard, Deep — and a **Start training** button. The fields described below live behind the **Advanced** toggle and only appear after you click it. If you just want to train, pick a preset and skip this doc. Read on when you want to understand or override what a preset is doing.
+
 ## The four sections
 
-The Train tab is laid out in four sections, top to bottom:
+When **Advanced** is on, the Train tab is laid out in four sections, top to bottom:
 
 1. **Bot + skill picker** (left sidebar)
 2. **Session basics** — mode, episodes, opponent
