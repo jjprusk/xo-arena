@@ -18,6 +18,16 @@ jobs:
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
 
+      # The training worker shares the backend image but runs as a separate
+      # Fly app with the worker entrypoint. Must be redeployed with backend
+      # so worker-side code (mlService, queue handlers) doesn't silently
+      # drift — drift caused the A3b/AZ dispatch fix to land on the API but
+      # not the worker, leaving AZ training silently running QLearning.
+      - name: Deploy training worker
+        run: flyctl deploy --config backend/fly.training.toml --app xo-training-staging --remote-only
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+
       - name: Deploy landing
         run: flyctl deploy --config landing/fly.toml --app xo-landing-staging --remote-only
         env:
