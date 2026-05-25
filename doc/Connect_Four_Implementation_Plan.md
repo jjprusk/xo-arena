@@ -176,6 +176,32 @@ with the run date in `Audit log`, and Phase A is closed.
   - Update the run-status table at the top of `V1_Acceptance.md` with the new run date and pass/fail per stage; commit on dev.
   - Any FAIL: file as a P1 against the offending sprint and re-run that stage only after the fix lands. Don't block Phase B on a single isolated regression — flag and triage.
 
+#### What's left for you to do — ordered checklist to unblock Phase B
+
+As of the v1.4.0-alpha-5.19 prod promote (2026-05-25), three of six exit
+criteria are fully closed and three are 🟡 — held by work that requires
+a human at a browser. Phase B sprint **B1** (`packages/game-connect-four/`
+scaffold + engine + solver + tests) has no dependency on these three and
+can start in parallel; sprint **B2** (UI) cannot start until the audits
+close. The fastest path to "Phase A done, all of Phase B unblocked":
+
+1. **Sign in on prod** at `https://xo-landing-prod.fly.dev`.
+2. **Play one casual TTT bot game.** Tables → *Play vs Bot* → Easy minimax. Confirm the game completes and your ELO doesn't change (casual is `offLadder=true`). *Validates #1 casual-bot surface.*
+3. **Play one casual TTT PvP game.** Tables → *Create table* in one tab; open an incognito window, sign in as a second account, join. Play a game to completion. *Validates #1 casual-PvP surface.*
+4. **Play one ranked TTT BO2 match.** Tables → *Ranked* → match through to completion (two games + tiebreak if needed). This is the most important step: it's the only way to **populate the prod `Match` table** so criterion #2 (match-level ELO) becomes verifiable. *Validates #1 ranked surface and unblocks #2.*
+5. **Join a TTT Cup.** Cups → next Daily/Weekly → join → play through your bracket matches. *Validates #1 tournament surface.*
+6. **Ping me** ("audit done") when steps 2–5 are complete. I'll:
+   - Re-run the prod ELO script — should now find the matches from step 4 and confirm BO2 delta signs/magnitudes are correct → closes **#2**.
+   - Re-grep prod backend logs for the run window → confirms **#1** clean.
+   - Mark **#1**, **#2** ✅ in the audit log.
+7. **Walk `doc/V1_Acceptance.md` stages 1–10 against prod.** ~30–45 min, your own pace. Most stages overlap with steps 2–5 above so a lot is already covered. Update the run-status table at the top of `V1_Acceptance.md` and commit on `dev`. *Closes #6.*
+8. **Audit ✅ across the board.** Phase A is done; Phase B sprint **B2** (Connect 4 UI) and beyond are formally unblocked.
+
+If you want to start Phase B engineering tonight: **B1 is safe to begin
+immediately** — it's a pure `packages/game-connect-four/` package (engine,
+serializer, master solver, unit tests) with zero platform touch. The
+audit work above can run in parallel without blocking B1.
+
 #### Audit log
 
 Add one row per audit run. Keep the latest at the top.
