@@ -17,10 +17,11 @@
  * replaces it with `master.bestMove()` (full-depth perfect play).
  */
 
-import { meta }                         from './meta.js'
-import { getLegalMoves, MARKS }         from './logic.js'
-import { bestMove, DIFFICULTY_DEPTH }   from './minimax.js'
-import { serializeState as _serState }  from './serializer.js'
+import { meta }                                      from './meta.js'
+import { getLegalMoves, MARKS }                      from './logic.js'
+import { bestMove, DIFFICULTY_DEPTH }                from './minimax.js'
+import { bestMove as masterBestMove }                from './master.js'
+import { serializeState as _serState }               from './serializer.js'
 
 const Y = MARKS.FIRST
 
@@ -49,11 +50,16 @@ function makeMove(state, playerId, persona, weights) {
   if (legal.length === 0) return -1
 
   if (persona.algorithm === 'minimax') {
-    const depth = DIFFICULTY_DEPTH[persona.difficulty] ?? DIFFICULTY_DEPTH.medium
-    const col = bestMove(board, mark, depth)
-    // Defensive: minimax should always return a legal move for non-empty
-    // legal sets, but if eval is degenerate (e.g. all moves lose by the
-    // same amount), pick the center-most legal column.
+    // Master tier routes to the dedicated solver in master.js — iterative
+    // deepening + transposition table + threat-parity heuristic. The
+    // depth-based DIFFICULTY_DEPTH mapping in minimax.js stops at 'hard';
+    // master is qualitatively different and lives in its own module.
+    const col = persona.difficulty === 'master'
+      ? masterBestMove(board, mark)
+      : bestMove(board, mark, DIFFICULTY_DEPTH[persona.difficulty] ?? DIFFICULTY_DEPTH.medium)
+    // Defensive: if the search returns an out-of-bounds column for any
+    // reason (degenerate eval, future bug), fall back to the most
+    // central legal column so the bot still plays a legal move.
     if (col < 0 || !legal.includes(col)) {
       return legal.includes(3) ? 3
         : legal.includes(2) ? 2

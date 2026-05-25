@@ -21,3 +21,13 @@ export * from './logic.js'
 export * from './serializer.js'
 export { meta }          from './meta.js'
 export { botInterface }  from './botInterface.js'
+// Master-tier solver is re-exported for direct programmatic use (e.g.
+// puzzle generation, training-vs-master eval). Most callers should go
+// through `botInterface.makeMove` with the master persona.
+export {
+  bestMove as masterBestMove,
+  masterSearch,
+  masterEvaluate,
+  createTT,
+  DEFAULT_MASTER_DEPTH,
+} from './master.js'
